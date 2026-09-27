@@ -1,20 +1,22 @@
-// Conversational assistant that drafts a skill or a custom deliverable template.
+// Conversational assistant that drafts a skill, a custom deliverable template, or a color theme.
 // It may research with MCP tools (Cekat docs) and ends a turn by proposing field values via `propose_update`;
-// the UI fills the editor with the proposal and the user decides whether to save.
+// the UI fills the editor (or previews the theme) with the proposal and the user decides whether to save.
 import { z } from 'zod'
 import { DOC_LABELS, SKILL_OUTPUT_TYPES } from '../../shared/schemas.ts'
+import { THEME_TOKENS, TOKEN_ROLES, themeProblems } from '../../shared/theme.ts'
 import { config } from '../config.ts'
+import { query } from '../db.ts'
 import { loadGlobalKnowledgeText } from './context.ts'
 import { resolveEffort, systemPrompt, toolEvents, toolsFor } from './common.ts'
-import { runModel, type ToolDef } from './llm/index.ts'
-import { callMcpTool } from './mcp.ts'
+import { runModel, type ToolDef, type Turn } from './llm/index.ts'
+import { callMcpTool, probeMcpServer } from './mcp.ts'
 import { activeModel } from './models.ts'
 import type { Stream } from './stream.ts'
 
 const PROPOSE_TOOL = 'propose_update'
 
 const assistInput = z.object({
-  kind: z.enum(['skill', 'template']),
+  kind: z.enum(['skill', 'template', 'theme', 'mcp']),
   current: z.record(z.string(), z.unknown()).default({}),
   messages: z
     .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(20_000) }))
@@ -24,7 +26,30 @@ const assistInput = z.object({
 
 const str = (description: string) => ({ type: 'string', description })
 
-const PROPOSALS: Record<'skill' | 'template', ToolDef> = {
+type Kind = z.infer<typeof assistInput>['kind']
+
+const paletteSchema = {
+  type: 'object',
+  properties: Object.fromEntries(THEME_TOKENS.map((t) => [t, { type: 'string', description: `#rrggbb — ${TOKEN_ROLES[t]}` }])),
+  required: [...THEME_TOKENS],
+  additionalProperties: false,
+}
+
+/** A theme that fails contrast is sent back to the model with the problems this many times. */
+const THEME_REPAIRS = 2
+
+const PROBE_TOOL: ToolDef = {
+  name: 'check_mcp_server',
+  description: 'Connect to a remote MCP server (Streamable HTTP, https only) and list its tools. Use it to verify a URL before proposing it.',
+  inputSchema: {
+    type: 'object',
+    properties: { url: { type: 'string', description: 'https:// MCP endpoint URL' } },
+    required: ['url'],
+    additionalProperties: false,
+  },
+}
+
+const PROPOSALS: Record<Kind, ToolDef> = {
   skill: {
     name: PROPOSE_TOOL,
     description: 'Propose the complete skill. Always send every field, including unchanged ones.',
@@ -56,9 +81,29 @@ const PROPOSALS: Record<'skill' | 'template', ToolDef> = {
       additionalProperties: false,
     },
   },
+  mcp: {
+    name: PROPOSE_TOOL,
+    description: 'Propose one MCP server to add. The user reviews it and clicks Add.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: str('Short display name, e.g. "Microsoft Learn"'), url: str('https:// Streamable HTTP MCP endpoint') },
+      required: ['name', 'url'],
+      additionalProperties: false,
+    },
+  },
+  theme: {
+    name: PROPOSE_TOOL,
+    description: 'Propose the complete color theme: a name plus a light and a dark palette.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: str('Short theme name'), light: paletteSchema, dark: paletteSchema },
+      required: ['name', 'light', 'dark'],
+      additionalProperties: false,
+    },
+  },
 }
 
-const ROLE: Record<'skill' | 'template', string> = {
+const ROLE: Record<Kind, string> = {
   skill: `# YOUR TASK: skill editor
 You help the SA write a "skill": the instruction set the copilot follows when producing one output type (${Object.entries(DOC_LABELS)
     .map(([k, v]) => `${k} = ${v}`)
@@ -69,28 +114,66 @@ Ask short clarifying questions when the request is vague. When you have enough, 
 You help the SA design a new deliverable type (beyond the built-in Assessment/TOR/Timeline/SOW/Onboarding).
 Every custom deliverable is written as: \`meta\` (key/value facts such as client, date, version, owner) + \`sections\` (title + markdown body, which may contain tables and lists).
 Your instructions must list the sections in order, say what goes in each, which meta keys to fill, and the language/tone. Ask short clarifying questions when needed, then call ${PROPOSE_TOOL}. Use the documentation tools for Cekat-specific content.`,
+  mcp: `# YOUR TASK: AI tools helper
+You help the SA configure the MCP servers this app's AI may consult (documentation lookups while chatting and drafting).
+What the app supports: remote MCP servers over Streamable HTTP, no login/API-key headers, and it only uses tools that don't declare side effects.
+Useful public examples: any GitBook docs site at <site>/~gitbook/mcp (e.g. https://docs.cekat.ai/~gitbook/mcp), Microsoft Learn https://learn.microsoft.com/api/mcp, Context7 library docs https://mcp.context7.com/mcp, DeepWiki (GitHub repos) https://mcp.deepwiki.com/mcp.
+Also answer questions about the current setup (listed below), explain what a server's tools do, or suggest turning one off.
+Always verify a URL with check_mcp_server before proposing it; if it fails, say so instead of proposing. Propose one server at a time via ${PROPOSE_TOOL}.`,
+  theme: `# YOUR TASK: color theme designer
+You design a color theme for this app (a calm, professional presales workbench). A theme has a LIGHT and a DARK palette with these tokens:
+${THEME_TOKENS.map((t) => `- ${t}: ${TOKEN_ROLES[t]}`).join('\n')}
+Requirements: every color is #rrggbb. Both palettes must be readable — ink on paper/panel ≥ 4.5:1, paper on forest ≥ 4.5:1, paper on ember ≥ 3:1, muted on panel ≥ 3:1, forest on forest-soft and ember on ember-soft ≥ 3:1. In dark mode, paper/panel are dark and forest/ember become lighter tints so the paper-colored text on them stays readable.
+Keep ok/warn/bad recognizably green/amber/red. Don't ask questions unless the request is truly unclear — propose a theme right away by calling ${PROPOSE_TOOL}, with one short sentence about the idea.`,
 }
 
 export async function assist(body: unknown, out: Stream): Promise<void> {
   const input = assistInput.parse(body)
   const model = await activeModel()
-  const [tools, effort, knowledge] = await Promise.all([toolsFor(model), resolveEffort(model, config.anthropic.chatEffort), loadGlobalKnowledgeText()])
-  const current = `# CURRENT DRAFT (what the editor holds now)\n${JSON.stringify(input.current, null, 2)}`
+  const isTheme = input.kind === 'theme'
+  const isMcp = input.kind === 'mcp'
+  // Themes and tool setup need neither Cekat docs nor the knowledge base.
+  const [docTools, effort, knowledge] = await Promise.all([
+    isTheme || isMcp ? [] : toolsFor(model),
+    resolveEffort(model, config.anthropic.chatEffort),
+    isTheme || isMcp ? '' : loadGlobalKnowledgeText(),
+  ])
+  // The tools helper gets a connection checker instead of documentation tools.
+  const tools = isMcp ? [PROBE_TOOL] : docTools
+  const runTool = isMcp ? (_name: string, args: unknown) => probeMcpServer((args as { url?: unknown } | null)?.url) : callMcpTool
+  const current = isMcp
+    ? `# CONFIGURED MCP SERVERS\n${JSON.stringify(await query('select name, url, enabled from mcp_servers order by created_at'), null, 2)}`
+    : `# CURRENT DRAFT (what the editor holds now)\n${JSON.stringify(input.current, null, 2)}`
+  const run = (turns: Turn[]) =>
+    runModel({
+      model,
+      system: systemPrompt(`${ROLE[input.kind]}\n\n${current}`, knowledge),
+      turns,
+      attachments: [],
+      tools,
+      runTool,
+      ...(model.tools ? { stopTool: PROPOSALS[input.kind] } : {}),
+      effort,
+      maxTokens: 16000,
+      onText: (text) => out.send({ type: 'delta', text }),
+      onProgress: (chars) => out.send({ type: 'progress', chars }),
+      onToolUse: toolEvents(out),
+    })
 
-  const result = await runModel({
-    model,
-    system: systemPrompt(`${ROLE[input.kind]}\n\n${current}`, knowledge),
-    turns: input.messages,
-    attachments: [],
-    tools,
-    runTool: callMcpTool,
-    ...(model.tools ? { stopTool: PROPOSALS[input.kind] } : {}),
-    effort,
-    maxTokens: 16000,
-    onText: (text) => out.send({ type: 'delta', text }),
-    onProgress: (chars) => out.send({ type: 'progress', chars }),
-    onToolUse: toolEvents(out),
-  })
+  let turns: Turn[] = input.messages
+  let result = await run(turns)
+  // Unreadable theme → show the model exactly which color pairs fail and let it fix them.
+  for (let i = 0; isTheme && result.stopInput && i < THEME_REPAIRS; i++) {
+    const problems = themeProblems(result.stopInput)
+    if (!problems.length) break
+    out.send({ type: 'tool', name: 'contrast__check', input: { fixing: `${problems.length} low-contrast pairs` } })
+    turns = [
+      ...turns,
+      { role: 'assistant', content: `Proposed theme: ${JSON.stringify(result.stopInput)}` },
+      { role: 'user', content: `The contrast check failed:\n- ${problems.join('\n- ')}\nAdjust only the colors needed and call ${PROPOSE_TOOL} again.` },
+    ]
+    result = await run(turns)
+  }
   if (result.stopInput) out.send({ type: 'proposal', data: result.stopInput })
   out.send({ type: 'done', stop_reason: result.stopReason })
 }

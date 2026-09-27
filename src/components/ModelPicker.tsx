@@ -19,7 +19,7 @@ function label(m: AiModel): string {
   return tags.length ? `${m.name} (${tags.join(', ')})` : m.name
 }
 
-/** Sidebar control: 9router provider → model, thinking effort, or a hand-typed model id. Saved server-side. */
+/** 9router provider → model, thinking effort, or a hand-typed model id. Saved server-side. Styled for a dark (forest) surface. */
 export function ModelPicker() {
   const qc = useQueryClient()
   const [typing, setTyping] = useState(false)
@@ -52,7 +52,7 @@ export function ModelPicker() {
   const error = list.error ?? select.error ?? effort.error
 
   return (
-    <section aria-label="AI model" className="hidden space-y-2 md:block">
+    <section aria-label="AI model" className="space-y-2">
       <div className="flex items-center justify-between">
         <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-paper/60">
           <Cpu className="size-3" /> AI model

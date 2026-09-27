@@ -108,3 +108,24 @@ export async function callMcpTool(name: string, input: unknown): Promise<string>
 export async function mcpToolDefs(): Promise<ToolDef[]> {
   return (await mcpTools()).map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))
 }
+
+/**
+ * Connects to a candidate server and lists its tools, for the AI helper to verify a URL before suggesting it.
+ * HTTPS only, so the helper cannot be steered into probing services on this machine or the local network.
+ */
+export async function probeMcpServer(url: unknown): Promise<string> {
+  if (typeof url !== 'string' || !URL.canParse(url) || new URL(url).protocol !== 'https:') return 'Only https:// URLs can be checked.'
+  const client = new Client({ name: 'sa-copilot-probe', version: '1.0.0' })
+  try {
+    await client.connect(new StreamableHTTPClientTransport(new URL(url)))
+    const { tools } = await client.listTools()
+    if (!tools.length) return 'Connected, but the server exposes no tools.'
+    return `Connected. ${tools.length} tools:\n${tools
+      .map((t) => `- ${t.name}${t.annotations?.readOnlyHint === false ? ' (has side effects — the app will NOT use it)' : ''}: ${(t.description ?? '').slice(0, 160)}`)
+      .join('\n')}`
+  } catch (e) {
+    return `Could not connect: ${e instanceof Error ? e.message : String(e)}`
+  } finally {
+    await client.close().catch(() => {})
+  }
+}

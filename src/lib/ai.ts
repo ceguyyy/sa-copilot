@@ -47,6 +47,8 @@ async function post(path: string, body: Record<string, unknown>, onEvent: (e: St
 
 /** Human-readable label for a tool call, e.g. "cekat_docs__searchDocumentation" + {query} → "Searching Cekat docs: broadcast". */
 export function describeTool(name: string, input: unknown): string {
+  if (name === 'contrast__check') return 'Fixing low-contrast colors'
+  if (name === 'check_mcp_server') return `Testing connection: ${String((input as { url?: string })?.url ?? '')}`
   const [server, tool = name] = name.split('__')
   const source = server.replace(/_/g, ' ')
   const arg = input && typeof input === 'object' ? Object.values(input as Record<string, unknown>).find((v) => typeof v === 'string') : undefined
@@ -93,9 +95,9 @@ export interface AssistMessage {
   content: string
 }
 
-/** Skill / template designer chat. Resolves with the proposed field values, if the AI made a proposal. */
+/** Skill / template / theme designer chat. Resolves with the proposed field values, if the AI made a proposal. */
 export async function assist(
-  params: { kind: 'skill' | 'template'; current: Record<string, unknown>; messages: AssistMessage[] },
+  params: { kind: 'skill' | 'template' | 'theme' | 'mcp'; current: Record<string, unknown>; messages: AssistMessage[] },
   handlers: { onText: (t: string) => void; onTool?: (label: string) => void; onProgress?: (chars: number) => void },
   signal?: AbortSignal,
 ): Promise<Record<string, unknown> | null> {

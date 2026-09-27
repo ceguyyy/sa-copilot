@@ -1,15 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Download, Plus, RotateCcw, Save, Star, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { DOC_LABELS, SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../shared/schemas.ts'
-import { AssistantChat } from '../components/AssistantChat'
-import { McpServersPanel } from '../components/McpServersPanel'
-import { Badge, Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea } from '../components/ui'
-import { skillsApi } from '../lib/api'
-import { DEFAULT_SKILLS } from '../lib/defaultSkills'
-import { downloadBlob, slugify } from '../lib/download'
-import { parseSkillMarkdown, skillToMarkdown } from '../lib/skillFile'
-import type { Skill, SkillInput } from '../lib/types'
+import { DOC_LABELS, SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../../shared/schemas.ts'
+import { AssistantChat } from '../../components/AssistantChat'
+import { Badge, Button, Card, ErrorNote, Field, Input, Select, Spinner, Textarea } from '../../components/ui'
+import { skillsApi } from '../../lib/api'
+import { DEFAULT_SKILLS } from '../../lib/defaultSkills'
+import { downloadBlob, slugify } from '../../lib/download'
+import { parseSkillMarkdown, skillToMarkdown } from '../../lib/skillFile'
+import type { Skill, SkillInput } from '../../lib/types'
 
 const label = (t: SkillOutputType) => (t === 'chat' ? 'Chat persona' : t === 'custom' ? 'Custom deliverables (all)' : DOC_LABELS[t])
 
@@ -20,7 +19,7 @@ const STARTERS = [
 ]
 const BLANK: SkillInput = { name: 'New skill', output_type: 'assessment', description: '', instructions: '', is_default: false }
 
-export function SkillsPage() {
+export function SkillsSettings() {
   const qc = useQueryClient()
   const skills = useQuery({ queryKey: ['skills'], queryFn: skillsApi.list })
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
@@ -102,43 +101,37 @@ export function SkillsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <PageHeader
-        kicker="Claude skills library"
-        title="Skills"
-        actions={
-          <>
-            <Button variant="outline" icon={<Upload className="size-4" />} loading={importFile.isPending} onClick={() => importInput.current?.click()}>
-              Import .md
-            </Button>
-            <input
-              ref={importInput}
-              type="file"
-              accept=".md,text/markdown"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                e.target.value = ''
-                if (f) importFile.mutate(f)
-              }}
-            />
-            <Button variant="outline" icon={<RotateCcw className="size-4" />} loading={restoreDefaults.isPending} onClick={() => restoreDefaults.mutate()}>
-              Restore missing defaults
-            </Button>
-            <Button
-              icon={<Plus className="size-4" />}
-              onClick={() => {
-                setSelectedId('new')
-                setForm(BLANK)
-              }}
-            >
-              New skill
-            </Button>
-          </>
-        }
-      />
+    <div className="space-y-6">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" icon={<Upload className="size-4" />} loading={importFile.isPending} onClick={() => importInput.current?.click()}>
+          Import .md
+        </Button>
+        <input
+          ref={importInput}
+          type="file"
+          accept=".md,text/markdown"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) importFile.mutate(f)
+          }}
+        />
+        <Button variant="outline" icon={<RotateCcw className="size-4" />} loading={restoreDefaults.isPending} onClick={() => restoreDefaults.mutate()}>
+          Restore missing defaults
+        </Button>
+        <Button
+          icon={<Plus className="size-4" />}
+          onClick={() => {
+            setSelectedId('new')
+            setForm(BLANK)
+          }}
+        >
+          New skill
+        </Button>
+      </div>
       <p className="max-w-3xl text-sm text-muted">
-        A skill is the instruction set Claude follows for one output type. The ★ default is used unless you pick another one when generating. Skills export as SKILL.md files usable in Claude Code too.
+        A skill is the instruction set the AI follows for one output type (a built-in document, every custom format, or chat). The ★ default is used unless you pick another one when generating. Skills export as SKILL.md files usable in Claude Code too.
       </p>
       <ErrorNote error={skills.error ?? importFile.error ?? restoreDefaults.error} />
 
@@ -242,7 +235,6 @@ export function SkillsPage() {
         </div>
       </div>
 
-      <McpServersPanel />
     </div>
   )
 }

@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SA Copilot</title>
+    <script>
+      // Paint the saved theme before the app loads so the page doesn't flash the default colors.
+      try {
+        var t = JSON.parse(localStorage.getItem('sa-copilot-theme'))
+        var dark = t.mode === 'dark' || (t.mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+        var palette = dark ? t.dark : t.light
+        for (var k in palette) document.documentElement.style.setProperty('--' + k, palette[k])
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

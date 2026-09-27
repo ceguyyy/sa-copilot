@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { AssistantChat } from '../components/AssistantChat'
-import { Button, Card, ErrorNote, Field, Input, PageHeader, Spinner, Textarea } from '../components/ui'
-import { templatesApi } from '../lib/api'
-import type { DocTemplate, DocTemplateInput } from '../lib/types'
+import { AssistantChat } from '../../components/AssistantChat'
+import { Button, Card, ErrorNote, Field, Input, Spinner, Textarea } from '../../components/ui'
+import { templatesApi } from '../../lib/api'
+import type { DocTemplate, DocTemplateInput } from '../../lib/types'
 
 const BLANK: DocTemplateInput = { name: 'New deliverable', description: '', instructions: '' }
 
@@ -17,8 +17,8 @@ const STARTERS = [
 
 const pick = (t: DocTemplate): DocTemplateInput => ({ name: t.name, description: t.description, instructions: t.instructions })
 
-/** Custom deliverable types: the AI writes each as meta + markdown sections following the template's instructions. */
-export function TemplatesPage() {
+/** Custom deliverable formats (templates): the AI writes each as meta + markdown sections following the template's instructions. */
+export function FormatsSettings() {
   const qc = useQueryClient()
   const templates = useQuery({ queryKey: ['templates'], queryFn: templatesApi.list })
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
@@ -57,22 +57,18 @@ export function TemplatesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <PageHeader
-        kicker="Beyond the built-in formats"
-        title="Deliverable templates"
-        actions={
-          <Button
-            icon={<Plus className="size-4" />}
-            onClick={() => {
-              setSelectedId('new')
-              setForm(BLANK)
-            }}
-          >
-            New template
-          </Button>
-        }
-      />
+    <div className="space-y-6">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          icon={<Plus className="size-4" />}
+          onClick={() => {
+            setSelectedId('new')
+            setForm(BLANK)
+          }}
+        >
+          New format
+        </Button>
+      </div>
       <p className="max-w-3xl text-sm text-muted">
         A template defines a deliverable of your own — its sections, key facts and tone. In a project, pick it under <em>Custom deliverables</em> and the
         AI drafts it from that project&apos;s requirements. The result is edited, versioned and exported (.docx / .md) like any other document.

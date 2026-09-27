@@ -3,6 +3,7 @@ import { Plug, Plus, Power, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { mcpApi } from '../lib/api'
 import type { McpServer } from '../lib/types'
+import { AssistantChat } from './AssistantChat'
 import { Badge, Button, ErrorNote, Input } from './ui'
 
 /** MCP servers whose read-only tools the AI may call while chatting and drafting (e.g. Cekat docs search). */
@@ -81,6 +82,21 @@ export function McpServersPanel() {
           Add server
         </Button>
       </form>
+
+      <AssistantChat
+        kind="mcp"
+        title="AI helper"
+        current={{}}
+        onProposal={(data) => setForm({ name: String(data.name ?? ''), url: String(data.url ?? '') })}
+        placeholder="Mau AI bisa cek dokumentasi apa? (produk, library, repo GitHub…)"
+        starters={[
+          'Tambahkan dokumentasi Microsoft Learn',
+          'Saya butuh docs library JavaScript terbaru (Context7)',
+          'Apa saja yang bisa dilakukan server Cekat Docs?',
+        ]}
+        intro="Ask which documentation sources to connect. The AI tests a server's connection first, then fills the form above — click Add to confirm."
+        appliedNote="Server filled into the form above — click Add server to confirm."
+      />
     </section>
   )
 }

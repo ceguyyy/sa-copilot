@@ -26,8 +26,8 @@ export function CustomDeliverables({ projectId, docs, running, onGenerate }: Pro
           <h2 className="font-display text-xl font-semibold">Custom deliverables</h2>
           <p className="text-xs text-muted">
             Your own formats (proposal, BRD, UAT plan…).{' '}
-            <Link to="/templates" className="font-medium text-forest hover:underline">
-              Design templates with AI →
+            <Link to="/settings/formats" className="font-medium text-forest hover:underline">
+              Design formats with AI →
             </Link>
           </p>
         </div>
@@ -49,10 +49,10 @@ export function CustomDeliverables({ projectId, docs, running, onGenerate }: Pro
 
       {templates.data?.length === 0 && (
         <Link
-          to="/templates"
+          to="/settings/formats"
           className="flex items-center gap-3 rounded-lg border border-dashed border-line p-4 text-sm text-muted transition hover:border-forest hover:text-forest"
         >
-          <LayoutTemplate className="size-5" /> No templates yet — create one (the AI can design it for you).
+          <LayoutTemplate className="size-5" /> No custom formats yet — create one in Settings (the AI can design it for you).
         </Link>
       )}
 

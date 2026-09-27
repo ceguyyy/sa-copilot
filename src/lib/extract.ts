@@ -1,9 +1,10 @@
-// Browser-side text extraction for uploaded requirement/knowledge files.
-// Images and scanned PDFs return '' and are sent to Claude natively by the edge function.
+// Browser-side text extraction for uploaded requirement/knowledge files. The server converts uploads with
+// markitdown (compact Markdown) and uses this text only as a fallback. Images and scanned PDFs are sent to the AI natively.
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024
 
-export const ACCEPTED_FILES = '.pdf,.docx,.xlsx,.csv,.txt,.md,.json,.png,.jpg,.jpeg,.webp,.gif'
+export const ACCEPTED_FILES =
+  '.pdf,.docx,.doc,.pptx,.xlsx,.xls,.csv,.txt,.md,.json,.html,.htm,.xml,.epub,.msg,.zip,.png,.jpg,.jpeg,.webp,.gif'
 
 export async function extractText(file: File): Promise<string> {
   if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is larger than 50 MB`)
@@ -14,7 +15,8 @@ export async function extractText(file: File): Promise<string> {
   if (name.endsWith('.docx')) return extractDocx(file)
   if (name.endsWith('.xlsx')) return extractXlsx(file)
   if (/\.(txt|md|csv|json)$/.test(name)) return file.text()
-  throw new Error(`Unsupported file type: ${file.name}`)
+  // Other formats (pptx, xls, html, epub, msg…) are only readable by markitdown on the server.
+  return ''
 }
 
 async function extractPdf(file: File): Promise<string> {

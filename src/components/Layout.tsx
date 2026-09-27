@@ -1,13 +1,12 @@
 import clsx from 'clsx'
-import { BookOpen, FolderKanban, LayoutTemplate, Sparkles } from 'lucide-react'
+import { BookOpen, FolderKanban, Settings } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { ModelPicker } from './ModelPicker'
+import { CurrentModel } from './CurrentModel'
 
 const NAV = [
   { to: '/', label: 'Projects', icon: FolderKanban, end: true },
   { to: '/knowledge', label: 'Knowledge', icon: BookOpen, end: false },
-  { to: '/templates', label: 'Templates', icon: LayoutTemplate, end: false },
-  { to: '/skills', label: 'Skills', icon: Sparkles, end: false },
+  { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]
 
 export function Layout() {
@@ -37,7 +36,7 @@ export function Layout() {
           ))}
         </nav>
         <div className="md:mt-auto">
-          <ModelPicker />
+          <CurrentModel />
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-10 md:py-8">

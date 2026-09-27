@@ -1,5 +1,6 @@
 // Data access layer (repository pattern) — every call to the local server's REST API lives here.
 import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
+import type { Theme, ThemeMode } from '../../shared/theme.ts'
 import type {
   AiModel,
   AiModelList,
@@ -153,4 +154,20 @@ export const mcpApi = {
   update: (id: string, input: Partial<Pick<McpServer, 'name' | 'url' | 'enabled'>>) =>
     send<McpServer>('Update tool server', 'PATCH', `/mcp-servers/${id}`, input),
   remove: (id: string) => send<void>('Delete tool server', 'DELETE', `/mcp-servers/${id}`),
+}
+
+// ---------- theme ----------
+
+export interface ThemeSettings {
+  mode: ThemeMode
+  activeId: string
+  custom: Theme[]
+  presets: Theme[]
+}
+
+export const themeApi = {
+  get: () => request<ThemeSettings>('Load theme', '/settings/theme'),
+  update: (patch: { mode?: ThemeMode; activeId?: string }) => send<ThemeSettings>('Update theme', 'PUT', '/settings/theme', patch),
+  save: (theme: Omit<Theme, 'id'>) => send<Theme>('Save theme', 'POST', '/settings/themes', theme),
+  remove: (id: string) => send<void>('Delete theme', 'DELETE', `/settings/themes/${id}`),
 }

@@ -19,7 +19,7 @@ React 19 + Vite + TypeScript + Tailwind v4 · TanStack Query · local Node serve
 
 ```
 src/
-  pages/              Projects, Project (sources + pipeline + chat), Document, Skills, Knowledge
+  pages/              Projects, Project (sources + pipeline + chat), Document, Knowledge, Settings (formats, skills, AI tools, model, theme)
   components/         ChatPanel, SourcesPanel, AiPanel, VersionHistory, Markdown, MermaidView, ui
   components/editors/ Assessment, TOR, Timeline (Gantt), SOW, Onboarding, Diagram
   lib/                api (REST client), ai (NDJSON stream client), timeline, docMarkdown, diff, extract, export/*
@@ -38,9 +38,16 @@ db/schema.sql         schema, applied automatically on every server start (idemp
 2. **Config** — copy `.env.example` to `.env` and set:
    - `DATABASE_URL=postgres://postgres:<your password>@localhost:5432/sa_copilot`
    - `ANTHROPIC_API_KEY` — a Claude API key, **or** a 9router key together with `ANTHROPIC_BASE_URL=http://localhost:20128` (run `9router` first).
-3. **Run** — double-click `start-sa-copilot.bat`. It installs, builds, starts the server and opens http://localhost:3000.
+3. **markitdown** (recommended) — `pip install "markitdown[all]"`. Uploads are converted to compact Markdown (tables and headings kept), which saves AI tokens and reads PDF/DOCX/PPTX/XLSX/HTML/EPUB/MSG. Without it, the browser's plain-text extraction is used. Set `MARKITDOWN_PYTHON` if markitdown lives in a different Python.
+4. **Run** — double-click `start-sa-copilot.bat`. It installs, builds, starts the server and opens http://localhost:3000.
 
-**Choosing the AI provider and model:** with `ANTHROPIC_BASE_URL` pointing at 9router, the sidebar shows an **AI model** picker listing every provider and model connected in 9router (from its `/v1/models`). The choice is saved in the database and used for chat and document generation; `ANTHROPIC_MODEL` is only the fallback. Connect more providers in the 9router dashboard, then press the reload icon next to the picker. Models marked *(chat only)* can't call tools, so they can't write documents.
+**Settings** (sidebar → Settings) is the single place to configure the copilot:
+
+- **Formats** — custom deliverable formats beyond the built-in ones, designed with an AI assistant.
+- **Skills** — how the AI writes each output; an AI assistant proposes skill text.
+- **AI tools** — MCP servers the AI may consult (Cekat Docs is preset). The *AI helper* tests a server's connection before suggesting it. Only read-only tools are used.
+- **AI model** — every provider and model connected in 9router (from `/v1/models`), a hand-typed model id for ones it doesn't list, and the thinking effort. `ANTHROPIC_MODEL` is only the fallback. Models marked *(chat only)* can't call tools, so they can't write documents.
+- **Theme** — light / dark / follow Windows, preset palettes, or a palette the AI designs (both light and dark, contrast-checked before it can be saved).
 
 There is no login: the server only listens on `127.0.0.1`, so it is reachable from this laptop only. Uploaded files are stored in `data/uploads/`. Back up both that folder and the database (pgAdmin → Backup) together.
 

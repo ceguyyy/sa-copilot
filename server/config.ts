@@ -29,6 +29,10 @@ export const config = {
   distDir: path.join(ROOT, 'dist'),
   schemaFile: path.join(ROOT, 'db', 'schema.sql'),
   maxUploadBytes: 50 * 1024 * 1024,
+  markitdown: {
+    // Python interpreter that has markitdown installed (pip install "markitdown[all]").
+    python: process.env.MARKITDOWN_PYTHON?.trim() || 'python',
+  },
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
     baseURL: anthropicBaseUrl,

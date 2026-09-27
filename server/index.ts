@@ -11,6 +11,7 @@ import { setupDatabase } from './db.ts'
 import { toHttpError } from './http.ts'
 import { api } from './routes.ts'
 import { extras } from './routes/extras.ts'
+import { themes } from './themes.ts'
 import { seedDefaultServers } from './ai/mcp.ts'
 
 const app = new Hono()
@@ -23,6 +24,7 @@ app.onError((e, c) => {
 
 app.route('/api', api)
 app.route('/api', extras)
+app.route('/api', themes)
 app.route('/api/ai', ai)
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
 

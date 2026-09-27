@@ -6,7 +6,7 @@ type Variant = 'primary' | 'ai' | 'ghost' | 'danger' | 'outline'
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-forest text-paper hover:brightness-110 active:brightness-95 shadow-[0_1px_0_rgba(0,0,0,.15)]',
-  ai: 'bg-ember text-white hover:brightness-110 active:brightness-95 shadow-[0_2px_0_color-mix(in_oklab,var(--ember)_55%,black)]',
+  ai: 'bg-ember text-paper hover:brightness-110 active:brightness-95 shadow-[0_2px_0_color-mix(in_oklab,var(--ember)_55%,black)]',
   ghost: 'text-ink hover:bg-forest-soft',
   outline: 'border border-line bg-panel text-ink hover:border-forest',
   danger: 'text-bad hover:bg-ember-soft',

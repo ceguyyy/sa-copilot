@@ -5,7 +5,8 @@ import { config } from './config.ts'
 import { query, queryOne, withTransaction } from './db.ts'
 import { HttpError, UUID_RE, idParam, notFound, parseJson } from './http.ts'
 import { exportDocumentFiles, exportProjectFiles, removeExportedFiles } from './exports.ts'
-import { deleteUpload, saveUpload } from './storage.ts'
+import { convertToMarkdown, shouldConvert } from './markitdown.ts'
+import { deleteUpload, resolveKey, saveUpload } from './storage.ts'
 import {
   documentInput,
   documentPatch,
@@ -103,10 +104,12 @@ api.post('/sources/upload', bodyLimit({ maxSize: config.maxUploadBytes + 10 * 10
 
   const key = await saveUpload(file)
   try {
+    // Prefer markitdown's Markdown (compact, keeps tables/headings); the browser's text is the fallback.
+    const markdown = shouldConvert(file.type, file.name) ? await convertToMarkdown(resolveKey(key)) : null
     const row = await queryOne(
       `insert into sources (project_id, kind, name, mime_type, storage_path, extracted_text, size_bytes)
        values ($1, $2, $3, $4, $5, $6, $7) returning *`,
-      [fields.projectId, fields.kind, file.name, file.type || null, key, fields.extractedText, file.size],
+      [fields.projectId, fields.kind, file.name, file.type || null, key, markdown ?? fields.extractedText, file.size],
     )
     return c.json(row, 201)
   } catch (e) {

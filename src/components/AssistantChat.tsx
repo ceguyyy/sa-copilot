@@ -5,17 +5,21 @@ import { Markdown } from './Markdown'
 import { Button, ErrorNote, Textarea } from './ui'
 
 interface Props {
-  kind: 'skill' | 'template'
+  kind: 'skill' | 'template' | 'theme' | 'mcp'
   /** What the editor currently holds; sent so the AI edits it instead of starting over. */
   current: Record<string, unknown>
   /** Called with the AI's proposed field values; the page fills its editor and the user decides to save. */
   onProposal: (data: Record<string, unknown>) => void
   placeholder: string
   starters: string[]
+  /** Shown after a proposal arrives. */
+  appliedNote?: string
+  intro?: string
+  title?: string
 }
 
 /** Chat with the AI to draft or refine a skill / template. The conversation lives only in this component. */
-export function AssistantChat({ kind, current, onProposal, placeholder, starters }: Props) {
+export function AssistantChat({ kind, current, onProposal, placeholder, starters, appliedNote = 'Proposal applied to the editor — review it, then Save.', intro, title = 'Design with AI' }: Props) {
   const [messages, setMessages] = useState<AssistMessage[]>([])
   const [input, setInput] = useState('')
   const [reply, setReply] = useState<string | null>(null)
@@ -80,14 +84,14 @@ export function AssistantChat({ kind, current, onProposal, placeholder, starters
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-ember/40 bg-ember-soft/40 p-4">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Wand2 className="size-4 text-ember" /> Design with AI
+        <Wand2 className="size-4 text-ember" /> {title}
       </h2>
 
       <div className="max-h-[420px] space-y-3 overflow-y-auto text-sm">
         {messages.length === 0 && !running && (
           <div className="space-y-2">
             <p className="text-xs text-muted">
-              Describe what you need. The AI can look things up in the Cekat docs, then fills the editor for you to review and save.
+              {intro ?? 'Describe what you need. The AI can look things up in the Cekat docs, then fills the editor for you to review and save.'}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {starters.map((s) => (
@@ -123,7 +127,7 @@ export function AssistantChat({ kind, current, onProposal, placeholder, starters
         )}
       </div>
 
-      {applied && <p className="rounded-md bg-forest-soft px-3 py-2 text-xs text-forest">Proposal applied to the editor — review it, then Save.</p>}
+      {applied && <p className="rounded-md bg-forest-soft px-3 py-2 text-xs text-forest">{appliedNote}</p>}
       <ErrorNote error={error} />
 
       <form onSubmit={onSubmit} className="space-y-2">
