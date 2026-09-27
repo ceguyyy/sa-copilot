@@ -3,6 +3,7 @@ import { Copy, Download, Plus, RotateCcw, Save, Star, Trash2, Upload } from 'luc
 import { useEffect, useRef, useState } from 'react'
 import { DOC_LABELS, SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../../shared/schemas.ts'
 import { AssistantChat } from '../../components/AssistantChat'
+import { ReferenceFiles } from '../../components/ReferenceFiles'
 import { Badge, Button, Card, ErrorNote, Field, Input, Select, Spinner, Textarea } from '../../components/ui'
 import { skillsApi } from '../../lib/api'
 import { DEFAULT_SKILLS } from '../../lib/defaultSkills'
@@ -187,6 +188,7 @@ export function SkillsSettings() {
             <Field label="Instructions (markdown)" hint="Sent to Claude as system instructions for this output. Output shape is enforced by the app's JSON schema.">
               <Textarea rows={22} className="font-mono text-xs" value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
             </Field>
+            <ReferenceFiles ownerKind="skill" ownerId={selected?.id} />
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} className="accent-[var(--ember)]" />
               Default for {label(form.output_type)}
@@ -227,6 +229,7 @@ export function SkillsSettings() {
         )}
         <AssistantChat
           kind="skill"
+          ownerId={selected?.id}
           current={selectedId ? form : {}}
           onProposal={applyProposal}
           placeholder={selectedId ? 'Apa yang mau diubah di skill ini?' : 'Skill apa yang mau dibuat?'}

@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { invalidateMcpCache, mcpTools } from '../ai/mcp.ts'
+import { removeOwnerFiles } from '../attachments.ts'
 import { query, queryOne } from '../db.ts'
 import { deleteProjectFile, exportProjectFiles, listProjectFiles, projectFilePath, revealInExplorer } from '../exports.ts'
 import { HttpError, idParam, notFound, parseJson } from '../http.ts'
@@ -65,7 +66,9 @@ extras.patch('/templates/:id', async (c) => {
 })
 
 extras.delete('/templates/:id', async (c) => {
-  await query('delete from doc_templates where id = $1', [idParam(c)])
+  const id = idParam(c)
+  await removeOwnerFiles('template', id)
+  await query('delete from doc_templates where id = $1', [id])
   return c.body(null, 204)
 })
 

@@ -1,13 +1,21 @@
 // AI endpoints: `chat` (streamed conversation) and `generate` (structured document), plus model/effort settings.
 // Responses stream NDJSON lines: {type:"delta"|"progress"|"tool"|"done"|"error", ...}.
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { DOC_LABELS, DOC_SCHEMAS, isDocType, validateContent, type DocType } from '../../shared/schemas.ts'
+import { attachmentIds, ownerFiles, requestFiles, type LoadedFiles } from '../attachments.ts'
 import { config } from '../config.ts'
 import { query, queryOne } from '../db.ts'
 import { exportDocumentFiles } from '../exports.ts'
 import { HttpError, UUID_RE } from '../http.ts'
 import { assist } from './assist.ts'
+import { splitDiagram } from './split.ts'
+import { summarizeAudit } from './auditSummary.ts'
+import { checkConsistency } from './consistency.ts'
+import { processMeetingNotes } from './meeting.ts'
+import { findQuestions } from './questions.ts'
+import { summarizeVersionDiff } from './versionDiff.ts'
+import { generateDemoScenarios } from './demoScenarios.ts'
 import { loadAttachments, loadProjectContext, renderContextText } from './context.ts'
 import { SUBMIT_TOOL, parseJsonObject } from './extract.ts'
 import { resolveEffort, systemPrompt, toolEvents, toolsFor } from './common.ts'
@@ -34,12 +42,23 @@ ai.post('/', async (c) => {
   throw new HttpError(400, 'Unknown action')
 })
 
-ai.post('/assist', async (c) => {
-  const body = await c.req.json().catch(() => null)
-  if (!body || typeof body !== 'object') throw new HttpError(400, 'Invalid JSON body')
+/** Endpoints that validate their own JSON body and stream NDJSON back. */
+const streamed = (run: (body: unknown, out: Stream) => Promise<void>) => async (c: Context) => {
+  const body = await c.req.json().catch(() => {
+    throw new HttpError(400, 'Invalid JSON body')
+  })
   requireApiKey()
-  return streamResponse((s) => assist(body, s))
-})
+  return streamResponse((s) => run(body, s))
+}
+
+ai.post('/assist', streamed(assist))
+ai.post('/split-diagram', streamed(splitDiagram))
+ai.post('/audit-summary', streamed(summarizeAudit))
+ai.post('/consistency', streamed(checkConsistency))
+ai.post('/meeting-notes', streamed(processMeetingNotes))
+ai.post('/find-questions', streamed(findQuestions))
+ai.post('/version-diff', streamed(summarizeVersionDiff))
+ai.post('/demo-scenarios', streamed(generateDemoScenarios))
 
 ai.get('/models', async (c) => {
   const [models, selected, effort] = await Promise.all([listModels(), activeModel(), getEffort()])
@@ -71,26 +90,35 @@ async function handleChat(body: Body, out: Stream) {
   if (!message || message.length > MAX_INSTRUCTION_CHARS) throw new HttpError(400, 'Message is empty or too long')
 
   const model = await activeModel()
-  const [ctx, skill, tools, effort] = await Promise.all([
+  const [ctx, skill, tools, effort, files] = await Promise.all([
     loadProjectContext(projectId),
     loadSkill(body.skillId, 'chat'),
     toolsFor(model),
     resolveEffort(model, config.anthropic.chatEffort),
+    requestFiles(attachmentIds.parse(body.attachmentIds), model.vision),
   ])
+  const skillFiles = await ownerFiles('skill', skill?.id, model.vision)
 
-  await query(`insert into messages (project_id, role, content) values ($1, 'user', $2)`, [projectId, message])
+  // History keeps only the file names; the file contents go to the model with this turn.
+  const saved = files.names.length ? `${message}\n\n📎 ${files.names.join(', ')}` : message
+  await query(`insert into messages (project_id, role, content) values ($1, 'user', $2)`, [projectId, saved])
   const history = await query<{ role: 'user' | 'assistant'; content: string }>(
     'select role, content from messages where project_id = $1 order by created_at desc limit $2',
     [projectId, HISTORY_LIMIT],
   )
   const turns = history.reverse()
   while (turns.length && turns[0].role !== 'user') turns.shift()
+  const last = turns.length - 1
+  if (last >= 0 && files.text) turns[last] = { role: 'user', content: withFiles(message, files) }
 
   const result = await runModel({
     model,
-    system: systemPrompt(skill?.instructions, renderContextText(ctx)),
+    system: systemPrompt(
+      [withFiles(skill?.instructions, skillFiles), focusNote(body.focus)].filter(Boolean).join('\n\n') || undefined,
+      renderContextText(ctx),
+    ),
     turns,
-    attachments: await loadAttachments(ctx, model),
+    attachments: [...(await loadAttachments(ctx, model)), ...skillFiles.images, ...files.images],
     tools,
     runTool: callMcpTool,
     effort,
@@ -127,11 +155,12 @@ async function handleGenerate(body: Body, out: Stream) {
   if (config.anthropic.proxied && !model.tools) {
     throw new HttpError(400, `${model.id} cannot call tools, so it can't write documents — pick another model (it still works for chat).`)
   }
-  const [ctx, skill, tools, effort] = await Promise.all([
+  const [ctx, skill, tools, effort, files] = await Promise.all([
     loadProjectContext(projectId),
     loadSkill(body.skillId, docType),
     toolsFor(model),
     resolveEffort(model, config.anthropic.generateEffort),
+    requestFiles(attachmentIds.parse(body.attachmentIds), model.vision),
   ])
   // Diagrams and custom deliverables can have many per project; the others are one-per-type.
   const existing = documentId
@@ -140,6 +169,10 @@ async function handleGenerate(body: Body, out: Stream) {
       ? undefined
       : ctx.docs.find((d) => d.type === docType)
   const template = docType === 'custom' ? await loadTemplate(body.templateId, existing?.id) : null
+  const [skillFiles, templateFiles] = await Promise.all([
+    ownerFiles('skill', skill?.id, model.vision),
+    ownerFiles('template', template?.id, model.vision),
+  ])
 
   const schema = DOC_SCHEMAS[docType]
   const task = buildTask(docType, instruction, existing, diagramKind, template)
@@ -152,9 +185,17 @@ async function handleGenerate(body: Body, out: Stream) {
 
   const result = await runModel({
     model,
-    system: systemPrompt(joinInstructions(skill?.instructions, template), renderContextText(ctx)),
-    turns: [{ role: 'user', content: structured ? task : `${task}\nReturn the document ONLY by calling the ${SUBMIT_TOOL} tool exactly once.` }],
-    attachments: await loadAttachments(ctx, model),
+    system: systemPrompt(
+      withFiles(withFiles(joinInstructions(skill?.instructions, template), skillFiles), templateFiles),
+      renderContextText(ctx),
+    ),
+    turns: [
+      {
+        role: 'user',
+        content: withFiles(structured ? task : `${task}\nReturn the document ONLY by calling the ${SUBMIT_TOOL} tool exactly once.`, files),
+      },
+    ],
+    attachments: [...(await loadAttachments(ctx, model)), ...skillFiles.images, ...templateFiles.images, ...files.images],
     tools,
     runTool: callMcpTool,
     ...(structured ? { jsonSchema: schema } : { stopTool }),
@@ -208,11 +249,27 @@ function buildTask(
       `A current version exists (<document id="${existing.id}"> v${existing.version} in the context). Revise it: apply the instruction, keep everything the instruction does not ask to change.`,
     )
   }
+  if (docType === 'deck') {
+    lines.push(
+      'It is the pitch deck: write the content of template slides 31–40 for THIS client — end-to-end architecture, CRM data flow, marketing journey, three WhatsApp use-case mockups (realistic chat in the project language, fake names), CRM / kanban / analytics mockups with realistic sample data, and the timeline prerequisites. Tailor every slide to the requirements and the Cekat features that actually exist (check the docs). Keep each text short enough for a slide.',
+    )
+  }
   if (docType === 'sow_cekat' || docType === 'sow_cif') {
     lines.push('Durations and milestones MUST come from the Timeline document in the context (its SLA/Days are the mandays set by the SA). If no timeline exists, write "TBD — timeline belum dibuat".')
   }
   lines.push(instruction ? `Instruction from the SA: ${instruction}` : 'No extra instruction — follow the skill guidance.')
   return lines.join('\n')
+}
+
+/** Which part of the project the SA is looking at (the project page tab), so answers stay on topic. */
+function focusNote(focus: unknown): string {
+  return typeof focus === 'string' && focus.trim() ? `# CURRENT FOCUS\nThe SA is on the "${focus.trim().slice(0, 60)}" tab of the project — prioritise that area.` : ''
+}
+
+/** Appends attached files' text below a prompt part (instructions or a user turn). */
+function withFiles<T extends string | undefined>(text: T, files: LoadedFiles): T | string {
+  if (!files.text) return text
+  return text ? `${text}\n\n${files.text}` : files.text
 }
 
 function joinInstructions(skill: string | undefined, template: Template | null): string | undefined {

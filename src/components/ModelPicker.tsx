@@ -5,7 +5,7 @@ import { modelsApi } from '../lib/api'
 import type { AiModel, EffortSetting } from '../lib/types'
 
 const selectCls =
-  'w-full truncate rounded-md border border-paper/20 bg-paper/10 px-2 py-1.5 text-xs text-paper focus:border-paper/60 focus:outline-none disabled:opacity-50 [&>option]:text-ink'
+  'w-full truncate rounded-md border border-paper/20 bg-paper/10 px-2 py-1.5 text-xs text-paper focus:border-paper/60 focus:outline-none disabled:opacity-50'
 
 const EFFORTS: { value: EffortSetting; label: string }[] = [
   { value: 'default', label: 'Thinking: auto' },

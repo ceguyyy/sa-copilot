@@ -24,6 +24,15 @@ export const config = {
   host: '127.0.0.1',
   databaseUrl: required('DATABASE_URL'),
   uploadDir: path.resolve(ROOT, process.env.UPLOAD_DIR ?? 'data/uploads'),
+  // Healthcare demo app (github.com/ceguyyy/Healthcare-demo-cekat): where scenarios are shown and the
+  // Supabase REST endpoint + key they are stored with. The key stays on this server.
+  demo: {
+    appUrl: process.env.DEMO_APP_URL?.trim() || 'https://healthcare-demo-cekat.vercel.app/',
+    supabaseUrl: process.env.DEMO_SUPABASE_URL?.trim().replace(/\/+$/, '') || '',
+    supabaseKey: process.env.DEMO_SUPABASE_KEY?.trim() || '',
+  },
+  // PowerPoint template whose slides 31–40 the pitch deck replaces.
+  deckTemplate: path.resolve(ROOT, process.env.DECK_TEMPLATE ?? 'data/templates/deck.pptx'),
   // Auto-exported deliverables, one folder per project.
   docsDir: path.resolve(ROOT, process.env.DOCS_DIR ?? 'data/projects'),
   distDir: path.join(ROOT, 'dist'),

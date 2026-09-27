@@ -1,10 +1,11 @@
 import clsx from 'clsx'
-import { Cpu, LayoutTemplate, Palette, Plug, Sparkles } from 'lucide-react'
+import { Cpu, Languages, LayoutTemplate, Palette, Plug, Sparkles } from 'lucide-react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { McpServersPanel } from '../components/McpServersPanel'
 import { ModelPicker } from '../components/ModelPicker'
 import { PageHeader } from '../components/ui'
 import { FormatsSettings } from './settings/FormatsSettings'
+import { LanguagesSettings } from './settings/LanguagesSettings'
 import { SkillsSettings } from './settings/SkillsSettings'
 import { ThemeSettings } from './settings/ThemeSettings'
 
@@ -32,6 +33,12 @@ const TABS = [
     label: 'AI model',
     icon: Cpu,
     intro: 'Which 9router provider and model answer, and how hard they think. Applies to chat, drafting and the design assistants.',
+  },
+  {
+    id: 'languages',
+    label: 'Languages',
+    icon: Languages,
+    intro: 'The choices in the project language dropdown. The ★ main language is preselected for new projects.',
   },
   {
     id: 'theme',
@@ -88,6 +95,8 @@ function TabContent({ tab }: { tab: TabId }) {
           <ModelPicker />
         </div>
       )
+    case 'languages':
+      return <LanguagesSettings />
     case 'theme':
       return <ThemeSettings />
   }

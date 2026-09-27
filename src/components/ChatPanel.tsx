@@ -3,6 +3,8 @@ import { Eraser, Send, Square } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { chat } from '../lib/ai'
 import { messagesApi, skillsApi } from '../lib/api'
+import { useRequestFiles } from '../lib/useRequestFiles'
+import { AttachFiles } from './AttachFiles'
 import { Markdown } from './Markdown'
 import { Button, ErrorNote, Select, Textarea } from './ui'
 
@@ -12,7 +14,15 @@ const STARTERS = [
   'Buatkan sequence diagram alur eskalasi ke human agent.',
 ]
 
-export function ChatPanel({ projectId }: { projectId: string }) {
+interface Props {
+  projectId: string
+  /** The project tab the SA is on; the AI prioritises that area. */
+  focus?: string
+  starters?: string[]
+}
+
+/** The project's AI chat. One shared history; each tab sets its own focus and starter prompts. */
+export function ChatPanel({ projectId, focus, starters = STARTERS }: Props) {
   const qc = useQueryClient()
   const key = ['messages', projectId]
   const messages = useQuery({ queryKey: key, queryFn: () => messagesApi.list(projectId) })
@@ -23,6 +33,7 @@ export function ChatPanel({ projectId }: { projectId: string }) {
   const [skillId, setSkillId] = useState('')
   const [pending, setPending] = useState<{ user: string; reply: string; activity: string } | null>(null)
   const [error, setError] = useState<unknown>(null)
+  const files = useRequestFiles()
   const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
 
@@ -33,14 +44,16 @@ export function ChatPanel({ projectId }: { projectId: string }) {
 
   async function send(text: string) {
     const message = text.trim()
-    if (!message || pending) return
+    if (!message || pending || files.uploading) return
+    const attachmentIds = files.ids
     setInput('')
+    files.clear()
     setError(null)
     setPending({ user: message, reply: '', activity: '' })
     abort.current = new AbortController()
     try {
       await chat(
-        { projectId, message, skillId: skillId || undefined },
+        { projectId, message, skillId: skillId || undefined, attachmentIds, focus },
         (t) => setPending((p) => (p ? { ...p, reply: p.reply + t, activity: '' } : p)),
         abort.current.signal,
         (activity) => setPending((p) => (p ? { ...p, activity } : p)),
@@ -101,7 +114,7 @@ export function ChatPanel({ projectId }: { projectId: string }) {
         {history.length === 0 && !pending && (
           <div className="space-y-2">
             <p className="text-sm text-muted">The copilot reads every requirement, knowledge source and document in this project.</p>
-            {STARTERS.map((s) => (
+            {starters.map((s) => (
               <button key={s} onClick={() => send(s)} className="block w-full rounded-md border border-dashed border-line px-3 py-2 text-left text-sm hover:border-ember hover:text-ember">
                 {s}
               </button>
@@ -135,13 +148,14 @@ export function ChatPanel({ projectId }: { projectId: string }) {
           placeholder="Tanya, minta revisi, atau diskusi solusi… (Enter to send)"
           aria-label="Message"
         />
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex items-start justify-between gap-2">
+          <AttachFiles state={files} disabled={!!pending} />
           {pending ? (
             <Button type="button" variant="outline" icon={<Square className="size-3.5" />} onClick={() => abort.current?.abort()}>
               Stop
             </Button>
           ) : (
-            <Button type="submit" variant="ai" disabled={!input.trim()} icon={<Send className="size-4" />}>
+            <Button type="submit" variant="ai" disabled={!input.trim() || files.uploading} icon={<Send className="size-4" />}>
               Send
             </Button>
           )}

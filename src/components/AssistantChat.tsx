@@ -1,6 +1,8 @@
 import { Bot, Send, Square, Wand2 } from 'lucide-react'
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { assist, type AssistMessage } from '../lib/ai'
+import { useRequestFiles } from '../lib/useRequestFiles'
+import { AttachFiles } from './AttachFiles'
 import { Markdown } from './Markdown'
 import { Button, ErrorNote, Textarea } from './ui'
 
@@ -16,10 +18,12 @@ interface Props {
   appliedNote?: string
   intro?: string
   title?: string
+  /** The saved skill / format being edited, so the AI also sees its reference files. */
+  ownerId?: string
 }
 
 /** Chat with the AI to draft or refine a skill / template. The conversation lives only in this component. */
-export function AssistantChat({ kind, current, onProposal, placeholder, starters, appliedNote = 'Proposal applied to the editor — review it, then Save.', intro, title = 'Design with AI' }: Props) {
+export function AssistantChat({ kind, current, onProposal, placeholder, starters, appliedNote = 'Proposal applied to the editor — review it, then Save.', intro, title = 'Design with AI', ownerId }: Props) {
   const [messages, setMessages] = useState<AssistMessage[]>([])
   const [input, setInput] = useState('')
   const [reply, setReply] = useState<string | null>(null)
@@ -27,12 +31,15 @@ export function AssistantChat({ kind, current, onProposal, placeholder, starters
   const [chars, setChars] = useState(0)
   const [applied, setApplied] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const files = useRequestFiles()
   const abort = useRef<AbortController | null>(null)
   const running = reply !== null
 
   async function send(text: string) {
     const content = text.trim()
-    if (!content || running) return
+    if (!content || running || files.uploading) return
+    const attachmentIds = files.ids
+    files.clear()
     const history: AssistMessage[] = [...messages, { role: 'user', content }]
     setMessages(history)
     setInput('')
@@ -45,7 +52,7 @@ export function AssistantChat({ kind, current, onProposal, placeholder, starters
     let answer = ''
     try {
       const proposal = await assist(
-        { kind, current, messages: history },
+        { kind, current, messages: history, ownerId, attachmentIds },
         {
           onText: (t) => {
             answer += t
@@ -132,6 +139,7 @@ export function AssistantChat({ kind, current, onProposal, placeholder, starters
 
       <form onSubmit={onSubmit} className="space-y-2">
         <Textarea rows={3} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} placeholder={placeholder} disabled={running} />
+        <AttachFiles state={files} disabled={running} />
         <div className="flex justify-between gap-2">
           <Button type="button" variant="ghost" disabled={running || !messages.length} onClick={() => setMessages([])}>
             New chat

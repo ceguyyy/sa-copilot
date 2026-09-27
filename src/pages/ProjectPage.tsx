@@ -1,45 +1,108 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, GitBranch, Sparkles, Trash2 } from 'lucide-react'
-import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
-import { DIAGRAM_KINDS, DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
+import { FileClock, FolderOpen, GitBranch, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
 import { ChatPanel } from '../components/ChatPanel'
+import { LanguageSelect } from '../components/LanguageSelect'
 import { CustomDeliverables } from '../components/CustomDeliverables'
+import { AuditPanel } from '../components/project/AuditPanel'
+import { ConsistencyPanel } from '../components/project/ConsistencyPanel'
+import { MeetingNotesPanel } from '../components/project/MeetingNotesPanel'
+import { QuestionsPanel } from '../components/project/QuestionsPanel'
+import { ProjectTabs } from '../components/project/ProjectTabs'
+import { DeliverablesPanel } from '../components/project/DeliverablesPanel'
+import { DemoPanel } from '../components/project/DemoPanel'
+import { DiagramsPanel } from '../components/project/DiagramsPanel'
 import { ProjectFilesPanel } from '../components/ProjectFilesPanel'
 import { SourcesPanel } from '../components/SourcesPanel'
-import { Badge, Button, ErrorNote, PageHeader, Select, Spinner } from '../components/ui'
-import { documentsApi, projectsApi } from '../lib/api'
+import { Button, ErrorNote, PageHeader, Select, Spinner } from '../components/ui'
+import { auditApi, demoApi, documentsApi, filesApi, projectsApi, questionsApi, sourcesApi } from '../lib/api'
 import { PROJECT_STATUSES, type DocumentRow, type ProjectStatus } from '../lib/types'
 import { useGenerate } from '../lib/useGenerate'
 
-const STEP_HINT: Record<DocType, string> = {
-  assessment: '12 standard questions answered from the requirements',
-  tor: 'Package + custom scope (Layanan / Sub Layanan)',
-  timeline: 'Activities & SLA/Days — you set the mandays',
-  sow_cekat: 'Internal Cekat format, Bahasa Indonesia',
-  sow_cif: 'Meta Client Integration Fund format',
-  onboarding: 'Form the client fills before kickoff',
-  diagram: '',
-  custom: '',
-}
+const TABS = [
+  {
+    id: 'requirements',
+    label: 'Requirements',
+    focus: 'Requirements & knowledge',
+    icon: NotebookText,
+    starters: ['Ringkas kebutuhan client dan gap terbesar yang harus dikonfirmasi.', 'Pertanyaan apa yang harus saya tanyakan di discovery call berikutnya?'],
+  },
+  {
+    id: 'deliverables',
+    label: 'Deliverables',
+    focus: 'Deliverables',
+    icon: ListChecks,
+    starters: ['Deliverable mana yang belum konsisten satu sama lain?', 'Apakah SOW sudah sesuai dengan Timeline terbaru?'],
+  },
+  {
+    id: 'custom',
+    label: 'Custom',
+    focus: 'Custom deliverables',
+    icon: LayoutTemplate,
+    starters: ['Format custom apa yang cocok untuk project ini?', 'Ringkas isi custom deliverable yang sudah ada.'],
+  },
+  {
+    id: 'diagrams',
+    label: 'Diagrams',
+    focus: 'Diagrams',
+    icon: GitBranch,
+    starters: ['Diagram apa yang masih kurang untuk project ini?', 'Jelaskan alur eskalasi ke human agent dalam bentuk langkah.'],
+  },
+  {
+    id: 'files',
+    label: 'Files',
+    focus: 'Files',
+    icon: FolderOpen,
+    starters: ['File mana yang perlu saya kirim ke client untuk tahap ini?', 'Buat draft email pengantar untuk mengirim SOW dan Timeline.'],
+  },
+  {
+    id: 'demo',
+    label: 'Demo',
+    focus: 'Demo',
+    icon: MonitorPlay,
+    starters: ['Use case mana yang paling kuat untuk didemokan ke klien ini?', 'Buat naskah presentasi demo 5 menit dari skenario yang ada.'],
+  },
+  {
+    id: 'audit',
+    label: 'Audit trail',
+    focus: 'Audit trail',
+    icon: FileClock,
+    starters: ['Apa saja yang berubah minggu ini?', 'Dokumen mana yang dibuat AI dan belum pernah saya edit manual?'],
+  },
+] as const
+
+type TabId = (typeof TABS)[number]['id']
 
 export function ProjectPage() {
   const { projectId = '' } = useParams()
+  const [params, setParams] = useSearchParams()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => projectsApi.get(projectId) })
   const docs = useQuery({ queryKey: ['documents', projectId], queryFn: () => documentsApi.list(projectId) })
   const gen = useGenerate(projectId)
-  const [diagramKind, setDiagramKind] = useState<string>('activity')
+  // Same query keys as the panels, so the tab summaries share their cache.
+  const sources = useQuery({ queryKey: ['sources', projectId], queryFn: () => sourcesApi.list(projectId) })
+  const files = useQuery({ queryKey: ['files', projectId], queryFn: () => filesApi.list(projectId) })
+  const audit = useQuery({ queryKey: ['audit', projectId], queryFn: () => auditApi.list(projectId) })
+  const questions = useQuery({ queryKey: ['questions', projectId], queryFn: () => questionsApi.list(projectId) })
+  const demo = useQuery({ queryKey: ['demo', projectId], queryFn: () => demoApi.get(projectId) })
 
-  const setStatus = useMutation({
-    mutationFn: (status: ProjectStatus) => projectsApi.update(projectId, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['project', projectId] }),
+  const tab = TABS.find((t) => t.id === params.get('tab')) ?? TABS[0]
+  const selectTab = (id: TabId) => setParams({ tab: id }, { replace: true })
+
+  const refreshProject = () =>
+    Promise.all(['project', 'audit'].map((k) => qc.invalidateQueries({ queryKey: [k, projectId] })).concat(qc.invalidateQueries({ queryKey: ['dashboard'] })))
+  const update = useMutation({
+    mutationFn: (patch: { status?: ProjectStatus; language?: string }) => projectsApi.update(projectId, patch),
+    onSuccess: refreshProject,
   })
   const removeProject = useMutation({
     mutationFn: () => projectsApi.remove(projectId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
       navigate('/')
     },
   })
@@ -52,24 +115,34 @@ export function ProjectPage() {
   if (project.isLoading) return <Spinner />
   if (!project.data) return <ErrorNote error={project.error ?? 'Project not found'} />
   const p = project.data
-  const byType = new Map<DocType, DocumentRow>()
-  const diagrams: DocumentRow[] = []
-  const customDocs: DocumentRow[] = []
-  for (const d of docs.data ?? []) {
-    if (d.type === 'diagram') diagrams.push(d)
-    else if (d.type === 'custom') customDocs.push(d)
-    else if (!byType.has(d.type)) byType.set(d.type, d)
+  const all = docs.data ?? []
+  const ofType = (type: DocType) => all.filter((d: DocumentRow) => d.type === type)
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  const today = new Date().toDateString()
+  const meta: Record<TabId, string> = {
+    requirements: sources.data
+      ? `${plural(sources.data.length, 'source')} · ${questions.data?.filter((q) => q.status === 'open').length ?? 0} open Q`
+      : '…',
+    deliverables: `${PIPELINE.filter((t) => all.some((d) => d.type === t)).length}/${PIPELINE.length} drafted`,
+    custom: plural(ofType('custom').length, 'document'),
+    diagrams: plural(ofType('diagram').length, 'diagram'),
+    files: files.data ? plural(files.data.files.length, 'file') : '…',
+    demo: demo.data
+      ? `${plural(demo.data.scenarios.length, 'scenario')}${demo.data.configured ? '' : ' · not connected'}`
+      : '…',
+    audit: audit.data ? `${audit.data.filter((e) => new Date(e.at).toDateString() === today).length} today` : '…',
   }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
-      <div className="min-w-0 space-y-10">
+      <div className="min-w-0 space-y-6">
         <PageHeader
           kicker={p.client_name}
           title={p.name}
           actions={
             <>
-              <Select aria-label="Project status" value={p.status} onChange={(e) => setStatus.mutate(e.target.value as ProjectStatus)} className="w-36">
+              <LanguageSelect className="w-44" value={p.language} onChange={(language) => update.mutate({ language })} />
+              <Select aria-label="Project status" value={p.status} onChange={(e) => update.mutate({ status: e.target.value as ProjectStatus })} className="w-36">
                 {PROJECT_STATUSES.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
@@ -80,95 +153,50 @@ export function ProjectPage() {
             </>
           }
         />
-        <p className="-mt-6 font-mono text-xs text-muted">
-          {p.package ?? '—'} · {p.industry || 'industry n/a'}
+        <p className="-mt-3 font-mono text-xs text-muted">
+          {p.package ?? '—'} · {p.industry || 'industry n/a'} · {p.language}
           {p.description ? ` · ${p.description}` : ''}
         </p>
+        <ErrorNote error={update.error ?? removeProject.error} />
 
-        <SourcesPanel projectId={projectId} kinds={['requirement', 'knowledge']} title="Requirements & knowledge" />
-
-        <section className="space-y-3">
-          <div className="flex items-end justify-between">
-            <h2 className="font-display text-xl font-semibold">Deliverables</h2>
-            {gen.running && (
-              <p className="max-w-[60%] truncate text-right font-mono text-xs text-ember" aria-live="polite">
-                {gen.activity || `Drafting ${DOC_LABELS[gen.running]}… ${gen.chars.toLocaleString()} chars`}
-              </p>
-            )}
-          </div>
-          <ErrorNote error={gen.error} />
-          <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {PIPELINE.map((type, i) => {
-              const doc = byType.get(type)
-              return (
-                <li key={type} className="flex flex-col justify-between gap-4 rounded-xl border border-line bg-panel p-4">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs text-ember">0{i + 1}</span>
-                      <span className="flex gap-1">
-                        {doc?.is_knowledge && <Badge tone="forest">knowledge</Badge>}
-                        {doc ? <Badge tone="ok">drafted</Badge> : <Badge>empty</Badge>}
-                      </span>
-                    </div>
-                    <h3 className="mt-2 font-display text-lg font-semibold">{DOC_LABELS[type]}</h3>
-                    <p className="text-xs text-muted">{STEP_HINT[type]}</p>
-                  </div>
-                  {doc ? (
-                    <Link to={`/projects/${projectId}/docs/${doc.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-forest hover:underline">
-                      Open · updated {new Date(doc.updated_at).toLocaleDateString()} <ArrowRight className="size-3.5" />
-                    </Link>
-                  ) : (
-                    <Button variant="ai" icon={<Sparkles className="size-4" />} loading={gen.running === type} disabled={!!gen.running} onClick={() => generateAndOpen(type)}>
-                      Draft with AI
-                    </Button>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
-        </section>
-
-        <CustomDeliverables
-          projectId={projectId}
-          docs={customDocs}
-          running={gen.running === 'custom'}
-          onGenerate={(templateId) => generateAndOpen('custom', { templateId })}
+        <ProjectTabs
+          tabs={TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon, meta: meta[t.id] }))}
+          active={tab.id}
+          onSelect={selectTab}
         />
 
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 className="font-display text-xl font-semibold">Diagrams</h2>
-            <div className="flex gap-2">
-              <Select aria-label="Diagram kind" value={diagramKind} onChange={(e) => setDiagramKind(e.target.value)} className="w-36">
-                {DIAGRAM_KINDS.map((k) => (
-                  <option key={k}>{k}</option>
-                ))}
-              </Select>
-              <Button variant="ai" icon={<GitBranch className="size-4" />} loading={gen.running === 'diagram'} disabled={!!gen.running} onClick={() => generateAndOpen('diagram', { diagramKind })}>
-                New diagram
-              </Button>
-            </div>
-          </div>
-          {diagrams.length === 0 ? (
-            <p className="text-sm text-muted">Activity, sequence, state, ER… generated from the project context as Mermaid.</p>
-          ) : (
-            <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
-              {diagrams.map((d) => (
-                <li key={d.id}>
-                  <Link to={`/projects/${projectId}/docs/${d.id}`} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-forest-soft">
-                    <span>{d.title}</span>
-                    <span className="font-mono text-[11px] text-muted">{new Date(d.updated_at).toLocaleString()}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {gen.running && (
+          <p className="truncate font-mono text-xs text-ember" aria-live="polite">
+            {gen.activity || `Drafting ${DOC_LABELS[gen.running]}… ${gen.chars.toLocaleString()} chars`}
+          </p>
+        )}
+        <ErrorNote error={gen.error} />
 
-        <ProjectFilesPanel projectId={projectId} />
+        {tab.id === 'requirements' && (
+          <div className="space-y-8">
+            <MeetingNotesPanel projectId={projectId} />
+            <SourcesPanel projectId={projectId} kinds={['requirement', 'knowledge']} title="Requirements & knowledge" />
+            <QuestionsPanel projectId={projectId} />
+          </div>
+        )}
+        {tab.id === 'deliverables' && (
+          <div className="space-y-6">
+            <ConsistencyPanel projectId={projectId} hasDocs={all.length > 0} />
+            <DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type) => generateAndOpen(type)} />
+          </div>
+        )}
+        {tab.id === 'custom' && (
+          <CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId) => generateAndOpen('custom', { templateId })} />
+        )}
+        {tab.id === 'diagrams' && (
+          <DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind) => generateAndOpen('diagram', { diagramKind })} />
+        )}
+        {tab.id === 'files' && <ProjectFilesPanel projectId={projectId} />}
+        {tab.id === 'demo' && <DemoPanel projectId={projectId} />}
+        {tab.id === 'audit' && <AuditPanel projectId={projectId} />}
       </div>
 
-      <ChatPanel projectId={projectId} />
+      <ChatPanel projectId={projectId} focus={tab.focus} starters={[...tab.starters]} />
     </div>
   )
 }

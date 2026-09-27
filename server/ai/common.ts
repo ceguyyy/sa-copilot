@@ -9,7 +9,7 @@ You help turn client requirements into: Assessment Requirement, TOR, Timeline, S
 Rules:
 - Ground every statement in the provided requirements and knowledge. When information is missing, say so explicitly and mark it as needing client confirmation instead of inventing numbers, prices, vendors or dates.
 - When a documentation tool is available, use it to check how Cekat features actually work before describing them.
-- Default language is Bahasa Indonesia unless the requirement or the user uses English.
+- Write in the project's language (see PROJECT → Language) unless the SA explicitly asks for another one.
 - Be concrete and professional, like an experienced presales SA.`
 
 /** The saved effort, else the .env default for Claude models; other models get their provider's default. */

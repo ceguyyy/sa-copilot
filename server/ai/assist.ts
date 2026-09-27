@@ -2,8 +2,10 @@
 // It may research with MCP tools (Cekat docs) and ends a turn by proposing field values via `propose_update`;
 // the UI fills the editor (or previews the theme) with the proposal and the user decides whether to save.
 import { z } from 'zod'
+import { UUID_RE } from '../http.ts'
 import { DOC_LABELS, SKILL_OUTPUT_TYPES } from '../../shared/schemas.ts'
 import { THEME_TOKENS, TOKEN_ROLES, themeProblems } from '../../shared/theme.ts'
+import { NO_FILES, attachmentIds, ownerFiles, requestFiles } from '../attachments.ts'
 import { config } from '../config.ts'
 import { query } from '../db.ts'
 import { loadGlobalKnowledgeText } from './context.ts'
@@ -18,6 +20,9 @@ const PROPOSE_TOOL = 'propose_update'
 const assistInput = z.object({
   kind: z.enum(['skill', 'template', 'theme', 'mcp']),
   current: z.record(z.string(), z.unknown()).default({}),
+  /** The skill / format being edited, so its reference files are visible to the assistant. */
+  ownerId: z.string().regex(UUID_RE).nullable().optional(),
+  attachmentIds,
   messages: z
     .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(20_000) }))
     .min(1)
@@ -144,12 +149,18 @@ export async function assist(body: unknown, out: Stream): Promise<void> {
   const current = isMcp
     ? `# CONFIGURED MCP SERVERS\n${JSON.stringify(await query('select name, url, enabled from mcp_servers order by created_at'), null, 2)}`
     : `# CURRENT DRAFT (what the editor holds now)\n${JSON.stringify(input.current, null, 2)}`
+  const ownerKind = input.kind === 'skill' || input.kind === 'template' ? input.kind : null
+  const [refs, files] = await Promise.all([
+    ownerKind ? ownerFiles(ownerKind, input.ownerId ?? undefined, model.vision) : NO_FILES,
+    requestFiles(input.attachmentIds, model.vision),
+  ])
+  const system = [ROLE[input.kind], current, refs.text].filter(Boolean).join('\n\n')
   const run = (turns: Turn[]) =>
     runModel({
       model,
-      system: systemPrompt(`${ROLE[input.kind]}\n\n${current}`, knowledge),
+      system: systemPrompt(system, knowledge),
       turns,
-      attachments: [],
+      attachments: [...refs.images, ...files.images],
       tools,
       runTool,
       ...(model.tools ? { stopTool: PROPOSALS[input.kind] } : {}),
@@ -160,7 +171,10 @@ export async function assist(body: unknown, out: Stream): Promise<void> {
       onToolUse: toolEvents(out),
     })
 
-  let turns: Turn[] = input.messages
+  // Files attached to this message ride along with the latest user turn.
+  let turns: Turn[] = input.messages.map((m, i, all) =>
+    i === all.length - 1 && m.role === 'user' && files.text ? { ...m, content: `${m.content}\n\n${files.text}` } : m,
+  )
   let result = await run(turns)
   // Unreadable theme → show the model exactly which color pairs fail and let it fix them.
   for (let i = 0; isTheme && result.stopInput && i < THEME_REPAIRS; i++) {

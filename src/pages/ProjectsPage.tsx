@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpRight, Plus, X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Badge, Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea } from '../components/ui'
+import { useNavigate } from 'react-router-dom'
+import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea } from '../components/ui'
 import { projectsApi } from '../lib/api'
+import { LanguageSelect } from '../components/LanguageSelect'
+import { PipelineDashboard } from '../components/PipelineDashboard'
 import type { ProjectInput } from '../lib/types'
 
-const EMPTY: ProjectInput = { name: '', client_name: '', industry: '', package: 'Enterprise', status: 'discovery', description: '' }
+const EMPTY: ProjectInput = { name: '', client_name: '', industry: '', package: 'Enterprise', status: 'discovery', description: '', language: '' }
 
 export function ProjectsPage() {
   const qc = useQueryClient()
@@ -19,6 +21,7 @@ export function ProjectsPage() {
     mutationFn: projectsApi.create,
     onSuccess: (p) => {
       qc.invalidateQueries({ queryKey: ['projects'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
       navigate(`/projects/${p.id}`)
     },
   })
@@ -31,7 +34,7 @@ export function ProjectsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <PageHeader
-        kicker="Workbench"
+        kicker="Pipeline"
         title="Projects"
         actions={
           <Button onClick={() => setCreating((v) => !v)} icon={creating ? <X className="size-4" /> : <Plus className="size-4" />}>
@@ -59,6 +62,9 @@ export function ProjectsPage() {
                 ))}
               </Select>
             </Field>
+            <Field label="Language" hint="The AI writes this project's documents and replies in it. Manage the list in Settings → Languages.">
+              <LanguageSelect value={form.language} onChange={(language) => setForm({ ...form, language })} />
+            </Field>
             <div className="md:col-span-2">
               <Field label="Short description">
                 <Textarea rows={2} value={form.description ?? ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -83,29 +89,7 @@ export function ProjectsPage() {
         </Card>
       )}
 
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {projects.data?.map((p, i) => (
-          <li key={p.id} className={i === 0 ? 'sm:col-span-2 lg:col-span-1 lg:row-span-2' : ''}>
-            <Link
-              to={`/projects/${p.id}`}
-              className="group flex h-full flex-col justify-between gap-6 rounded-xl border border-line bg-panel p-5 transition hover:-translate-y-0.5 hover:border-forest hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,.25)]"
-            >
-              <div>
-                <div className="flex items-center justify-between">
-                  <Badge tone={p.status === 'won' ? 'ok' : p.status === 'lost' ? 'warn' : 'forest'}>{p.status}</Badge>
-                  <ArrowUpRight className="size-4 text-muted transition group-hover:text-ember" />
-                </div>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted">{p.client_name}</p>
-                <h2 className={`font-display font-semibold leading-tight ${i === 0 ? 'text-3xl' : 'text-xl'}`}>{p.name}</h2>
-                {p.description && <p className="mt-2 line-clamp-3 text-sm text-muted">{p.description}</p>}
-              </div>
-              <p className="font-mono text-[11px] text-muted">
-                {p.package ?? '—'} · updated {new Date(p.updated_at).toLocaleDateString()}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <PipelineDashboard />
     </div>
   )
 }

@@ -11,11 +11,13 @@ export interface Project {
   package: string | null
   status: ProjectStatus
   description: string | null
+  /** Language the AI writes this project's documents and replies in. */
+  language: string
   created_at: string
   updated_at: string
 }
 
-export type ProjectInput = Pick<Project, 'name' | 'client_name' | 'industry' | 'package' | 'status' | 'description'>
+export type ProjectInput = Pick<Project, 'name' | 'client_name' | 'industry' | 'package' | 'status' | 'description' | 'language'>
 
 export interface Source {
   id: string

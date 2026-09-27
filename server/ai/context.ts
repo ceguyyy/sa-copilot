@@ -31,6 +31,8 @@ export interface ProjectContext {
   docs: DocSnapshot[]
   /** Documents from other projects that were flagged "use as knowledge". */
   knowledgeDocs: (DocSnapshot & { project_name: string })[]
+  /** Open and answered client questions (dropped ones are left out). */
+  questions: { question: string; status: 'open' | 'answered'; answer: string }[]
 }
 
 // Latest version of each document, joined laterally so one query covers all documents.
@@ -47,7 +49,7 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
   const project = await queryOne('select * from projects where id = $1', [projectId])
   if (!project) throw new HttpError(404, 'Project not found')
 
-  const [sources, docs, knowledgeDocs] = await Promise.all([
+  const [sources, docs, knowledgeDocs, questions] = await Promise.all([
     query<SourceRow>(
       `select id, project_id, kind, name, mime_type, storage_path, extracted_text
        from sources where (project_id = $1 or project_id is null) and enabled order by created_at`,
@@ -58,8 +60,12 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
       `${LATEST_DOCS} where d.is_knowledge and d.project_id <> $1 order by d.updated_at desc`,
       [projectId],
     ),
+    query<ProjectContext['questions'][number]>(
+      `select question, status, answer from open_questions where project_id = $1 and status <> 'dropped' order by created_at`,
+      [projectId],
+    ),
   ])
-  return { project, sources, docs, knowledgeDocs }
+  return { project, sources, docs, knowledgeDocs, questions }
 }
 
 /** Global knowledge only (no project): used by the skill assistant. */
@@ -84,7 +90,7 @@ export function renderContextText(ctx: ProjectContext): string {
   const p = ctx.project
   const parts: string[] = [
     '# PROJECT',
-    `Name: ${p.name}\nClient: ${p.client_name}\nIndustry: ${p.industry ?? '-'}\nPackage: ${p.package ?? '-'}\nStatus: ${p.status}\nDescription: ${p.description ?? '-'}`,
+    `Name: ${p.name}\nClient: ${p.client_name}\nLanguage: ${p.language ?? 'Bahasa Indonesia'} — write every document and reply in this language\nIndustry: ${p.industry ?? '-'}\nPackage: ${p.package ?? '-'}\nStatus: ${p.status}\nDescription: ${p.description ?? '-'}`,
   ]
 
   const section = (title: string, rows: SourceRow[]) => {
@@ -96,6 +102,17 @@ export function renderContextText(ctx: ProjectContext): string {
   section('CLIENT REQUIREMENTS', ctx.sources.filter((s) => s.kind === 'requirement'))
   section('PROJECT KNOWLEDGE', ctx.sources.filter((s) => s.kind === 'knowledge' && s.project_id))
   section('GLOBAL KNOWLEDGE (Cekat products, pricing, standard practice)', ctx.sources.filter((s) => !s.project_id))
+
+  const answered = ctx.questions.filter((q) => q.status === 'answered')
+  if (answered.length) {
+    parts.push('# CLIENT ANSWERS (confirmed by the client — these override assumptions)')
+    parts.push(answered.map((q) => `Q: ${q.question}\nA: ${q.answer || '(answered, no text)'}`).join('\n\n'))
+  }
+  const open = ctx.questions.filter((q) => q.status === 'open')
+  if (open.length) {
+    parts.push('# OPEN QUESTIONS (not confirmed yet — mark anything depending on them as needing confirmation)')
+    parts.push(open.map((q) => `- ${q.question}`).join('\n'))
+  }
 
   if (ctx.knowledgeDocs.length) {
     parts.push('# REFERENCE DOCUMENTS FROM OTHER PROJECTS (flagged as knowledge — reuse their structure and standard wording, never their client-specific facts)')

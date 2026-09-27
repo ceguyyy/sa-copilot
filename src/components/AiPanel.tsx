@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { DIAGRAM_KINDS, type DiagramContent, type DocType } from '../../shared/schemas.ts'
 import { skillsApi } from '../lib/api'
 import type { GenerateParams } from '../lib/useGenerate'
+import { useRequestFiles } from '../lib/useRequestFiles'
+import { AttachFiles } from './AttachFiles'
 import { Button, ErrorNote, Field, Select, Textarea } from './ui'
 
 interface Props {
@@ -27,6 +29,7 @@ const SUGGESTIONS: Partial<Record<DocType, string[]>> = {
   sow_cif: ['Recalculate milestones from the latest timeline', 'Make the objective more measurable'],
   onboarding: ['Tambahkan section untuk integrasi API'],
   diagram: ['Tambahkan jalur eskalasi ke human agent', 'Pecah per swimlane aktor'],
+  deck: ['Isi presenter: Christian Gunawan, Solution Architect', 'Buat mockup pakai nama klinik klien', 'Sesuaikan arsitektur dengan integrasi HIS yang disebut di requirement'],
   custom: ['Cek fitur Cekat di dokumentasi dan perbaiki bagian yang tidak akurat', 'Ringkas jadi maksimal 2 halaman'],
 }
 
@@ -36,10 +39,19 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, acti
   const [skillId, setSkillId] = useState('')
   const [instruction, setInstruction] = useState('')
   const [kind, setKind] = useState<string>(currentKind ?? 'activity')
+  const files = useRequestFiles()
 
   function run() {
-    onRun({ docType, documentId, skillId: skillId || undefined, instruction, diagramKind: docType === 'diagram' ? kind : undefined })
+    onRun({
+      docType,
+      documentId,
+      skillId: skillId || undefined,
+      instruction,
+      diagramKind: docType === 'diagram' ? kind : undefined,
+      attachmentIds: files.ids,
+    })
     setInstruction('')
+    files.clear()
   }
 
   return (
@@ -70,6 +82,7 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, acti
       <Field label="Instruction" hint="Empty = regenerate from the latest requirements & documents.">
         <Textarea rows={4} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Apa yang mau diubah?" />
       </Field>
+      <AttachFiles state={files} disabled={running} />
       <div className="flex flex-wrap gap-1.5">
         {SUGGESTIONS[docType]?.map((s) => (
           <button key={s} onClick={() => setInstruction(s)} className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] text-muted hover:border-ember hover:text-ember">
@@ -78,7 +91,7 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, acti
         ))}
       </div>
       {dirty && <p className="text-xs text-warn">You have unsaved edits — save them first, or the AI will revise the last saved version.</p>}
-      <Button variant="ai" className="w-full" loading={running} onClick={run} icon={<Sparkles className="size-4" />}>
+      <Button variant="ai" className="w-full" loading={running} disabled={files.uploading} onClick={run} icon={<Sparkles className="size-4" />}>
         {running ? `Writing… ${chars.toLocaleString()} chars` : 'Create new version'}
       </Button>
       {running && activity && (

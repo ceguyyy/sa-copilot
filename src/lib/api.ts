@@ -171,3 +171,166 @@ export const themeApi = {
   save: (theme: Omit<Theme, 'id'>) => send<Theme>('Save theme', 'POST', '/settings/themes', theme),
   remove: (id: string) => send<void>('Delete theme', 'DELETE', `/settings/themes/${id}`),
 }
+
+// ---------- files attached to instructions ----------
+
+export interface AttachedFile {
+  id: string
+  owner_kind: 'skill' | 'template' | 'request'
+  owner_id: string | null
+  name: string
+  mime_type: string | null
+  size_bytes: number | null
+  text_chars: number | null
+  created_at: string
+}
+
+export const attachmentsApi = {
+  list: (ownerKind: 'skill' | 'template', ownerId: string) =>
+    request<AttachedFile[]>('Load reference files', `/attachments?ownerKind=${ownerKind}&ownerId=${ownerId}`),
+  upload(params: { file: File; extractedText: string; ownerKind: AttachedFile['owner_kind']; ownerId?: string }): Promise<AttachedFile> {
+    const form = new FormData()
+    form.set('file', params.file)
+    form.set('extractedText', params.extractedText)
+    form.set('ownerKind', params.ownerKind)
+    if (params.ownerId) form.set('ownerId', params.ownerId)
+    return request(`Attach ${params.file.name}`, '/attachments', { method: 'POST', body: form })
+  },
+  remove: (id: string) => send<void>('Remove file', 'DELETE', `/attachments/${id}`),
+}
+
+// ---------- audit trail ----------
+
+export interface AuditEvent {
+  id: string
+  at: string
+  action: string
+  summary: string
+  detail: Record<string, unknown>
+}
+
+export const auditApi = {
+  list: (projectId: string) => request<AuditEvent[]>('Load audit trail', `/projects/${projectId}/audit`),
+}
+
+// ---------- project languages ----------
+
+export interface LanguageSettings {
+  items: string[]
+  main: string
+}
+
+export const languagesApi = {
+  get: () => request<LanguageSettings>('Load languages', '/settings/languages'),
+  save: (settings: LanguageSettings) => send<LanguageSettings>('Save languages', 'PUT', '/settings/languages', settings),
+}
+
+// ---------- open questions, consistency, dashboard ----------
+
+export interface OpenQuestion {
+  id: string
+  project_id: string
+  question: string
+  context: string
+  status: 'open' | 'answered' | 'dropped'
+  answer: string
+  origin: 'manual' | 'ai' | 'meeting'
+  created_at: string
+  updated_at: string
+}
+
+export const questionsApi = {
+  list: (projectId: string) => request<OpenQuestion[]>('Load questions', `/projects/${projectId}/questions`),
+  create: (projectId: string, input: { question: string; context?: string }) =>
+    send<OpenQuestion>('Add question', 'POST', `/projects/${projectId}/questions`, input),
+  update: (id: string, patch: Partial<Pick<OpenQuestion, 'question' | 'context' | 'status' | 'answer'>>) =>
+    send<OpenQuestion>('Update question', 'PATCH', `/questions/${id}`, patch),
+  remove: (id: string) => send<void>('Delete question', 'DELETE', `/questions/${id}`),
+}
+
+export interface ConsistencyIssue {
+  severity: 'high' | 'medium' | 'low'
+  title: string
+  documents: string[]
+  detail: string
+  suggestion: string
+}
+
+export interface ConsistencyCheck {
+  id: string
+  project_id: string
+  created_at: string
+  model: string
+  result: { summary: string; issues: ConsistencyIssue[] }
+}
+
+export const consistencyApi = {
+  latest: (projectId: string) => request<ConsistencyCheck | null>('Load consistency check', `/projects/${projectId}/consistency`),
+}
+
+export interface DashboardRow {
+  id: string
+  name: string
+  client_name: string
+  industry: string | null
+  package: string | null
+  status: Project['status']
+  language: string
+  updated_at: string
+  drafted: number
+  custom_docs: number
+  diagrams: number
+  open_questions: number
+  sources: number
+  last_check_issues: number | null
+  last_activity: string
+}
+
+export const dashboardApi = {
+  get: () => request<DashboardRow[]>('Load dashboard', '/dashboard'),
+}
+
+// ---------- demo app ----------
+
+export interface DemoScenarioPayload {
+  name: string
+  title: string
+  tag: string
+  triggerType: 'INBOUND_USER' | 'OUTBOUND_SYSTEM'
+  outboundPill?: string
+  description: string
+  cekatComponents: string[]
+  apiScopes: string[]
+  ruleNote: string
+  stepsDetail: string[]
+  initialText: string
+  steps: { userReply: string; aiResponse: string; chips?: string[]; enableCard?: boolean; enableFlow?: boolean }[]
+}
+
+export interface DemoScenario {
+  id: string
+  project_id: string
+  payload: DemoScenarioPayload
+  pushed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DemoState {
+  configured: boolean
+  appUrl: string
+  categoryId: string
+  categoryLink: string
+  scenarios: DemoScenario[]
+  /** Scenario ids live in the demo for this project's category (null when not connected). */
+  remote: string[] | null
+  remoteError: string | null
+}
+
+export const demoApi = {
+  get: (projectId: string) => request<DemoState>('Load demo', `/projects/${projectId}/demo`),
+  update: (id: string, payload: unknown) => send<DemoScenario>('Save scenario', 'PATCH', `/demo-scenarios/${id}`, { payload }),
+  remove: (id: string) => send<void>('Delete scenario', 'DELETE', `/demo-scenarios/${id}`),
+  push: (projectId: string, ids?: string[]) =>
+    send<{ pushed: number; categoryId: string; link: string }>('Push to demo', 'POST', `/projects/${projectId}/demo/push`, { ids }),
+}

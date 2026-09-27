@@ -12,6 +12,10 @@ import { toHttpError } from './http.ts'
 import { api } from './routes.ts'
 import { extras } from './routes/extras.ts'
 import { themes } from './themes.ts'
+import { languages } from './languages.ts'
+import { questions } from './routes/questions.ts'
+import { demo } from './demo.ts'
+import { attachments, purgeOldRequestFiles } from './attachments.ts'
 import { seedDefaultServers } from './ai/mcp.ts'
 
 const app = new Hono()
@@ -25,6 +29,10 @@ app.onError((e, c) => {
 app.route('/api', api)
 app.route('/api', extras)
 app.route('/api', themes)
+app.route('/api', languages)
+app.route('/api', questions)
+app.route('/api', demo)
+app.route('/api', attachments)
 app.route('/api/ai', ai)
 app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
 
@@ -39,6 +47,7 @@ if (existsSync(config.distDir)) {
 try {
   await setupDatabase()
   await seedDefaultServers()
+  await purgeOldRequestFiles()
 } catch (e) {
   console.error(`\nCannot set up PostgreSQL: ${e instanceof Error ? e.message : e}`)
   console.error('Check DATABASE_URL in .env and that the PostgreSQL service is running (pgAdmin / services.msc).\n')

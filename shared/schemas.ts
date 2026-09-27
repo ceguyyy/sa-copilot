@@ -1,6 +1,8 @@
 // Single source of truth for document types and their JSON schemas.
 // Imported by the Deno edge function AND the Vite frontend, so it must stay
-// dependency-free plain TypeScript.
+// dependency-free plain TypeScript (shared/deck/types.ts follows the same rule).
+
+import { DECK_SCHEMA, deckProblems, emptyDeck, type DeckContent } from './deck/types.ts'
 
 export const DOC_TYPES = [
   'assessment',
@@ -11,6 +13,7 @@ export const DOC_TYPES = [
   'onboarding',
   'diagram',
   'custom',
+  'deck',
 ] as const
 
 export type DocType = (typeof DOC_TYPES)[number]
@@ -27,10 +30,11 @@ export const DOC_LABELS: Record<DocType, string> = {
   onboarding: 'Onboarding Form',
   diagram: 'Diagram',
   custom: 'Custom deliverable',
+  deck: 'Pitch deck (PPTX)',
 }
 
 /** Pipeline order shown on the project overview. Diagrams are free-floating. */
-export const PIPELINE: DocType[] = ['assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding']
+export const PIPELINE: DocType[] = ['assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'deck']
 
 export const DIAGRAM_KINDS = [
   'activity',
@@ -116,6 +120,8 @@ export interface DocContentMap {
   diagram: DiagramContent
   /** User-defined deliverable (see doc_templates): same shape as a SOW. */
   custom: SowContent
+  /** Pitch deck: slides 31–40 of the PPTX template (see shared/deck). */
+  deck: DeckContent
 }
 
 export type AnyDocContent = DocContentMap[DocType]
@@ -174,6 +180,7 @@ export const DOC_SCHEMAS: Record<DocType, JsonSchema> = {
   sow_cekat: sowSchema,
   sow_cif: sowSchema,
   custom: sowSchema,
+  deck: DECK_SCHEMA,
   onboarding: obj({
     title: str,
     sections: arr(
@@ -223,6 +230,8 @@ export function validateContent(type: DocType, content: unknown): string | null 
       return Array.isArray(c.sections) ? null : 'Missing sections[]'
     case 'diagram':
       return typeof c.mermaid === 'string' && c.mermaid.trim() ? null : 'Missing mermaid source'
+    case 'deck':
+      return deckProblems(c)
   }
 }
 
@@ -234,6 +243,7 @@ export function emptyContent<T extends DocType>(type: T): DocContentMap[T] {
     sow_cekat: { meta: [], sections: [] },
     sow_cif: { meta: [], sections: [] },
     custom: { meta: [], sections: [] },
+    deck: emptyDeck(),
     onboarding: { title: 'Onboarding Form', sections: [] },
     diagram: { kind: 'activity', title: 'New diagram', mermaid: 'flowchart TD\n  A[Start] --> B[End]', explanation: '' },
   }

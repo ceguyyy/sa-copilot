@@ -3,12 +3,15 @@
 import { spawn } from 'node:child_process'
 import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import type { DeckContent } from '../shared/deck/types.ts'
+import { drawioShortcut } from '../shared/drawio.ts'
 import { toMarkdown } from '../shared/docMarkdown.ts'
 import { DOCX_TYPES, exportDocx } from '../shared/export/docx.ts'
 import { XLSX_TYPES, exportXlsx } from '../shared/export/xlsx.ts'
 import type { AnyDocContent, DiagramContent, DocType } from '../shared/schemas.ts'
 import { config } from './config.ts'
 import { query, queryOne } from './db.ts'
+import { buildDeckPptx } from './deck/build.ts'
 import { HttpError } from './http.ts'
 
 const RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i
@@ -47,9 +50,15 @@ async function removeFiles(files: string[]): Promise<void> {
   )
 }
 
-async function renderFiles(type: DocType, title: string, content: AnyDocContent): Promise<{ ext: string; data: Buffer }[]> {
-  const files = [{ ext: 'md', data: Buffer.from(toMarkdown(type, title, content), 'utf8') }]
-  if (type === 'diagram') files.push({ ext: 'mmd', data: Buffer.from((content as DiagramContent).mermaid, 'utf8') })
+async function renderFiles(type: DocType, title: string, content: AnyDocContent, projectId: string): Promise<{ ext: string; data: Buffer }[]> {
+  const files: { ext: string; data: Buffer }[] = [{ ext: 'md', data: Buffer.from(toMarkdown(type, title, content), 'utf8') }]
+  if (type === 'deck') files.push({ ext: 'pptx', data: await buildDeckPptx(content as DeckContent, projectId) })
+  if (type === 'diagram') {
+    const { mermaid } = content as DiagramContent
+    files.push({ ext: 'mmd', data: Buffer.from(mermaid, 'utf8') })
+    // Double-click opens the diagram as an editable draw.io diagram.
+    files.push({ ext: 'drawio.url', data: Buffer.from(await drawioShortcut(mermaid), 'utf8') })
+  }
   if (DOCX_TYPES.includes(type)) files.push({ ext: 'docx', data: Buffer.from(await (await exportDocx(type, title, content)).arrayBuffer()) })
   if (XLSX_TYPES.includes(type)) files.push({ ext: 'xlsx', data: Buffer.from(await (await exportXlsx(type, title, content)).arrayBuffer()) })
   return files
@@ -85,7 +94,7 @@ export async function exportDocumentFiles(documentId: string): Promise<string[]>
   await mkdir(dir, { recursive: true })
 
   const written: string[] = []
-  for (const f of await renderFiles(doc.type, doc.title, latest.content)) {
+  for (const f of await renderFiles(doc.type, doc.title, latest.content, doc.project_id)) {
     const file = path.join(dir, `${base}.${f.ext}`)
     await writeFile(file, f.data)
     written.push(file)

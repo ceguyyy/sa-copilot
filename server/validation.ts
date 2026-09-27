@@ -13,6 +13,7 @@ export const projectInput = z.object({
   package: optionalText,
   status: z.enum(['discovery', 'assessment', 'proposal', 'won', 'lost', 'delivery']).optional(),
   description: optionalText,
+  language: z.string().trim().min(1).max(40).optional(),
 })
 export const projectPatch = projectInput.partial()
 

@@ -30,3 +30,6 @@ dist-ssr
 
 # local data (uploaded files)
 data/
+
+# machine-specific Windows shortcuts (absolute paths)
+*.lnk

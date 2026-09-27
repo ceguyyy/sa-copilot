@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DOC_LABELS, type AnyDocContent } from '../../shared/schemas.ts'
 import { AiPanel } from '../components/AiPanel'
+import { DiagramSplitPanel } from '../components/DiagramSplitPanel'
 import { DocEditor } from '../components/editors/DocEditor'
 import { Markdown } from '../components/Markdown'
 import { Badge, Button, ErrorNote, Input, Spinner } from '../components/ui'
+import { VersionDiffSummary } from '../components/VersionDiffSummary'
 import { VersionHistory } from '../components/VersionHistory'
 import { documentsApi, filesApi, versionsApi } from '../lib/api'
 import { lineDiff } from '../lib/diff'
@@ -18,6 +20,9 @@ import type { DocumentVersion } from '../lib/types'
 import { useGenerate } from '../lib/useGenerate'
 
 type Mode = 'edit' | 'preview' | 'diff'
+
+/** The project page tab a document type lives on, for the way back. */
+const projectTab = (type: string | undefined) => (type === 'diagram' ? 'diagrams' : type === 'custom' ? 'custom' : 'deliverables')
 
 /** Remount per document so local state (selected version, draft, mode) never leaks between documents. */
 export function DocumentPage() {
@@ -90,7 +95,7 @@ function DocumentView() {
     mutationFn: () => documentsApi.remove(documentId),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['documents', projectId] })
-      navigate(`/projects/${projectId}`)
+      navigate(`/projects/${projectId}?tab=${projectTab(doc.data?.type)}`)
     },
   })
   const exporter = useMutation({
@@ -124,7 +129,7 @@ function DocumentView() {
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="min-w-0 space-y-6">
         <div>
-          <Link to={`/projects/${projectId}`} className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
+          <Link to={`/projects/${projectId}?tab=${projectTab(d.type)}`} className="inline-flex items-center gap-1 text-sm text-muted hover:text-forest">
             <ArrowLeft className="size-4" /> Back to project
           </Link>
           <div className="mt-3 flex flex-wrap items-center gap-3 border-b border-line pb-5">
@@ -161,6 +166,16 @@ function DocumentView() {
                 <Button variant="outline" onClick={() => exporter.mutate('docx')} loading={exporter.isPending && exporter.variables === 'docx'}>
                   .docx
                 </Button>
+              )}
+              {d.type === 'deck' && (
+                <a
+                  href={`/api/documents/${documentId}/pptx`}
+                  download
+                  title={dirty ? 'Save first — the .pptx is built from the last saved version' : 'Build the PowerPoint from the template'}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-line bg-panel px-3 py-1.5 text-sm font-medium text-ink transition hover:border-forest"
+                >
+                  <Download className="size-4" /> .pptx
+                </a>
               )}
               {XLSX_TYPES.includes(d.type) && (
                 <Button variant="outline" onClick={() => exporter.mutate('xlsx')} loading={exporter.isPending && exporter.variables === 'xlsx'}>
@@ -248,7 +263,12 @@ function DocumentView() {
             <Markdown>{toMarkdown(d.type, d.title, shown)}</Markdown>
           </div>
         ) : (
-          <DiffView lines={diffLines} />
+          <div className="space-y-3">
+            {viewingOld && latest && selected.id !== latest.id && (
+              <VersionDiffSummary key={`${selected.id}-${latest.id}`} documentId={documentId} fromVersionId={selected.id} toVersionId={latest.id} />
+            )}
+            <DiffView lines={diffLines} />
+          </div>
         )}
       </div>
 
@@ -267,6 +287,7 @@ function DocumentView() {
             await gen.run(params)
           }}
         />
+        {d.type === 'diagram' && <DiagramSplitPanel projectId={projectId} documentId={documentId} projectDocs={projectDocs.data ?? []} dirty={dirty} />}
         <VersionHistory versions={versions.data ?? []} latestId={latest?.id} selectedId={selected?.id ?? null} onSelect={setSelected} />
       </div>
     </div>

@@ -1,12 +1,14 @@
 // Client for the local server's /api/ai endpoints. Responses are NDJSON streams.
 import type { DocType } from '../../shared/schemas.ts'
+import type { ConsistencyCheck } from './api'
 
 export type StreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'progress'; chars: number }
   | { type: 'tool'; name: string; input: unknown }
   | { type: 'proposal'; data: Record<string, unknown> }
-  | { type: 'done'; documentId?: string; versionId?: string; versionNo?: number }
+  | { type: 'result'; data: unknown }
+  | { type: 'done'; documentId?: string; versionId?: string; versionNo?: number; documentIds?: string[] }
   | { type: 'error'; error: string }
 
 type Done = Extract<StreamEvent, { type: 'done' }>
@@ -57,7 +59,7 @@ export function describeTool(name: string, input: unknown): string {
 }
 
 export function chat(
-  params: { projectId: string; message: string; skillId?: string },
+  params: { projectId: string; message: string; skillId?: string; attachmentIds?: string[]; focus?: string },
   onText: (t: string) => void,
   signal?: AbortSignal,
   onTool?: (label: string) => void,
@@ -81,6 +83,7 @@ export interface GenerateRequest {
   instruction?: string
   diagramKind?: string
   templateId?: string
+  attachmentIds?: string[]
 }
 
 export function generate(params: GenerateRequest, onProgress: (chars: number) => void, onTool?: (label: string) => void) {
@@ -97,7 +100,13 @@ export interface AssistMessage {
 
 /** Skill / template / theme designer chat. Resolves with the proposed field values, if the AI made a proposal. */
 export async function assist(
-  params: { kind: 'skill' | 'template' | 'theme' | 'mcp'; current: Record<string, unknown>; messages: AssistMessage[] },
+  params: {
+    kind: 'skill' | 'template' | 'theme' | 'mcp'
+    current: Record<string, unknown>
+    messages: AssistMessage[]
+    ownerId?: string
+    attachmentIds?: string[]
+  },
   handlers: { onText: (t: string) => void; onTool?: (label: string) => void; onProgress?: (chars: number) => void },
   signal?: AbortSignal,
 ): Promise<Record<string, unknown> | null> {
@@ -115,3 +124,57 @@ export async function assist(
   )
   return proposal
 }
+
+/** Splits a diagram into one diagram per lane (or per the instruction). Resolves with the new document ids. */
+export async function splitDiagram(params: { documentId: string; instruction?: string }, onProgress: (chars: number) => void): Promise<string[]> {
+  const done = await post('/split-diagram', params, (e) => e.type === 'progress' && onProgress(e.chars))
+  return done.documentIds ?? []
+}
+
+/** Streams an AI summary of the project's audit trail (or an answer to a question about it). */
+export function summarizeAudit(params: { projectId: string; days?: number; question?: string }, onText: (t: string) => void, signal?: AbortSignal) {
+  return post('/audit-summary', params, (e) => e.type === 'delta' && onText(e.text), signal)
+}
+
+/** Runs a streamed AI job that ends with one `result` event; reports progress and tool activity. */
+export interface JobHandlers {
+  onProgress?: (chars: number) => void
+  onTool?: (label: string) => void
+}
+
+async function job<T>(path: string, params: Record<string, unknown>, handlers: JobHandlers = {}): Promise<T> {
+  let result: T | undefined
+  await post(path, params, (e) => {
+    if (e.type === 'progress') handlers.onProgress?.(e.chars)
+    else if (e.type === 'tool') handlers.onTool?.(describeTool(e.name, e.input))
+    else if (e.type === 'result') result = e.data as T
+  })
+  if (result === undefined) throw new Error('The AI finished without a result — try again.')
+  return result
+}
+
+export const checkConsistency = (projectId: string, handlers?: JobHandlers) =>
+  job<ConsistencyCheck>('/consistency', { projectId }, handlers)
+
+export interface MeetingResult {
+  sourceId: string
+  title: string
+  summary: string
+  requirements: { title: string; detail: string }[]
+  decisions: string[]
+  action_items: { task: string; owner: string; due: string }[]
+  open_questions: { question: string; context: string }[]
+}
+
+export const processMeetingNotes = (params: { projectId: string; title?: string; notes: string; attachmentIds: string[] }, handlers?: JobHandlers) =>
+  job<MeetingResult>('/meeting-notes', params, handlers)
+
+export const findQuestions = (projectId: string, handlers?: JobHandlers) => job<{ added: number }>('/find-questions', { projectId }, handlers)
+
+/** Streams a plain-language summary of what changed between two versions. */
+export function summarizeVersionDiff(params: { documentId: string; fromVersionId: string; toVersionId: string }, onText: (t: string) => void) {
+  return post('/version-diff', params, (e) => e.type === 'delta' && onText(e.text))
+}
+
+export const generateDemoScenarios = (params: { projectId: string; count: number; instruction?: string }, handlers?: JobHandlers) =>
+  job<{ added: number; skipped: number }>('/demo-scenarios', params, handlers)

@@ -10,6 +10,7 @@ export interface GenerateParams {
   instruction?: string
   diagramKind?: string
   templateId?: string
+  attachmentIds?: string[]
 }
 
 /** Runs AI generation with progress + refreshes every cache the new version touches. */

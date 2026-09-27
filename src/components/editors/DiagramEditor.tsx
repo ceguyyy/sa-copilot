@@ -30,7 +30,7 @@ export function DiagramEditor({ value, onChange, readOnly }: { value: DiagramCon
           />
         </Field>
         <div className="rounded-xl border border-line bg-panel p-4">
-          <MermaidView source={value.mermaid} filename={slugify(value.title || 'diagram')} />
+          <MermaidView source={value.mermaid} title={value.title} filename={slugify(value.title || 'diagram')} />
         </div>
       </div>
       <Field label="Explanation">

@@ -1,9 +1,14 @@
 // REST API for the data the frontend reads and writes (repository layer lives in src/lib/api.ts).
+import type { DeckContent } from '../shared/deck/types.ts'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { config } from './config.ts'
 import { query, queryOne, withTransaction } from './db.ts'
 import { HttpError, UUID_RE, idParam, notFound, parseJson } from './http.ts'
+import { removeOwnerFiles } from './attachments.ts'
+import { latestConsistencyCheck } from './ai/consistency.ts'
+import { buildDeckPptx } from './deck/build.ts'
+import { languageForNewProject } from './languages.ts'
 import { exportDocumentFiles, exportProjectFiles, removeExportedFiles } from './exports.ts'
 import { convertToMarkdown, shouldConvert } from './markitdown.ts'
 import { deleteUpload, resolveKey, saveUpload } from './storage.ts'
@@ -40,9 +45,9 @@ api.get('/projects/:id', async (c) =>
 api.post('/projects', async (c) => {
   const p = await parseJson(c, projectInput)
   const row = await queryOne(
-    `insert into projects (name, client_name, industry, package, status, description)
-     values ($1, $2, $3, $4, coalesce($5, 'discovery'), $6) returning *`,
-    [p.name, p.client_name, p.industry ?? null, p.package ?? null, p.status ?? null, p.description ?? null],
+    `insert into projects (name, client_name, industry, package, status, description, language)
+     values ($1, $2, $3, $4, coalesce($5, 'discovery'), $6, $7) returning *`,
+    [p.name, p.client_name, p.industry ?? null, p.package ?? null, p.status ?? null, p.description ?? null, await languageForNewProject(p.language)],
   )
   return c.json(row, 201)
 })
@@ -161,7 +166,9 @@ api.patch('/skills/:id', async (c) => {
 })
 
 api.delete('/skills/:id', async (c) => {
-  await query('delete from skills where id = $1', [idParam(c)])
+  const id = idParam(c)
+  await removeOwnerFiles('skill', id)
+  await query('delete from skills where id = $1', [id])
   return c.body(null, 204)
 })
 
@@ -240,6 +247,58 @@ api.get('/projects/:id/messages', async (c) =>
 )
 
 api.delete('/projects/:id/messages', async (c) => {
-  await query('delete from messages where project_id = $1', [idParam(c)])
+  const id = idParam(c)
+  await query('delete from messages where project_id = $1', [id])
+  await query(`select audit($1, 'chat.clear', 'Cleared the AI chat', '{}')`, [id])
   return c.body(null, 204)
+})
+
+// ---------- audit trail ----------
+
+const AUDIT_PAGE = 300
+
+api.get('/projects/:id/audit', async (c) =>
+  c.json(await query('select id, at, action, summary, detail from audit_log where project_id = $1 order by at desc limit $2', [idParam(c), AUDIT_PAGE])),
+)
+
+api.get('/projects/:id/consistency', async (c) => c.json(await latestConsistencyCheck(idParam(c))))
+
+// ---------- dashboard ----------
+
+/** One row per project with what the pipeline dashboard needs; totals are computed in the UI. */
+api.get('/dashboard', async (c) =>
+  c.json(
+    await query(
+      `select p.id, p.name, p.client_name, p.industry, p.package, p.status, p.language, p.updated_at,
+         (select count(distinct d.type) from documents d
+            where d.project_id = p.id and d.type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'deck'))::int as drafted,
+         (select count(*) from documents d where d.project_id = p.id and d.type = 'custom')::int as custom_docs,
+         (select count(*) from documents d where d.project_id = p.id and d.type = 'diagram')::int as diagrams,
+         (select count(*) from open_questions q where q.project_id = p.id and q.status = 'open')::int as open_questions,
+         (select count(*) from sources s where s.project_id = p.id)::int as sources,
+         (select jsonb_array_length(cc.result->'issues') from consistency_checks cc
+            where cc.project_id = p.id order by cc.created_at desc limit 1) as last_check_issues,
+         coalesce((select max(a.at) from audit_log a where a.project_id = p.id), p.updated_at) as last_activity
+       from projects p order by last_activity desc`,
+    ),
+  ),
+)
+
+// ---------- pitch deck ----------
+
+/** Builds the .pptx from the deck document's latest version (template slides 31–40 replaced). */
+api.get('/documents/:id/pptx', async (c) => {
+  const id = idParam(c)
+  const doc = notFound(await queryOne<{ project_id: string; title: string; type: string }>('select project_id, title, type from documents where id = $1', [id]), 'Document')
+  if (doc.type !== 'deck') throw new HttpError(400, 'Only pitch decks export to PowerPoint')
+  const latest = notFound(
+    await queryOne<{ content: DeckContent }>('select content from document_versions where document_id = $1 order by version_no desc limit 1', [id]),
+    'Version',
+  )
+  const pptx = await buildDeckPptx(latest.content, doc.project_id)
+  const name = `${doc.title.replace(/[^\w .()-]+/g, ' ').trim() || 'Pitch deck'}.pptx`
+  return c.body(new Uint8Array(pptx), 200, {
+    'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+  })
 })

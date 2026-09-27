@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AssistantChat } from '../../components/AssistantChat'
+import { ReferenceFiles } from '../../components/ReferenceFiles'
 import { Button, Card, ErrorNote, Field, Input, Spinner, Textarea } from '../../components/ui'
 import { templatesApi } from '../../lib/api'
 import type { DocTemplate, DocTemplateInput } from '../../lib/types'
@@ -106,6 +107,7 @@ export function FormatsSettings() {
               <Field label="Instructions (markdown)" hint="Sections in order, what goes in each, which key facts (meta) to fill, language and tone.">
                 <Textarea rows={20} className="font-mono text-xs" value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
               </Field>
+              <ReferenceFiles ownerKind="template" ownerId={selected?.id} />
               <ErrorNote error={save.error ?? remove.error} />
               <div className="flex flex-wrap gap-2 border-t border-line pt-4">
                 <Button icon={<Save className="size-4" />} loading={save.isPending} onClick={() => save.mutate()}>
@@ -123,6 +125,7 @@ export function FormatsSettings() {
           )}
           <AssistantChat
             kind="template"
+            ownerId={selected?.id}
             current={selectedId ? form : {}}
             onProposal={applyProposal}
             placeholder={selectedId ? 'Apa yang mau diubah di template ini?' : 'Deliverable apa yang mau dibuat?'}

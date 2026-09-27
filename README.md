@@ -39,7 +39,7 @@ db/schema.sql         schema, applied automatically on every server start (idemp
    - `DATABASE_URL=postgres://postgres:<your password>@localhost:5432/sa_copilot`
    - `ANTHROPIC_API_KEY` — a Claude API key, **or** a 9router key together with `ANTHROPIC_BASE_URL=http://localhost:20128` (run `9router` first).
 3. **markitdown** (recommended) — `pip install "markitdown[all]"`. Uploads are converted to compact Markdown (tables and headings kept), which saves AI tokens and reads PDF/DOCX/PPTX/XLSX/HTML/EPUB/MSG. Without it, the browser's plain-text extraction is used. Set `MARKITDOWN_PYTHON` if markitdown lives in a different Python.
-4. **Run** — double-click `start-sa-copilot.bat`. It installs, builds, starts the server and opens http://localhost:3000.
+4. **Run** — double-click `SACopilot.bat` (or a **SACopilot** shortcut: `.bat` files can't carry an icon, so create a shortcut to it with `assets/SACopilot.ico`). It installs, builds, starts the server and opens http://localhost:3000.
 
 **Settings** (sidebar → Settings) is the single place to configure the copilot:
 

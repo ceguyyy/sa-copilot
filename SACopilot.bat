@@ -1,7 +1,7 @@
 @echo off
-rem Double-click to start SA Copilot locally and open it in the browser.
+rem Double-click (or use the SACopilot shortcut) to start SA Copilot locally and open it in the browser.
 cd /d "%~dp0"
-title SA Copilot
+title SACopilot
 
 if not exist .env (
   echo .env not found. Copy .env.example to .env and fill in DATABASE_URL and ANTHROPIC_API_KEY.

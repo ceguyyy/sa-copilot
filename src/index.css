@@ -55,6 +55,14 @@
   }
 }
 
+/* Native dropdown lists can't inherit translucent backgrounds, so paint options from the theme explicitly
+   (otherwise dark mode shows light text on the browser's white popup). */
+select option,
+select optgroup {
+  background-color: var(--panel);
+  color: var(--ink);
+}
+
 body {
   background: var(--paper);
   color: var(--ink);

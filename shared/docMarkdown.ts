@@ -1,3 +1,5 @@
+import { deckMarkdown } from './deck/markdown.ts'
+import type { DeckContent } from './deck/types.ts'
 import type {
   AnyDocContent,
   AssessmentContent,
@@ -84,6 +86,9 @@ export function toMarkdown(type: DocType, title: string, content: AnyDocContent)
       }
       break
     }
+    case 'deck':
+      out.push(deckMarkdown(content as DeckContent))
+      break
     case 'diagram': {
       const c = content as DiagramContent
       out.push(`_${c.kind} diagram_`)
