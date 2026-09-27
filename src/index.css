@@ -1,0 +1,120 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-forest: var(--forest);
+  --color-forest-soft: var(--forest-soft);
+  --color-ember: var(--ember);
+  --color-ember-soft: var(--ember-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+}
+
+:root {
+  --paper: #f4f1ea;
+  --panel: #fbfaf6;
+  --ink: #1b1b18;
+  --muted: #6d6a60;
+  --line: #ddd7ca;
+  --forest: #1f3b34;
+  --forest-soft: #dfe8e3;
+  --ember: #c9542a;
+  --ember-soft: #fbe6dc;
+  --ok: #2f7a4f;
+  --warn: #9a6200;
+  --bad: #b3261e;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #141513;
+    --panel: #1c1e1b;
+    --ink: #eceadf;
+    --muted: #9c998d;
+    --line: #34362f;
+    --forest: #8fc2ae;
+    --forest-soft: #22332d;
+    --ember: #f08a5d;
+    --ember-soft: #3a2519;
+    --ok: #6cc28e;
+    --warn: #e0b04a;
+    --bad: #f08080;
+    color-scheme: dark;
+  }
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* faint paper grain */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: radial-gradient(color-mix(in oklab, var(--ink) 6%, transparent) 0.6px, transparent 0.6px);
+  background-size: 3px 3px;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+.prose-doc {
+  --tw-prose-body: var(--ink);
+  --tw-prose-headings: var(--ink);
+  --tw-prose-bold: var(--ink);
+  --tw-prose-links: var(--forest);
+  --tw-prose-bullets: var(--muted);
+  --tw-prose-counters: var(--muted);
+  --tw-prose-th-borders: var(--line);
+  --tw-prose-td-borders: var(--line);
+  --tw-prose-code: var(--ink);
+}
+.prose-doc table {
+  font-size: 0.85em;
+}
+.prose-doc th {
+  background: var(--forest-soft);
+  padding: 0.4em 0.6em;
+}
+.prose-doc td {
+  padding: 0.4em 0.6em;
+  vertical-align: top;
+}
+
+.mermaid-host svg {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,24 @@
+project_id = "sa-copilot"
+
+[api]
+port = 54321
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+port = 54323
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+
+[auth.email]
+enable_signup = true
+
+[storage]
+file_size_limit = "50MiB"
+
+[functions.ai]
+verify_jwt = true
