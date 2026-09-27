@@ -1,4 +1,4 @@
-import type { AnyDocContent, DocType, SkillOutputType } from '../../supabase/functions/_shared/schemas.ts'
+import type { AnyDocContent, DocType, SkillOutputType } from '../../shared/schemas.ts'
 
 export type ProjectStatus = 'discovery' | 'assessment' | 'proposal' | 'won' | 'lost' | 'delivery'
 export const PROJECT_STATUSES: ProjectStatus[] = ['discovery', 'assessment', 'proposal', 'won', 'lost', 'delivery']
@@ -26,6 +26,8 @@ export interface Source {
   storage_path: string | null
   extracted_text: string | null
   size_bytes: number | null
+  /** Disabled sources are kept but not given to the AI. */
+  enabled: boolean
   created_at: string
 }
 
@@ -47,6 +49,11 @@ export interface DocumentRow {
   project_id: string
   type: DocType
   title: string
+  /** Shared with every project's AI context as a reference document. */
+  is_knowledge: boolean
+  template_id: string | null
+  /** Absolute paths of the files last auto-exported to disk. */
+  export_files: string[]
   created_at: string
   updated_at: string
 }
@@ -70,4 +77,58 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+}
+
+export interface KnowledgeDocument extends DocumentRow {
+  project_name: string
+}
+
+export interface DocTemplate {
+  id: string
+  name: string
+  description: string
+  instructions: string
+  created_at: string
+  updated_at: string
+}
+
+export type DocTemplateInput = Pick<DocTemplate, 'name' | 'description' | 'instructions'>
+
+export interface McpServer {
+  id: string
+  name: string
+  url: string
+  enabled: boolean
+  created_at: string
+  /** Tools the AI can use from this server (empty when disabled or unreachable). */
+  tools: string[]
+}
+
+export interface ProjectFile {
+  name: string
+  size: number
+  modified: string
+}
+
+export type EffortSetting = 'default' | 'low' | 'medium' | 'high'
+
+export interface AiModel {
+  id: string
+  provider: string
+  name: string
+  format: 'anthropic' | 'openai'
+  tools: boolean
+  vision: boolean
+  pdf: boolean
+  reasoning: boolean
+  adaptiveThinking: boolean
+  maxOutput: number | null
+  custom: boolean
+}
+
+export interface AiModelList {
+  models: AiModel[]
+  selected: string
+  effort: EffortSetting
+  proxied: boolean
 }

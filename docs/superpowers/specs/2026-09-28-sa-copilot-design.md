@@ -2,6 +2,8 @@
 
 Date: 2026-09-28 · Status: implemented (v1)
 
+> **Update 2026-09-28:** moved off Supabase to a local Windows app: a Node server (`server/`) with local PostgreSQL (pgAdmin), files on disk, and no login (the server binds to 127.0.0.1). The Supabase-specific rows below (Edge Function, RLS, Storage, magic link) are historical. See the README.
+
 ## Goal
 A single-user dashboard for a Cekat presales Solution Architect. The SA uploads client requirements and chats with Claude acting as their SA, and the app generates versioned deliverables in the SA's own formats: Assessment Requirement, TOR, Timeline, SOW (Cekat internal and Meta CIF), Onboarding Form, and Mermaid UML/flow diagrams. A CRUD skills library controls how Claude writes each output. All data lives in Supabase.
 

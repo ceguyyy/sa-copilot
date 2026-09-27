@@ -1,21 +1,20 @@
-// Client for the `ai` edge function. Responses are NDJSON streams.
-import type { DocType } from '../../supabase/functions/_shared/schemas.ts'
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from './supabase'
+// Client for the local server's /api/ai endpoints. Responses are NDJSON streams.
+import type { DocType } from '../../shared/schemas.ts'
 
-type StreamEvent =
+export type StreamEvent =
   | { type: 'delta'; text: string }
   | { type: 'progress'; chars: number }
+  | { type: 'tool'; name: string; input: unknown }
+  | { type: 'proposal'; data: Record<string, unknown> }
   | { type: 'done'; documentId?: string; versionId?: string; versionNo?: number }
   | { type: 'error'; error: string }
 
-async function post(body: Record<string, unknown>, onEvent: (e: StreamEvent) => void, signal?: AbortSignal) {
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
-  if (!token) throw new Error('Session expired — please sign in again')
+type Done = Extract<StreamEvent, { type: 'done' }>
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/ai`, {
+async function post(path: string, body: Record<string, unknown>, onEvent: (e: StreamEvent) => void, signal?: AbortSignal): Promise<Done> {
+  const res = await fetch(`/api/ai${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
   })
@@ -27,7 +26,7 @@ async function post(body: Record<string, unknown>, onEvent: (e: StreamEvent) => 
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  let done: StreamEvent | null = null
+  let done: Done | null = null
   for (;;) {
     const { value, done: finished } = await reader.read()
     if (finished) break
@@ -42,17 +41,75 @@ async function post(body: Record<string, unknown>, onEvent: (e: StreamEvent) => 
       onEvent(event)
     }
   }
-  if (!done) throw new Error('Connection closed before the AI finished (function timeout?)')
-  return done as Extract<StreamEvent, { type: 'done' }>
+  if (!done) throw new Error('Connection closed before the AI finished (server stopped?)')
+  return done
 }
 
-export function chat(params: { projectId: string; message: string; skillId?: string }, onText: (t: string) => void, signal?: AbortSignal) {
-  return post({ action: 'chat', ...params }, (e) => e.type === 'delta' && onText(e.text), signal)
+/** Human-readable label for a tool call, e.g. "cekat_docs__searchDocumentation" + {query} → "Searching Cekat docs: broadcast". */
+export function describeTool(name: string, input: unknown): string {
+  const [server, tool = name] = name.split('__')
+  const source = server.replace(/_/g, ' ')
+  const arg = input && typeof input === 'object' ? Object.values(input as Record<string, unknown>).find((v) => typeof v === 'string') : undefined
+  const verb = /search/i.test(tool) ? 'Searching' : /get|read|fetch/i.test(tool) ? 'Reading' : `Using ${tool} on`
+  return `${verb} ${source}${arg ? `: ${String(arg).slice(0, 80)}` : ''}`
 }
 
-export function generate(
-  params: { projectId: string; docType: DocType; documentId?: string; skillId?: string; instruction?: string; diagramKind?: string },
-  onProgress: (chars: number) => void,
+export function chat(
+  params: { projectId: string; message: string; skillId?: string },
+  onText: (t: string) => void,
+  signal?: AbortSignal,
+  onTool?: (label: string) => void,
 ) {
-  return post({ action: 'generate', ...params }, (e) => e.type === 'progress' && onProgress(e.chars))
+  return post(
+    '',
+    { action: 'chat', ...params },
+    (e) => {
+      if (e.type === 'delta') onText(e.text)
+      else if (e.type === 'tool') onTool?.(describeTool(e.name, e.input))
+    },
+    signal,
+  )
+}
+
+export interface GenerateRequest {
+  projectId: string
+  docType: DocType
+  documentId?: string
+  skillId?: string
+  instruction?: string
+  diagramKind?: string
+  templateId?: string
+}
+
+export function generate(params: GenerateRequest, onProgress: (chars: number) => void, onTool?: (label: string) => void) {
+  return post('', { action: 'generate', ...params }, (e) => {
+    if (e.type === 'progress') onProgress(e.chars)
+    else if (e.type === 'tool') onTool?.(describeTool(e.name, e.input))
+  })
+}
+
+export interface AssistMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/** Skill / template designer chat. Resolves with the proposed field values, if the AI made a proposal. */
+export async function assist(
+  params: { kind: 'skill' | 'template'; current: Record<string, unknown>; messages: AssistMessage[] },
+  handlers: { onText: (t: string) => void; onTool?: (label: string) => void; onProgress?: (chars: number) => void },
+  signal?: AbortSignal,
+): Promise<Record<string, unknown> | null> {
+  let proposal: Record<string, unknown> | null = null
+  await post(
+    '/assist',
+    params,
+    (e) => {
+      if (e.type === 'delta') handlers.onText(e.text)
+      else if (e.type === 'tool') handlers.onTool?.(describeTool(e.name, e.input))
+      else if (e.type === 'progress') handlers.onProgress?.(e.chars)
+      else if (e.type === 'proposal') proposal = e.data
+    },
+    signal,
+  )
+  return proposal
 }

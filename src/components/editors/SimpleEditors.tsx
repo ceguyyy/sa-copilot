@@ -1,4 +1,4 @@
-import type { AssessmentContent, TorContent } from '../../../supabase/functions/_shared/schemas.ts'
+import type { AssessmentContent, TorContent } from '../../../shared/schemas.ts'
 import { Field, Select, Textarea } from '../ui'
 import { TableEditor, type Column } from './TableEditor'
 

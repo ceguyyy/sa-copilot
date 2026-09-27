@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, GitBranch, Sparkles, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { DIAGRAM_KINDS, DOC_LABELS, PIPELINE, type DocType } from '../../supabase/functions/_shared/schemas.ts'
+import { DIAGRAM_KINDS, DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
 import { ChatPanel } from '../components/ChatPanel'
+import { CustomDeliverables } from '../components/CustomDeliverables'
+import { ProjectFilesPanel } from '../components/ProjectFilesPanel'
 import { SourcesPanel } from '../components/SourcesPanel'
 import { Badge, Button, ErrorNote, PageHeader, Select, Spinner } from '../components/ui'
 import { documentsApi, projectsApi } from '../lib/api'
@@ -18,6 +20,7 @@ const STEP_HINT: Record<DocType, string> = {
   sow_cif: 'Meta Client Integration Fund format',
   onboarding: 'Form the client fills before kickoff',
   diagram: '',
+  custom: '',
 }
 
 export function ProjectPage() {
@@ -41,7 +44,7 @@ export function ProjectPage() {
     },
   })
 
-  async function generateAndOpen(docType: DocType, extra: { diagramKind?: string } = {}) {
+  async function generateAndOpen(docType: DocType, extra: { diagramKind?: string; templateId?: string } = {}) {
     const done = await gen.run({ docType, ...extra })
     if (done?.documentId) navigate(`/projects/${projectId}/docs/${done.documentId}`)
   }
@@ -51,8 +54,10 @@ export function ProjectPage() {
   const p = project.data
   const byType = new Map<DocType, DocumentRow>()
   const diagrams: DocumentRow[] = []
+  const customDocs: DocumentRow[] = []
   for (const d of docs.data ?? []) {
     if (d.type === 'diagram') diagrams.push(d)
+    else if (d.type === 'custom') customDocs.push(d)
     else if (!byType.has(d.type)) byType.set(d.type, d)
   }
 
@@ -86,8 +91,8 @@ export function ProjectPage() {
           <div className="flex items-end justify-between">
             <h2 className="font-display text-xl font-semibold">Deliverables</h2>
             {gen.running && (
-              <p className="font-mono text-xs text-ember" aria-live="polite">
-                Drafting {DOC_LABELS[gen.running]}… {gen.chars.toLocaleString()} chars
+              <p className="max-w-[60%] truncate text-right font-mono text-xs text-ember" aria-live="polite">
+                {gen.activity || `Drafting ${DOC_LABELS[gen.running]}… ${gen.chars.toLocaleString()} chars`}
               </p>
             )}
           </div>
@@ -100,7 +105,10 @@ export function ProjectPage() {
                   <div>
                     <div className="flex items-center justify-between">
                       <span className="font-mono text-xs text-ember">0{i + 1}</span>
-                      {doc ? <Badge tone="ok">drafted</Badge> : <Badge>empty</Badge>}
+                      <span className="flex gap-1">
+                        {doc?.is_knowledge && <Badge tone="forest">knowledge</Badge>}
+                        {doc ? <Badge tone="ok">drafted</Badge> : <Badge>empty</Badge>}
+                      </span>
                     </div>
                     <h3 className="mt-2 font-display text-lg font-semibold">{DOC_LABELS[type]}</h3>
                     <p className="text-xs text-muted">{STEP_HINT[type]}</p>
@@ -119,6 +127,13 @@ export function ProjectPage() {
             })}
           </ol>
         </section>
+
+        <CustomDeliverables
+          projectId={projectId}
+          docs={customDocs}
+          running={gen.running === 'custom'}
+          onGenerate={(templateId) => generateAndOpen('custom', { templateId })}
+        />
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-end justify-between gap-2">
@@ -149,6 +164,8 @@ export function ProjectPage() {
             </ul>
           )}
         </section>
+
+        <ProjectFilesPanel projectId={projectId} />
       </div>
 
       <ChatPanel projectId={projectId} />

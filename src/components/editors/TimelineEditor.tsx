@@ -1,5 +1,5 @@
-import type { TimelineContent, TimelineRow } from '../../../supabase/functions/_shared/schemas.ts'
-import { computeSchedule, weeksCovered } from '../../lib/timeline'
+import type { TimelineContent, TimelineRow } from '../../../shared/schemas.ts'
+import { computeSchedule, weeksCovered } from '../../../shared/timeline.ts'
 import { Field, Input, Textarea } from '../ui'
 import { TableEditor, type Column } from './TableEditor'
 

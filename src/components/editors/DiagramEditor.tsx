@@ -1,4 +1,4 @@
-import { DIAGRAM_KINDS, type DiagramContent, type DiagramKind } from '../../../supabase/functions/_shared/schemas.ts'
+import { DIAGRAM_KINDS, type DiagramContent, type DiagramKind } from '../../../shared/schemas.ts'
 import { slugify } from '../../lib/download'
 import { MermaidView } from '../MermaidView'
 import { Field, Input, Select, Textarea } from '../ui'

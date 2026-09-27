@@ -7,7 +7,7 @@ import type {
   SowContent,
   TimelineContent,
   TorContent,
-} from '../../../supabase/functions/_shared/schemas.ts'
+} from '../../../shared/schemas.ts'
 import { DiagramEditor } from './DiagramEditor'
 import { OnboardingEditor } from './OnboardingEditor'
 import { AssessmentEditor, TorEditor } from './SimpleEditors'
@@ -32,6 +32,7 @@ export function DocEditor({ type, value, onChange, readOnly }: Props) {
       return <TimelineEditor value={value as TimelineContent} onChange={onChange} readOnly={readOnly} />
     case 'sow_cekat':
     case 'sow_cif':
+    case 'custom':
       return <SowEditor value={value as SowContent} onChange={onChange} readOnly={readOnly} />
     case 'onboarding':
       return <OnboardingEditor value={value as OnboardingContent} onChange={onChange} readOnly={readOnly} />

@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import type { SowContent } from '../../../supabase/functions/_shared/schemas.ts'
+import type { SowContent } from '../../../shared/schemas.ts'
 import { Markdown } from '../Markdown'
 import { Button, Input, Textarea } from '../ui'
 

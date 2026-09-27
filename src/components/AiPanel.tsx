@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
-import { DIAGRAM_KINDS, type DiagramContent, type DocType } from '../../supabase/functions/_shared/schemas.ts'
+import { DIAGRAM_KINDS, type DiagramContent, type DocType } from '../../shared/schemas.ts'
 import { skillsApi } from '../lib/api'
 import type { GenerateParams } from '../lib/useGenerate'
 import { Button, ErrorNote, Field, Select, Textarea } from './ui'
@@ -12,6 +12,8 @@ interface Props {
   currentKind?: DiagramContent['kind']
   running: boolean
   chars: number
+  /** Current tool activity, e.g. "Searching cekat docs: broadcast". */
+  activity?: string
   error: unknown
   dirty: boolean
   onRun: (params: GenerateParams) => void
@@ -25,9 +27,10 @@ const SUGGESTIONS: Partial<Record<DocType, string[]>> = {
   sow_cif: ['Recalculate milestones from the latest timeline', 'Make the objective more measurable'],
   onboarding: ['Tambahkan section untuk integrasi API'],
   diagram: ['Tambahkan jalur eskalasi ke human agent', 'Pecah per swimlane aktor'],
+  custom: ['Cek fitur Cekat di dokumentasi dan perbaiki bagian yang tidak akurat', 'Ringkas jadi maksimal 2 halaman'],
 }
 
-export function AiPanel({ docType, documentId, currentKind, running, chars, error, dirty, onRun }: Props) {
+export function AiPanel({ docType, documentId, currentKind, running, chars, activity, error, dirty, onRun }: Props) {
   const skills = useQuery({ queryKey: ['skills'], queryFn: skillsApi.list })
   const options = skills.data?.filter((s) => s.output_type === docType) ?? []
   const [skillId, setSkillId] = useState('')
@@ -78,6 +81,11 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, erro
       <Button variant="ai" className="w-full" loading={running} onClick={run} icon={<Sparkles className="size-4" />}>
         {running ? `Writing… ${chars.toLocaleString()} chars` : 'Create new version'}
       </Button>
+      {running && activity && (
+        <p className="truncate font-mono text-[11px] text-ember" aria-live="polite" title={activity}>
+          {activity}
+        </p>
+      )}
       <ErrorNote error={error} />
     </section>
   )

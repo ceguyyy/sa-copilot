@@ -1,5 +1,5 @@
 // SKILL.md-style import/export: YAML-ish frontmatter (name, description, output_type) + markdown body.
-import { SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../supabase/functions/_shared/schemas.ts'
+import { SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../shared/schemas.ts'
 import type { SkillInput } from './types'
 
 type SkillFile = Omit<SkillInput, 'is_default'>

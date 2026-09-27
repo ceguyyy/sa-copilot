@@ -1,19 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, ArrowLeft, Download, Eye, GitCompare, PenLine, RotateCcw, Save, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BookmarkCheck, BookmarkPlus, Download, Eye, FolderOpen, GitCompare, PenLine, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { DOC_LABELS, type AnyDocContent } from '../../supabase/functions/_shared/schemas.ts'
+import { DOC_LABELS, type AnyDocContent } from '../../shared/schemas.ts'
 import { AiPanel } from '../components/AiPanel'
 import { DocEditor } from '../components/editors/DocEditor'
 import { Markdown } from '../components/Markdown'
 import { Badge, Button, ErrorNote, Input, Spinner } from '../components/ui'
 import { VersionHistory } from '../components/VersionHistory'
-import { documentsApi, versionsApi } from '../lib/api'
+import { documentsApi, filesApi, versionsApi } from '../lib/api'
 import { lineDiff } from '../lib/diff'
-import { toMarkdown } from '../lib/docMarkdown'
+import { toMarkdown } from '../../shared/docMarkdown.ts'
 import { downloadBlob, slugify } from '../lib/download'
-import { DOCX_TYPES, exportDocx } from '../lib/export/docx'
-import { XLSX_TYPES, exportXlsx } from '../lib/export/xlsx'
+import { DOCX_TYPES, exportDocx } from '../../shared/export/docx.ts'
+import { XLSX_TYPES, exportXlsx } from '../../shared/export/xlsx.ts'
 import type { DocumentVersion } from '../lib/types'
 import { useGenerate } from '../lib/useGenerate'
 
@@ -52,7 +52,11 @@ function DocumentView() {
   const dirty = useMemo(() => !!latest && !!draft && JSON.stringify(draft) !== JSON.stringify(latest.content), [draft, latest])
 
   const refreshVersions = () =>
-    Promise.all([qc.invalidateQueries({ queryKey: ['versions', documentId] }), qc.invalidateQueries({ queryKey: ['documents', projectId] })])
+    Promise.all([
+      qc.invalidateQueries({ queryKey: ['versions', documentId] }),
+      qc.invalidateQueries({ queryKey: ['documents', projectId] }),
+      qc.invalidateQueries({ queryKey: ['files', projectId] }),
+    ])
 
   const save = useMutation({
     mutationFn: () => versionsApi.create(documentId, draft!, 'manual', note.trim() || 'Manual edit'),
@@ -72,6 +76,16 @@ function DocumentView() {
     mutationFn: () => documentsApi.rename(documentId, title.trim()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['document', documentId] }),
   })
+  const knowledge = useMutation({
+    mutationFn: (value: boolean) => documentsApi.setKnowledge(documentId, value),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['document', documentId] }),
+        qc.invalidateQueries({ queryKey: ['documents', projectId] }),
+        qc.invalidateQueries({ queryKey: ['knowledge-docs'] }),
+      ]),
+  })
+  const openFolder = useMutation({ mutationFn: () => filesApi.openFolder(projectId) })
   const remove = useMutation({
     mutationFn: () => documentsApi.remove(documentId),
     onSuccess: async () => {
@@ -126,6 +140,20 @@ function DocumentView() {
             </div>
             {latest && <Badge tone="forest">v{latest.version_no}</Badge>}
             <div className="flex flex-wrap gap-1">
+              <Button
+                variant={d.is_knowledge ? 'primary' : 'outline'}
+                aria-pressed={d.is_knowledge}
+                title={
+                  d.is_knowledge
+                    ? 'Used as a reference in every project — click to stop sharing'
+                    : 'Share this document with every project as a reference (structure, standard wording)'
+                }
+                icon={d.is_knowledge ? <BookmarkCheck className="size-4" /> : <BookmarkPlus className="size-4" />}
+                loading={knowledge.isPending}
+                onClick={() => knowledge.mutate(!d.is_knowledge)}
+              >
+                {d.is_knowledge ? 'In knowledge' : 'Add to knowledge'}
+              </Button>
               <Button variant="outline" icon={<Download className="size-4" />} onClick={() => exporter.mutate('md')}>
                 .md
               </Button>
@@ -144,7 +172,16 @@ function DocumentView() {
           </div>
         </div>
 
-        <ErrorNote error={exporter.error ?? rename.error ?? remove.error ?? versions.error} />
+        {d.export_files.length > 0 && (
+          <p className="-mt-3 flex flex-wrap items-center gap-x-2 font-mono text-[11px] text-muted">
+            Saved to disk: {d.export_files.map((f) => f.split(/[\\/]/).pop()).join(' · ')}
+            <button className="inline-flex items-center gap-1 text-forest hover:underline" onClick={() => openFolder.mutate()}>
+              <FolderOpen className="size-3" /> open folder
+            </button>
+          </p>
+        )}
+
+        <ErrorNote error={exporter.error ?? rename.error ?? knowledge.error ?? openFolder.error ?? remove.error ?? versions.error} />
 
         {timelineOutdated && (
           <div className="flex items-center gap-2 rounded-md border border-warn/40 bg-ember-soft px-3 py-2 text-sm text-warn">
@@ -222,6 +259,7 @@ function DocumentView() {
           currentKind={d.type === 'diagram' ? (latest?.content as { kind?: never })?.kind : undefined}
           running={!!gen.running}
           chars={gen.chars}
+          activity={gen.activity}
           error={gen.error}
           dirty={dirty}
           onRun={async (params) => {

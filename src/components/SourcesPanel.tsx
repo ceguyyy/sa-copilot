@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, Image as ImageIcon, NotebookPen, Trash2, Upload } from 'lucide-react'
+import clsx from 'clsx'
+import { Brain, BrainCircuit, FileText, Image as ImageIcon, NotebookPen, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { sourcesApi } from '../lib/api'
 import { ACCEPTED_FILES, extractText } from '../lib/extract'
@@ -49,6 +50,11 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
     },
   })
 
+  const toggle = useMutation({
+    mutationFn: (s: Source) => sourcesApi.setEnabled(s.id, !s.enabled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  })
+
   const remove = useMutation({
     mutationFn: sourcesApi.remove,
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
@@ -96,7 +102,7 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
       </div>
 
       {progress && <p className="font-mono text-xs text-muted">{progress}</p>}
-      <ErrorNote error={upload.error ?? addNote.error ?? remove.error ?? sources.error} />
+      <ErrorNote error={upload.error ?? addNote.error ?? toggle.error ?? remove.error ?? sources.error} />
 
       {noteOpen && (
         <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
@@ -111,7 +117,7 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
       <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
         {sources.data?.length === 0 && <li className="p-4 text-sm text-muted">Nothing yet — upload PDF, DOCX, XLSX, images, or paste notes.</li>}
         {sources.data?.map((s) => (
-          <li key={s.id} className="p-3">
+          <li key={s.id} className={clsx('p-3 transition', !s.enabled && 'opacity-55')}>
             <div className="flex items-center gap-3">
               {s.mime_type?.startsWith('image/') ? <ImageIcon className="size-4 shrink-0 text-muted" /> : <FileText className="size-4 shrink-0 text-muted" />}
               <button className="min-w-0 flex-1 truncate text-left text-sm hover:underline" onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
@@ -121,6 +127,19 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
               <span className="hidden font-mono text-[11px] text-muted sm:inline">
                 {s.extracted_text ? `${Math.round(s.extracted_text.length / 1000)}k chars` : 'vision'}
               </span>
+              <button
+                aria-pressed={s.enabled}
+                title={s.enabled ? 'Used by the AI — click to ignore this source' : 'Ignored by the AI — click to use it again'}
+                className={clsx(
+                  'flex items-center gap-1 rounded px-1.5 py-1 font-mono text-[11px] transition',
+                  s.enabled ? 'text-forest hover:bg-forest-soft' : 'text-muted line-through hover:bg-line/60',
+                )}
+                disabled={toggle.isPending && toggle.variables?.id === s.id}
+                onClick={() => toggle.mutate(s)}
+              >
+                {s.enabled ? <BrainCircuit className="size-3.5" /> : <Brain className="size-3.5" />}
+                <span className="hidden sm:inline">{s.enabled ? 'AI' : 'off'}</span>
+              </button>
               <button
                 aria-label={`Delete ${s.name}`}
                 className="rounded p-1 text-muted hover:bg-ember-soft hover:text-bad"

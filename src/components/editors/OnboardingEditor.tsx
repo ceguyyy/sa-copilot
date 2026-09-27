@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from 'lucide-react'
-import type { OnboardingContent, OnboardingFieldType } from '../../../supabase/functions/_shared/schemas.ts'
+import type { OnboardingContent, OnboardingFieldType } from '../../../shared/schemas.ts'
 import { Button, Input, Textarea } from '../ui'
 import { TableEditor, type Column } from './TableEditor'
 

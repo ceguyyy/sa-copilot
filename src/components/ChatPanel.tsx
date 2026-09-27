@@ -21,7 +21,7 @@ export function ChatPanel({ projectId }: { projectId: string }) {
 
   const [input, setInput] = useState('')
   const [skillId, setSkillId] = useState('')
-  const [pending, setPending] = useState<{ user: string; reply: string } | null>(null)
+  const [pending, setPending] = useState<{ user: string; reply: string; activity: string } | null>(null)
   const [error, setError] = useState<unknown>(null)
   const abort = useRef<AbortController | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
@@ -36,10 +36,15 @@ export function ChatPanel({ projectId }: { projectId: string }) {
     if (!message || pending) return
     setInput('')
     setError(null)
-    setPending({ user: message, reply: '' })
+    setPending({ user: message, reply: '', activity: '' })
     abort.current = new AbortController()
     try {
-      await chat({ projectId, message, skillId: skillId || undefined }, (t) => setPending((p) => (p ? { ...p, reply: p.reply + t } : p)), abort.current.signal)
+      await chat(
+        { projectId, message, skillId: skillId || undefined },
+        (t) => setPending((p) => (p ? { ...p, reply: p.reply + t, activity: '' } : p)),
+        abort.current.signal,
+        (activity) => setPending((p) => (p ? { ...p, activity } : p)),
+      )
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e)
     } finally {
@@ -110,6 +115,11 @@ export function ChatPanel({ projectId }: { projectId: string }) {
           <>
             <Bubble role="user" text={pending.user} />
             <Bubble role="assistant" text={pending.reply || '…'} streaming />
+            {pending.activity && (
+              <p className="truncate pl-3 font-mono text-[11px] text-ember" aria-live="polite" title={pending.activity}>
+                {pending.activity}…
+              </p>
+            )}
           </>
         )}
         <ErrorNote error={error} />

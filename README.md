@@ -10,64 +10,55 @@ A presales Solution Architect workbench for Cekat AI. You upload the client's re
 - **Chat**: streams from Claude and grounds its answers in all of the project's sources and documents.
 - **Documents**: structured JSON per type, rendered by editors (tables, sections, Gantt, Mermaid). Claude writes them through JSON-schema structured outputs.
 - **Version history**: versions are immutable. Every save, AI revision or restore creates a new version, and you can diff any version against the current one.
-- **Skills library**: full CRUD over the instructions Claude follows per output type. The first sign-in seeds defaults built from your templates. Skills import and export as `SKILL.md`.
+- **Skills library**: full CRUD over the instructions Claude follows per output type. The first run seeds defaults built from your templates. Skills import and export as `SKILL.md`.
 - **Export**: `.md` for all documents, `.docx` for SOW/onboarding/assessment/TOR/timeline, `.xlsx` for assessment/TOR/timeline (the timeline export includes Gantt week bars), and `.svg` for diagrams.
 
 ## Stack
 
-React 19 + Vite + TypeScript + Tailwind v4 · TanStack Query · Supabase (Postgres + RLS, Storage, Auth magic link, Edge Functions) · Claude (`claude-opus-5`) via `@anthropic-ai/sdk` · mermaid · exceljs · docx · pdf.js · mammoth.
+React 19 + Vite + TypeScript + Tailwind v4 · TanStack Query · local Node server (Hono, runs `.ts` directly on Node 24) · PostgreSQL (manage it with pgAdmin) · Claude via `@anthropic-ai/sdk` (directly or through 9router) · mermaid · exceljs · docx · pdf.js · mammoth.
 
 ```
 src/
-  pages/              Projects, Project (sources + pipeline + chat), Document, Skills, Knowledge, Login
+  pages/              Projects, Project (sources + pipeline + chat), Document, Skills, Knowledge
   components/         ChatPanel, SourcesPanel, AiPanel, VersionHistory, Markdown, MermaidView, ui
   components/editors/ Assessment, TOR, Timeline (Gantt), SOW, Onboarding, Diagram
-  lib/                api (repository), ai (NDJSON stream client), timeline, docMarkdown, diff, extract, export/*
-supabase/
-  migrations/         schema + RLS + storage bucket
-  functions/_shared/  schemas.ts (doc types + JSON schemas, shared with the frontend), context builder
-  functions/ai/       chat + generate edge function
+  lib/                api (REST client), ai (NDJSON stream client), timeline, docMarkdown, diff, extract, export/*
+server/
+  index.ts            serves /api + the built UI on 127.0.0.1
+  routes.ts           REST endpoints (projects, sources, skills, documents, versions, messages)
+  ai/                 chat + generate (streams NDJSON), project context builder
+  db.ts, storage.ts   PostgreSQL pool + first-run setup, uploaded files on local disk
+shared/schemas.ts     doc types + JSON schemas, shared by server and UI
+db/schema.sql         schema, applied automatically on every server start (idempotent)
 ```
 
-## Setup
+## Setup (Windows)
 
-1. **Create a Supabase project** at supabase.com.
-2. **Link and migrate:**
-   ```bash
-   npx supabase login
-   npx supabase link --project-ref YOUR-PROJECT-REF
-   npx supabase db push
-   ```
-3. **Set the Edge Function secrets.** Copy `supabase/functions/.env.example` to `supabase/functions/.env` and fill in `ANTHROPIC_API_KEY`, then run:
-   ```bash
-   npx supabase secrets set --env-file supabase/functions/.env
-   npx supabase functions deploy ai
-   ```
-4. **Configure the frontend.** Copy `.env.example` to `.env.local` and set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Supabase → Project Settings → API).
-5. **Configure auth.** In Supabase → Authentication → URL Configuration, add `http://localhost:5173` (and your prod URL) to the redirect URLs.
-6. **Run it:** `npm install && npm run dev`
+1. **PostgreSQL** — install it (pgAdmin comes with it) and make sure the service is running. You don't need to create the database; the server creates `sa_copilot` on first start.
+2. **Config** — copy `.env.example` to `.env` and set:
+   - `DATABASE_URL=postgres://postgres:<your password>@localhost:5432/sa_copilot`
+   - `ANTHROPIC_API_KEY` — a Claude API key, **or** a 9router key together with `ANTHROPIC_BASE_URL=http://localhost:20128` (run `9router` first).
+3. **Run** — double-click `start-sa-copilot.bat`. It installs, builds, starts the server and opens http://localhost:3000.
 
-### Local Supabase (optional, needs Docker)
+**Choosing the AI provider and model:** with `ANTHROPIC_BASE_URL` pointing at 9router, the sidebar shows an **AI model** picker listing every provider and model connected in 9router (from its `/v1/models`). The choice is saved in the database and used for chat and document generation; `ANTHROPIC_MODEL` is only the fallback. Connect more providers in the 9router dashboard, then press the reload icon next to the picker. Models marked *(chat only)* can't call tools, so they can't write documents.
 
-```bash
-npx supabase start                                            # prints local URL + anon key -> .env.local
-npx supabase functions serve ai --env-file supabase/functions/.env
-```
-Magic-link emails show up in Inbucket at http://localhost:54324.
+There is no login: the server only listens on `127.0.0.1`, so it is reachable from this laptop only. Uploaded files are stored in `data/uploads/`. Back up both that folder and the database (pgAdmin → Backup) together.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Vite dev server |
-| `npm test` | Vitest unit tests (timeline scheduling, markdown rendering, diff, SKILL.md parsing) |
-| `npm run build` | Type-check + production build |
-| `npm run check:functions` | `deno check` the edge function |
+| `npm start` | Build the UI and run the server on http://localhost:3000 |
+| `npm run serve` | Run the server with the last build |
+| `npm run dev` + `npm run dev:server` | Development: Vite on :5173 (proxies `/api`) + server with `--watch` |
+| `npm test` | Vitest unit tests (UI helpers + server validation, errors, storage) |
+| `npm run build` | Type-check (UI + server) + production build |
 
 ## Notes & limits
 
-- **Function timeout:** a long SOW generation can take a couple of minutes. Supabase's wall-clock limit is 150 s on the free plan and 400 s on paid plans. If you hit it, set `GENERATE_EFFORT=medium`.
-- **Refusal fallback:** requests use Claude's server-side refusal fallback (`fallbacks: "default"`), which reruns on a fallback model if the primary one declines. Remove `FALLBACK` in `supabase/functions/ai/index.ts` to turn it off.
+- **Long generations:** a SOW can take a couple of minutes. There is no function timeout locally; set `GENERATE_EFFORT=medium` if it is too slow.
+- **Refusal fallback:** when calling the Claude API directly, requests use Claude's server-side refusal fallback (`fallbacks: "default"`). It is switched off automatically when `ANTHROPIC_BASE_URL` points at a proxy such as 9router.
+- **Proxies:** generation uses structured outputs (`output_config.format`) and adaptive thinking. If your proxy or model doesn't support them, chat may work while "Draft with AI" fails with an API error.
 - **Mandays:** these are the Timeline's `SLA/Days` column, which you set. SOWs read them, and a SOW shows a "timeline outdated" banner when the timeline changes after its last version.
 - **DOCX export:** the file follows each template's section structure but not its exact Word styling or logo. Paste it into the branded template if you need pixel-perfect output.
-- **Single-user:** every row is scoped to `auth.uid()` via RLS. To share with a team you would need a workspace table and new policies.
+- **Single-user, local only:** no auth. Don't change the server's host to `0.0.0.0` without adding a login first.

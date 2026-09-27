@@ -23,10 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# env & supabase local state
+# env
 .env
 .env.*
 !.env.example
-supabase/.temp
-supabase/.branches
-supabase/functions/.env
+
+# local data (uploaded files)
+data/

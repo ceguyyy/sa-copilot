@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Download, Plus, RotateCcw, Save, Star, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { DOC_LABELS, SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../supabase/functions/_shared/schemas.ts'
+import { DOC_LABELS, SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../shared/schemas.ts'
+import { AssistantChat } from '../components/AssistantChat'
+import { McpServersPanel } from '../components/McpServersPanel'
 import { Badge, Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea } from '../components/ui'
 import { skillsApi } from '../lib/api'
 import { DEFAULT_SKILLS } from '../lib/defaultSkills'
@@ -9,7 +11,13 @@ import { downloadBlob, slugify } from '../lib/download'
 import { parseSkillMarkdown, skillToMarkdown } from '../lib/skillFile'
 import type { Skill, SkillInput } from '../lib/types'
 
-const label = (t: SkillOutputType) => (t === 'chat' ? 'Chat persona' : DOC_LABELS[t])
+const label = (t: SkillOutputType) => (t === 'chat' ? 'Chat persona' : t === 'custom' ? 'Custom deliverables (all)' : DOC_LABELS[t])
+
+const STARTERS = [
+  'Buat skill SOW Cekat yang selalu menyebut batasan paket dan SLA dari dokumentasi Cekat',
+  'Perbaiki skill ini supaya output lebih ringkas dan pakai bahasa formal',
+  'Buat chat persona yang menjawab seperti SA senior dan selalu cek dokumentasi Cekat dulu',
+]
 const BLANK: SkillInput = { name: 'New skill', output_type: 'assessment', description: '', instructions: '', is_default: false }
 
 export function SkillsPage() {
@@ -78,6 +86,20 @@ export function SkillsPage() {
   })
 
   const list = (skills.data ?? []).filter((s) => filter === 'all' || s.output_type === filter)
+
+  /** The AI proposes whole field values; keep the default flag, which is the user's call. */
+  function applyProposal(data: Record<string, unknown>) {
+    const str = (k: string, fallback: string) => (typeof data[k] === 'string' ? (data[k] as string) : fallback)
+    const outputType = SKILL_OUTPUT_TYPES.includes(data.output_type as SkillOutputType) ? (data.output_type as SkillOutputType) : form.output_type
+    setForm({
+      ...form,
+      name: str('name', form.name),
+      output_type: outputType,
+      description: str('description', form.description),
+      instructions: str('instructions', form.instructions),
+    })
+    if (!selectedId) setSelectedId('new')
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -149,6 +171,7 @@ export function SkillsPage() {
           </ul>
         </div>
 
+        <div className="min-w-0 space-y-6">
         {selectedId ? (
           <Card className="space-y-4 p-5">
             <div className="grid gap-4 md:grid-cols-[1fr_220px]">
@@ -207,9 +230,19 @@ export function SkillsPage() {
             </div>
           </Card>
         ) : (
-          <Card className="flex items-center justify-center p-10 text-sm text-muted">Select a skill to edit, or create a new one.</Card>
+          <Card className="flex items-center justify-center p-10 text-sm text-muted">Select a skill to edit, create a new one, or ask the AI below.</Card>
         )}
+        <AssistantChat
+          kind="skill"
+          current={selectedId ? form : {}}
+          onProposal={applyProposal}
+          placeholder={selectedId ? 'Apa yang mau diubah di skill ini?' : 'Skill apa yang mau dibuat?'}
+          starters={STARTERS}
+        />
+        </div>
       </div>
+
+      <McpServersPanel />
     </div>
   )
 }
