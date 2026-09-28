@@ -1,24 +1,17 @@
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../../shared/schemas.ts'
 import type { DocumentRow } from '../../lib/types'
-import { Badge, Button } from '../ui'
+import { STEP_HINT } from '../../lib/deliverables'
+import { AiDraftButton } from '../AiDraftButton'
+import { Badge } from '../ui'
 
-const STEP_HINT: Partial<Record<DocType, string>> = {
-  assessment: '12 standard questions answered from the requirements',
-  tor: 'Package + custom scope (Layanan / Sub Layanan)',
-  timeline: 'Activities & SLA/Days — you set the mandays',
-  sow_cekat: 'Internal Cekat format',
-  sow_cif: 'Meta Client Integration Fund format',
-  onboarding: 'Form the client fills before kickoff',
-  deck: 'Cekat deck with slides 31–40 made for this client (.pptx)',
-}
 
 interface Props {
   projectId: string
   docs: DocumentRow[]
   running: DocType | null
-  onGenerate: (type: DocType) => void
+  onGenerate: (type: DocType, instruction: string) => void
 }
 
 /** The built-in pipeline: one card per deliverable, drafted by the AI or opened for editing. */
@@ -48,9 +41,7 @@ export function DeliverablesPanel({ projectId, docs, running, onGenerate }: Prop
                 Open · updated {new Date(doc.updated_at).toLocaleDateString()} <ArrowRight className="size-3.5" />
               </Link>
             ) : (
-              <Button variant="ai" icon={<Sparkles className="size-4" />} loading={running === type} disabled={!!running} onClick={() => onGenerate(type)}>
-                Draft with AI
-              </Button>
+              <AiDraftButton label="Draft with AI" align="left" isLoading={running === type} isDisabled={!!running} onRun={(instruction) => onGenerate(type, instruction)} />
             )}
           </li>
         )

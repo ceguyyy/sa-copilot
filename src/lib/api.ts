@@ -3,6 +3,8 @@ import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
 import type { Theme, ThemeMode } from '../../shared/theme.ts'
 import type {
   AiModel,
+  BackupInspect,
+  BackupRestoreResult,
   AiModelList,
   ChatMessage,
   DocTemplate,
@@ -12,6 +14,11 @@ import type {
   EffortSetting,
   KnowledgeDocument,
   McpServer,
+  N8nNodeSkill,
+  N8nNodeSkillInput,
+  PocConfig,
+  PocRow,
+  PocVersion,
   ProjectFile,
   Project,
   ProjectInput,
@@ -50,6 +57,9 @@ export const projectsApi = {
   create: (input: ProjectInput) => send<Project>('Create project', 'POST', '/projects', input),
   update: (id: string, input: Partial<ProjectInput>) => send<Project>('Update project', 'PATCH', `/projects/${id}`, input),
   remove: (id: string) => send<void>('Delete project', 'DELETE', `/projects/${id}`),
+  sendToNotion: (id: string) => send<{ url: string; blocks: number }>('Send to Notion', 'POST', `/projects/${id}/notion`),
+  /** Download link for the whole project as one Markdown file. */
+  markdownUrl: (id: string) => `/api/projects/${id}/export.md`,
 }
 
 // ---------- sources ----------
@@ -106,6 +116,33 @@ export const versionsApi = {
   /** Restoring never rewrites history — it appends a copy of the old version. */
   restore(documentId: string, version: DocumentVersion): Promise<DocumentVersion> {
     return versionsApi.create(documentId, version.content, 'restore', `Restored from v${version.version_no}`)
+  },
+}
+
+// ---------- Cekat n8n node catalog ----------
+
+export const n8nNodesApi = {
+  list: () => request<N8nNodeSkill[]>('Load n8n nodes', '/n8n-nodes'),
+  create: (input: N8nNodeSkillInput) => send<N8nNodeSkill>('Add n8n node', 'POST', '/n8n-nodes', input),
+  importWorkflow: (workflow: string) => send<N8nNodeSkill[]>('Import n8n workflow', 'POST', '/n8n-nodes/import', { workflow }),
+  update: (id: string, input: Partial<N8nNodeSkillInput>) => send<N8nNodeSkill>('Update n8n node', 'PATCH', `/n8n-nodes/${id}`, input),
+  remove: (id: string) => send<void>('Delete n8n node', 'DELETE', `/n8n-nodes/${id}`),
+}
+
+export const pocsApi = {
+  list: (projectId: string) => request<PocRow[]>('Load POCs', `/projects/${projectId}/pocs`),
+  get: (id: string) => request<PocRow>('Load POC', `/pocs/${id}`),
+  create(projectId: string, name: string, config: PocConfig): Promise<PocRow> {
+    return send('Create POC', 'POST', `/projects/${projectId}/pocs`, { projectId, name, config })
+  },
+  update: (id: string, patch: Partial<{ name: string; config: PocConfig }>) => send<PocRow>('Update POC', 'PATCH', `/pocs/${id}`, patch),
+  remove: (id: string) => send<void>('Delete POC', 'DELETE', `/pocs/${id}`),
+}
+
+export const pocVersionsApi = {
+  list: (pocId: string) => request<PocVersion[]>('Load POC versions', `/pocs/${pocId}/versions`),
+  create(pocId: string, config: PocConfig, origin: 'manual' | 'ai' | 'restore', note: string): Promise<PocVersion> {
+    return send('Save POC version', 'POST', `/pocs/${pocId}/versions`, { config, origin, note })
   },
 }
 
@@ -333,4 +370,31 @@ export const demoApi = {
   remove: (id: string) => send<void>('Delete scenario', 'DELETE', `/demo-scenarios/${id}`),
   push: (projectId: string, ids?: string[]) =>
     send<{ pushed: number; categoryId: string; link: string }>('Push to demo', 'POST', `/projects/${projectId}/demo/push`, { ids }),
+}
+
+export interface DemoOverview {
+  configured: boolean
+  appUrl: string
+  projects: { id: string; name: string; client_name: string; scenarios: number; pushed: number; link: string }[]
+}
+
+export const demoOverviewApi = {
+  get: () => request<DemoOverview>('Load demo', '/demo'),
+}
+
+// ---------- backup ----------
+
+function backupForm(file: File, confirm?: string): FormData {
+  const form = new FormData()
+  form.set('file', file)
+  if (confirm) form.set('confirm', confirm)
+  return form
+}
+
+export const backupApi = {
+  downloadUrl: '/api/backup',
+  /** Where the server keeps uploads, exports and pre-restore backups. */
+  storage: () => request<{ uploads: string; exports: string; backups: string }>('Load storage folders', '/storage'),
+  inspect: (file: File) => request<BackupInspect>('Read backup', '/backup/inspect', { method: 'POST', body: backupForm(file) }),
+  restore: (file: File) => request<BackupRestoreResult>('Restore backup', '/backup/restore', { method: 'POST', body: backupForm(file, 'RESTORE') }),
 }

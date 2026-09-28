@@ -1,5 +1,6 @@
 // Request body schemas. Zod strips unknown keys, so parsed objects only ever contain writable columns.
 import { z } from 'zod'
+import { CRM_COLUMN_TYPES, normalizeCrm } from '../shared/pocCrm.ts'
 import { DOC_TYPES, SKILL_OUTPUT_TYPES } from '../shared/schemas.ts'
 import { HttpError, UUID_RE } from './http.ts'
 
@@ -13,7 +14,8 @@ export const projectInput = z.object({
   package: optionalText,
   status: z.enum(['discovery', 'assessment', 'proposal', 'won', 'lost', 'delivery']).optional(),
   description: optionalText,
-  language: z.string().trim().min(1).max(40).optional(),
+  // Blank = not chosen in the form; the main language from Settings is used for new projects.
+  language: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), z.string().trim().min(1).max(40).optional()),
 })
 export const projectPatch = projectInput.partial()
 
@@ -79,12 +81,184 @@ const httpUrl = z
   .max(500)
   .refine((u) => /^https?:\/\//i.test(u) && URL.canParse(u), 'Must be an http(s) URL')
 
+const optionalHttpUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .refine((u) => u.length === 0 || (/^https?:\/\//i.test(u) && URL.canParse(u)), 'Must be an http(s) URL or blank')
+
+const pocApiMethod = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+const blankableText = (max: number) => z.string().trim().max(max)
+const pocKnowledgeBase = z.object({
+  textSections: z.array(z.object({ title: blankableText(200), content: z.string().max(50_000).default('') })).default([]),
+  websites: z.array(z.object({ url: optionalHttpUrl, note: z.string().max(2_000).default('') })).default([]),
+  qna: z.array(z.object({ question: blankableText(500), answer: z.string().max(20_000).default('') })).default([]),
+  files: z.array(z.object({ name: blankableText(200), size: z.number().int().min(0).default(0) })).default([]),
+})
+
+const pocKnowledgeBasePatch = pocKnowledgeBase.partial()
+
+const pocPipeline = z.array(
+  z.object({
+    order: z.number().int().min(1),
+    status: z.string().trim().max(120).default(''),
+    condition: z.string().max(2_000).default(''),
+  }),
+).default([])
+
+// Cekat CRM boards (typed columns + sample items, kanban grouped by a Select/Dropdown column). Legacy
+// stage-only boards are converted by normalizeCrm before validation.
+const pocCrmColumn = z.object({
+  key: z.string().trim().min(1).max(20),
+  name: z.string().trim().max(120),
+  type: z.enum(CRM_COLUMN_TYPES),
+  options: z.array(z.object({ label: z.string().trim().max(80), condition: z.string().max(2_000) })).max(50),
+})
+const pocCrm = z.preprocess(
+  normalizeCrm,
+  z.object({
+    boards: z
+      .array(
+        z.object({
+          name: z.string().trim().max(120),
+          description: z.string().max(2_000),
+          columns: z.array(pocCrmColumn).max(40),
+          rows: z.array(z.record(z.string(), z.string().max(5_000))).max(100),
+          kanbanColumn: z.string().max(20),
+        }),
+      )
+      .max(30),
+  }),
+)
+
+const pocApiIntegration = z.object({
+  name: z.string().trim().max(64).refine((v) => v === '' || /^[a-z][a-z0-9_]{0,63}$/.test(v), 'Must be a valid API name or blank'),
+  httpMethod: pocApiMethod,
+  description: z.string().max(5_000).default(''),
+  webhookAddress: z.string().trim().max(500).default(''),
+  apiKey: z.string().max(500).optional().or(z.literal('')),
+  aiInput: z.record(z.string(), z.unknown()).default({}),
+  // What the n8n workflow behind the Cekat webhook calls: the client's endpoint, and its login endpoint if any.
+  targetMethod: pocApiMethod.default('GET'),
+  targetUrl: z.string().trim().max(1_000).default(''),
+  authUrl: z.string().trim().max(1_000).default(''),
+})
+
+export const pocConfig = z.object({
+  agentBehavior: z.string().max(200_000).default(''),
+  welcomeMessage: z.string().max(5_000).default(''),
+  welcomeImage: z.string().max(500).nullable().optional(),
+  agentTransferConditions: z.string().max(5_000).default(''),
+  stopAiAfterHandoff: z.boolean().default(false),
+  silentAgentHandoff: z.boolean().default(false),
+  labels: z.array(z.object({ name: z.string().trim().max(80).default(''), condition: z.string().max(2_000).default('') })).default([]),
+  pipeline: pocPipeline,
+  knowledgeBase: pocKnowledgeBase.default({
+    textSections: [],
+    websites: [],
+    qna: [],
+    files: [],
+  } as const),
+  apiIntegrations: z.array(pocApiIntegration).default([]),
+  crm: pocCrm.default({ boards: [] }),
+  additionalSettings: z
+    .object({
+      aiHistoryLimit: z.number().int().min(0).default(20),
+      aiReadFileLimit: z.number().int().min(0).default(3),
+      aiContextLimit: z.number().int().min(0).default(10),
+      aiTemperature: z.enum(['low', 'balanced', 'creative']).default('balanced'),
+      messageAwait: z.number().int().min(0).default(5),
+      aiMessageLimit: z.number().int().min(0).default(1000),
+      watcher: z.enum(['off', 'standard', 'strict']).default('off'),
+      timezone: z.string().trim().min(1).max(80).default('(GMT+7:00) Bangkok, Hanoi, Jakarta'),
+      sessionOnlyMemory: z.enum(['off', 'session_only', 'per_thread']).default('off'),
+      ignoreTeamHandoff: z.boolean().default(false),
+    })
+    .default({
+      aiHistoryLimit: 20,
+      aiReadFileLimit: 3,
+      aiContextLimit: 10,
+      aiTemperature: 'balanced',
+      messageAwait: 5,
+      aiMessageLimit: 1000,
+      watcher: 'off',
+      timezone: '(GMT+7:00) Bangkok, Hanoi, Jakarta',
+      sessionOnlyMemory: 'off',
+      ignoreTeamHandoff: false,
+    } as const),
+})
+
+const pocConfigPatch = pocConfig.partial().extend({
+  knowledgeBase: pocKnowledgeBasePatch.optional(),
+  labels: z.array(z.object({ name: z.string().trim().max(80).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
+  pipeline: z.array(z.object({ order: z.number().int().min(1).optional(), status: z.string().trim().max(120).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
+  apiIntegrations: z.array(pocApiIntegration.partial()).optional(),
+  additionalSettings: z.object({
+    aiHistoryLimit: z.number().int().min(0).optional(),
+    aiReadFileLimit: z.number().int().min(0).optional(),
+    aiContextLimit: z.number().int().min(0).optional(),
+    aiTemperature: z.enum(['low', 'balanced', 'creative']).optional(),
+    messageAwait: z.number().int().min(0).optional(),
+    aiMessageLimit: z.number().int().min(0).optional(),
+    watcher: z.enum(['off', 'standard', 'strict']).optional(),
+    timezone: z.string().trim().min(1).max(80).optional(),
+    sessionOnlyMemory: z.enum(['off', 'session_only', 'per_thread']).optional(),
+    ignoreTeamHandoff: z.boolean().optional(),
+  }).partial().optional(),
+})
+
+export const pocInput = z.object({
+  projectId: uuid,
+  name: z.string().trim().min(1).max(120),
+  config: pocConfig.default({
+    agentBehavior: '',
+    welcomeMessage: '',
+    welcomeImage: null,
+    agentTransferConditions: '',
+    stopAiAfterHandoff: false,
+    silentAgentHandoff: false,
+    labels: [],
+    pipeline: [],
+    knowledgeBase: {
+      textSections: [],
+      websites: [],
+      qna: [],
+      files: [],
+    },
+    apiIntegrations: [],
+    crm: { boards: [] },
+    additionalSettings: {
+      aiHistoryLimit: 20,
+      aiReadFileLimit: 3,
+      aiContextLimit: 10,
+      aiTemperature: 'balanced',
+      messageAwait: 5,
+      aiMessageLimit: 1000,
+      watcher: 'off',
+      timezone: '(GMT+7:00) Bangkok, Hanoi, Jakarta',
+      sessionOnlyMemory: 'off',
+      ignoreTeamHandoff: false,
+    },
+  } as const),
+})
+
+export const pocPatch = z.object({
+  name: z.string().trim().min(1).max(120),
+  config: pocConfigPatch,
+}).partial().refine((p) => p.name !== undefined || p.config !== undefined, 'Nothing to update')
+
 export const mcpServerInput = z.object({ name: z.string().trim().min(1).max(80), url: httpUrl })
 export const mcpServerPatch = z.object({ name: z.string().trim().min(1).max(80), url: httpUrl, enabled: z.boolean() }).partial()
 
 export const versionInput = z.object({
   content: docContent,
   origin: z.enum(['manual', 'restore']),
+  note: z.string().max(2_000).default(''),
+})
+
+export const pocVersionInput = z.object({
+  config: pocConfig,
+  origin: z.enum(['manual', 'ai', 'restore']).default('manual'),
   note: z.string().max(2_000).default(''),
 })
 
@@ -97,3 +271,13 @@ export function toSetClause(patch: Record<string, unknown>, firstIndex = 1): { s
     values: entries.map(([, v]) => v),
   }
 }
+
+export const n8nNodeInput = z.object({
+  name: z.string().trim().min(1).max(120),
+  node_type: z.string().trim().min(1).max(200),
+  kind: z.enum(['trigger', 'action']).default('action'),
+  description: z.string().max(5_000).default(''),
+  example: z.record(z.string(), z.unknown()).default({}),
+})
+export const n8nNodePatch = n8nNodeInput.partial()
+export const n8nWorkflowImport = z.object({ workflow: z.unknown() })

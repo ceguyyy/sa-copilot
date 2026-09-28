@@ -1,8 +1,8 @@
 import ExcelJS from 'exceljs'
 import { describe, expect, test } from 'vitest'
-import type { TimelineContent } from '../schemas.ts'
+import type { TimelineContent, UserJourneyContent } from '../schemas.ts'
 import { exportDocx } from './docx.ts'
-import { exportXlsx } from './xlsx.ts'
+import { exportXlsx, journeySheetName } from './xlsx.ts'
 
 const timeline: TimelineContent = {
   title: 'Timeline Setup',
@@ -37,6 +37,38 @@ describe('exportXlsx', () => {
     const fill = (col: number) => (ws.getRow(6).getCell(col).fill as { fgColor?: { argb?: string } } | undefined)?.fgColor?.argb
     expect(fill(7)).toBe('FFE0673A')
     expect(fill(8)).toBe('FFE0673A')
+  })
+
+  test('writes the user journey as READ_ME + one sheet per topic with blue section rows', async () => {
+    const journey: UserJourneyContent = {
+      title: 'User Journey',
+      persona: 'Clara',
+      sheets: [
+        {
+          name: 'Greeting, Main Menu',
+          sections: [
+            { title: 'Greeting', scripts: [{ no: '1', parent: 'root', scenario: 'Greeting', trigger: 'halo', response: 'Hai 👋', note: '', revision: 'added 28/09/2026' }] },
+            { title: 'Main Menu', scripts: [{ no: '2', parent: 'random', scenario: 'Main menu', trigger: 'menu', response: '[button] Booking', note: '', revision: '' }] },
+          ],
+        },
+        { name: 'Tracking/Paket: [cek]', sections: [{ title: '', scripts: [{ no: '1', parent: 'random', scenario: 'Cek', trigger: '[no resi]', response: 'Status: [Status]', note: 'API GET', revision: '' }] }] },
+      ],
+    }
+    const wb = await readBack(await exportXlsx('user_journey', 'User Journey', journey))
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['READ_ME!', 'Greeting, Main Menu', 'Tracking Paket cek'])
+    const ws = wb.getWorksheet('Greeting, Main Menu')!
+    expect(ws.getRow(1).values).toEqual([undefined, 'Script No', 'Parent', 'Scenario', 'Trigger / Condition', 'Ekspektasi Respon', 'Note', 'Revision History'])
+    expect(ws.getRow(2).getCell(1).value).toBe('Greeting')
+    expect((ws.getRow(2).getCell(1).fill as { fgColor?: { argb?: string } }).fgColor?.argb).toBe('FFA4C2F4')
+    expect(ws.getRow(3).getCell(4).value).toBe('halo')
+    expect(ws.getRow(4).getCell(1).value).toBe('Main Menu')
+  })
+
+  test('keeps sheet names within Excel limits and unique', () => {
+    const used = new Set<string>()
+    expect(journeySheetName('A'.repeat(40), used)).toHaveLength(31)
+    expect(journeySheetName('A'.repeat(40), used)).toBe(`${'A'.repeat(29)} 2`)
+    expect(journeySheetName('', used)).toBe('Topic')
   })
 
   test('refuses types without a spreadsheet layout', async () => {

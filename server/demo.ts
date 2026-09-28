@@ -210,3 +210,25 @@ demo.post('/projects/:id/demo/push', async (c) => {
   await query('update demo_scenarios set pushed_at = now() where id = any($1::uuid[])', [rows.map((r) => r.id)])
   return c.json({ pushed: rows.length, categoryId, link: demoLink(categoryId, rows[0].id) })
 })
+
+/** All projects' demo categories, for the sidebar Demo page. */
+demo.get('/demo', async (c) => {
+  const projects = await query<ProjectRow & { scenarios: number; pushed: number }>(
+    `select p.id, p.name, p.client_name, p.description,
+       count(s.id)::int as scenarios, count(s.pushed_at)::int as pushed
+     from projects p left join demo_scenarios s on s.project_id = p.id
+     group by p.id order by max(s.updated_at) desc nulls last, p.updated_at desc`,
+  )
+  return c.json({
+    configured: demoConfigured(),
+    appUrl: config.demo.appUrl,
+    projects: projects.map((p) => ({
+      id: p.id,
+      name: p.name,
+      client_name: p.client_name,
+      scenarios: p.scenarios,
+      pushed: p.pushed,
+      link: demoLink(demoCategoryId(p)),
+    })),
+  })
+})

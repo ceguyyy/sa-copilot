@@ -28,6 +28,7 @@ const SUGGESTIONS: Partial<Record<DocType, string[]>> = {
   sow_cekat: ['Update timeline dari dokumen Timeline terbaru', 'Perjelas out of scope'],
   sow_cif: ['Recalculate milestones from the latest timeline', 'Make the objective more measurable'],
   onboarding: ['Tambahkan section untuk integrasi API'],
+  user_journey: ['Tambahkan idle respon 5 menit untuk setiap menu', 'Tambahkan respon error API di setiap hit API'],
   diagram: ['Tambahkan jalur eskalasi ke human agent', 'Pecah per swimlane aktor'],
   deck: ['Isi presenter: Christian Gunawan, Solution Architect', 'Buat mockup pakai nama klinik klien', 'Sesuaikan arsitektur dengan integrasi HIS yang disebut di requirement'],
   custom: ['Cek fitur Cekat di dokumentasi dan perbaiki bagian yang tidak akurat', 'Ringkas jadi maksimal 2 halaman'],

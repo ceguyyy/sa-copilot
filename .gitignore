@@ -33,3 +33,15 @@ data/
 
 # machine-specific Windows shortcuts (absolute paths)
 *.lnk
+
+# execution ledgers (superpowers)
+.superpowers/
+
+# desktop build output
+release/
+server-dist/
+electron-dist/
+build/python/
+build/cache/
+build/templates/
+.playwright-mcp/

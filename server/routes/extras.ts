@@ -2,10 +2,12 @@
 import { Hono } from 'hono'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { invalidateMcpCache, mcpTools } from '../ai/mcp.ts'
+import { builtinServers, invalidateMcpCache, mcpTools } from '../ai/mcp.ts'
 import { removeOwnerFiles } from '../attachments.ts'
 import { query, queryOne } from '../db.ts'
-import { deleteProjectFile, exportProjectFiles, listProjectFiles, projectFilePath, revealInExplorer } from '../exports.ts'
+import { deleteProjectFile, exportProjectFiles, listProjectFiles, projectFilePath, revealInExplorer, safeSegment } from '../exports.ts'
+import { pushProjectToNotion } from '../notion/push.ts'
+import { loadProjectMarkdown } from '../projectExport.ts'
 import { HttpError, idParam, notFound, parseJson } from '../http.ts'
 import { mcpServerInput, mcpServerPatch, templateInput, templatePatch, toSetClause } from '../validation.ts'
 
@@ -14,6 +16,19 @@ export const extras = new Hono()
 // ---------- project files (auto-exported deliverables) ----------
 
 extras.get('/projects/:id/files', async (c) => c.json(await listProjectFiles(idParam(c))))
+
+/** The whole project (latest version of every document, questions, POCs) as one Markdown download. */
+extras.get('/projects/:id/export.md', async (c) => {
+  const { project, markdown } = await loadProjectMarkdown(idParam(c))
+  const file = `${safeSegment(project.name)}.md`
+  return c.body(markdown, 200, {
+    'Content-Type': 'text/markdown; charset=utf-8',
+    'Content-Disposition': `attachment; filename="${file.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(file)}`,
+  })
+})
+
+/** Writes the project to Notion as one page (replacing the page it was sent to before). */
+extras.post('/projects/:id/notion', async (c) => c.json(await pushProjectToNotion(idParam(c))))
 
 extras.post('/projects/:id/files/export', async (c) => c.json({ exported: await exportProjectFiles(idParam(c)) }))
 
@@ -80,7 +95,8 @@ extras.get('/mcp-servers', async (c) => {
     mcpTools().catch(() => []),
   ])
   // `tools` is empty for a disabled or unreachable server — the UI shows that as "no tools".
-  return c.json(servers.map((s) => ({ ...s, tools: tools.filter((t) => t.serverId === s.id).map((t) => t.name) })))
+  const builtin = builtinServers().map(({ id, name, url, enabled, created_at }) => ({ id, name, url, enabled, created_at, builtin: true }))
+  return c.json([...servers, ...builtin].map((s) => ({ ...s, tools: tools.filter((t) => t.serverId === s.id).map((t) => t.name) })))
 })
 
 extras.post('/mcp-servers', async (c) => {

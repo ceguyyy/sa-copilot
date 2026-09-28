@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileClock, FolderOpen, GitBranch, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
+import { ExternalLink, FileClock, FileDown, FolderOpen, GitBranch, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
 import { ChatPanel } from '../components/ChatPanel'
@@ -11,12 +11,14 @@ import { MeetingNotesPanel } from '../components/project/MeetingNotesPanel'
 import { QuestionsPanel } from '../components/project/QuestionsPanel'
 import { ProjectTabs } from '../components/project/ProjectTabs'
 import { DeliverablesPanel } from '../components/project/DeliverablesPanel'
+import { DeliverablesProgress } from '../components/project/DeliverablesProgress'
 import { DemoPanel } from '../components/project/DemoPanel'
 import { DiagramsPanel } from '../components/project/DiagramsPanel'
+import { PocPanel } from '../components/project/PocPanel'
 import { ProjectFilesPanel } from '../components/ProjectFilesPanel'
 import { SourcesPanel } from '../components/SourcesPanel'
 import { Button, ErrorNote, PageHeader, Select, Spinner } from '../components/ui'
-import { auditApi, demoApi, documentsApi, filesApi, projectsApi, questionsApi, sourcesApi } from '../lib/api'
+import { auditApi, demoApi, documentsApi, filesApi, pocsApi, projectsApi, questionsApi, sourcesApi } from '../lib/api'
 import { PROJECT_STATUSES, type DocumentRow, type ProjectStatus } from '../lib/types'
 import { useGenerate } from '../lib/useGenerate'
 
@@ -50,6 +52,13 @@ const TABS = [
     starters: ['Diagram apa yang masih kurang untuk project ini?', 'Jelaskan alur eskalasi ke human agent dalam bentuk langkah.'],
   },
   {
+    id: 'poc',
+    label: 'POC',
+    focus: 'POC',
+    icon: NotebookText,
+    starters: ['Buat draft konfigurasi POC untuk kebutuhan ini?', 'Apakah API integration ini sudah cukup untuk agent flow yang diinginkan?'],
+  },
+  {
     id: 'files',
     label: 'Files',
     focus: 'Files',
@@ -81,6 +90,7 @@ export function ProjectPage() {
   const navigate = useNavigate()
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => projectsApi.get(projectId) })
   const docs = useQuery({ queryKey: ['documents', projectId], queryFn: () => documentsApi.list(projectId) })
+  const pocs = useQuery({ queryKey: ['pocs', projectId], queryFn: () => pocsApi.list(projectId) })
   const gen = useGenerate(projectId)
   // Same query keys as the panels, so the tab summaries share their cache.
   const sources = useQuery({ queryKey: ['sources', projectId], queryFn: () => sourcesApi.list(projectId) })
@@ -98,6 +108,10 @@ export function ProjectPage() {
     mutationFn: (patch: { status?: ProjectStatus; language?: string }) => projectsApi.update(projectId, patch),
     onSuccess: refreshProject,
   })
+  const sendToNotion = useMutation({
+    mutationFn: () => projectsApi.sendToNotion(projectId),
+    onSuccess: refreshProject,
+  })
   const removeProject = useMutation({
     mutationFn: () => projectsApi.remove(projectId),
     onSuccess: () => {
@@ -107,7 +121,7 @@ export function ProjectPage() {
     },
   })
 
-  async function generateAndOpen(docType: DocType, extra: { diagramKind?: string; templateId?: string } = {}) {
+  async function generateAndOpen(docType: DocType, extra: { diagramKind?: string; templateId?: string; instruction?: string } = {}) {
     const done = await gen.run({ docType, ...extra })
     if (done?.documentId) navigate(`/projects/${projectId}/docs/${done.documentId}`)
   }
@@ -126,6 +140,7 @@ export function ProjectPage() {
     deliverables: `${PIPELINE.filter((t) => all.some((d) => d.type === t)).length}/${PIPELINE.length} drafted`,
     custom: plural(ofType('custom').length, 'document'),
     diagrams: plural(ofType('diagram').length, 'diagram'),
+    poc: pocs.data ? plural(pocs.data.length, 'POC') : '…',
     files: files.data ? plural(files.data.files.length, 'file') : '…',
     demo: demo.data
       ? `${plural(demo.data.scenarios.length, 'scenario')}${demo.data.configured ? '' : ' · not connected'}`
@@ -147,6 +162,23 @@ export function ProjectPage() {
                   <option key={s}>{s}</option>
                 ))}
               </Select>
+              <a
+                href={projectsApi.markdownUrl(projectId)}
+                download
+                title="Every deliverable, diagram, client question and POC of this project in one Markdown file"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-paper"
+              >
+                <FileDown className="size-4" /> Download MD
+              </a>
+              <Button
+                variant="outline"
+                icon={<NotebookText className="size-4" />}
+                loading={sendToNotion.isPending}
+                title={p.notion_page_id ? 'Replace the Notion page with the latest version of this project' : 'Create a Notion page with every deliverable, diagram, question and POC'}
+                onClick={() => sendToNotion.mutate()}
+              >
+                {p.notion_page_id ? 'Update Notion' : 'Send to Notion'}
+              </Button>
               <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => confirm(`Delete project "${p.name}" and all its documents?`) && removeProject.mutate()}>
                 Delete
               </Button>
@@ -157,7 +189,15 @@ export function ProjectPage() {
           {p.package ?? '—'} · {p.industry || 'industry n/a'} · {p.language}
           {p.description ? ` · ${p.description}` : ''}
         </p>
-        <ErrorNote error={update.error ?? removeProject.error} />
+        {sendToNotion.data && (
+          <p className="-mt-3 text-sm text-ok">
+            Sent to Notion ({sendToNotion.data.blocks} blocks) —{' '}
+            <a href={sendToNotion.data.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium underline">
+              open the page <ExternalLink className="size-3.5" />
+            </a>
+          </p>
+        )}
+        <ErrorNote error={update.error ?? removeProject.error ?? sendToNotion.error} />
 
         <ProjectTabs
           tabs={TABS.map((t) => ({ id: t.id, label: t.label, icon: t.icon, meta: meta[t.id] }))}
@@ -181,16 +221,18 @@ export function ProjectPage() {
         )}
         {tab.id === 'deliverables' && (
           <div className="space-y-6">
+            <DeliverablesProgress projectId={projectId} docs={all} />
             <ConsistencyPanel projectId={projectId} hasDocs={all.length > 0} />
-            <DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type) => generateAndOpen(type)} />
+            <DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type, instruction) => generateAndOpen(type, { instruction })} />
           </div>
         )}
         {tab.id === 'custom' && (
-          <CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId) => generateAndOpen('custom', { templateId })} />
+          <CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId, instruction) => generateAndOpen('custom', { templateId, instruction })} />
         )}
         {tab.id === 'diagrams' && (
-          <DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind) => generateAndOpen('diagram', { diagramKind })} />
+          <DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind, instruction) => generateAndOpen('diagram', { diagramKind, instruction })} />
         )}
+        {tab.id === 'poc' && <PocPanel projectId={projectId} clientName={p.client_name || p.name} />}
         {tab.id === 'files' && <ProjectFilesPanel projectId={projectId} />}
         {tab.id === 'demo' && <DemoPanel projectId={projectId} />}
         {tab.id === 'audit' && <AuditPanel projectId={projectId} />}

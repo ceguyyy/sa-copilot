@@ -11,12 +11,14 @@ import { setupDatabase } from './db.ts'
 import { toHttpError } from './http.ts'
 import { api } from './routes.ts'
 import { extras } from './routes/extras.ts'
+import { n8nNodes } from './routes/n8nNodes.ts'
 import { themes } from './themes.ts'
 import { languages } from './languages.ts'
 import { questions } from './routes/questions.ts'
 import { demo } from './demo.ts'
 import { attachments, purgeOldRequestFiles } from './attachments.ts'
 import { seedDefaultServers } from './ai/mcp.ts'
+import { backup } from './backup/routes.ts'
 
 const app = new Hono()
 
@@ -28,6 +30,8 @@ app.onError((e, c) => {
 
 app.route('/api', api)
 app.route('/api', extras)
+app.route('/api', n8nNodes)
+app.route('/api', backup)
 app.route('/api', themes)
 app.route('/api', languages)
 app.route('/api', questions)
@@ -39,9 +43,13 @@ app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404))
 // Built frontend (npm run build). In dev, Vite serves the UI and proxies /api here instead.
 if (existsSync(config.distDir)) {
   const root = path.relative(process.cwd(), config.distDir) || '.'
+  // index.html is read per request and never cached, so a rebuild is picked up without restarting the server;
+  // the hashed assets it points to can be cached.
+  const noCache = { 'Cache-Control': 'no-cache' }
+  const indexHtml = () => readFile(path.join(config.distDir, 'index.html'), 'utf8')
+  app.get('/', async (c) => c.html(await indexHtml(), 200, noCache))
   app.use('/*', serveStatic({ root }))
-  const indexHtml = await readFile(path.join(config.distDir, 'index.html'), 'utf8')
-  app.get('*', (c) => c.html(indexHtml)) // SPA fallback for client-side routes
+  app.get('*', async (c) => c.html(await indexHtml(), 200, noCache)) // SPA fallback for client-side routes
 }
 
 try {

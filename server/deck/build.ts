@@ -13,7 +13,7 @@ import { queryOne } from '../db.ts'
 import { HttpError } from '../http.ts'
 import { templateEdits } from './template.ts'
 
-const SCRIPT = path.join(import.meta.dirname, 'build_deck.py')
+const SCRIPT = config.deckScript
 const TIMEOUT_MS = 180_000
 /** Raster width per visual: sharp on a projector without bloating the file. */
 const RASTER_WIDTH: Record<string, number> = { mockup1: 700, mockup2: 700, mockup3: 700 }

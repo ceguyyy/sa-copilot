@@ -1,15 +1,31 @@
 import clsx from 'clsx'
-import { Cpu, Languages, LayoutTemplate, Palette, Plug, Sparkles } from 'lucide-react'
+import { Archive, Cpu, FileStack, KeyRound, Languages, LayoutTemplate, Palette, Plug, Sparkles } from 'lucide-react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { McpServersPanel } from '../components/McpServersPanel'
 import { ModelPicker } from '../components/ModelPicker'
 import { PageHeader } from '../components/ui'
+import { desktop } from '../lib/desktop'
+import { BackupSettings } from './settings/BackupSettings'
+import { ConnectionsSettings } from './settings/ConnectionsSettings'
+import { DeliverablesSettings } from './settings/DeliverablesSettings'
 import { FormatsSettings } from './settings/FormatsSettings'
 import { LanguagesSettings } from './settings/LanguagesSettings'
 import { SkillsSettings } from './settings/SkillsSettings'
 import { ThemeSettings } from './settings/ThemeSettings'
 
 const TABS = [
+  {
+    id: 'deliverables',
+    label: 'Deliverables',
+    icon: FileStack,
+    intro: 'The built-in deliverables (Assessment, TOR, Timeline, SOW, Onboarding, User Journey, Deck): edit the format each one is drafted with, attach the latest template, or have the AI update it.',
+  },
+  {
+    id: 'connections',
+    label: 'Connections',
+    icon: KeyRound,
+    intro: 'Every setting that used to live in .env — AI key and endpoint, model, Outline, Notion, the demo app and folders. Saving applies it immediately.',
+  },
   {
     id: 'formats',
     label: 'Formats',
@@ -41,6 +57,12 @@ const TABS = [
     intro: 'The choices in the project language dropdown. The ★ main language is preselected for new projects.',
   },
   {
+    id: 'backup',
+    label: 'Backup',
+    icon: Archive,
+    intro: 'Move all your data to another device: download a backup here, restore it there.',
+  },
+  {
     id: 'theme',
     label: 'Theme',
     icon: Palette,
@@ -50,17 +72,20 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
+/** Connections edits the desktop app's settings; in the browser/dev server they come from .env instead. */
+const VISIBLE_TABS = TABS.filter((t) => t.id !== 'connections' || desktop)
+
 /** One place to configure everything: formats, skills, AI tools and the model. The tab lives in the URL. */
 export function SettingsPage() {
   const { tab } = useParams()
-  const current = TABS.find((t) => t.id === tab)
-  if (!current) return <Navigate to="/settings/formats" replace />
+  const current = VISIBLE_TABS.find((t) => t.id === tab)
+  if (!current) return <Navigate to="/settings/deliverables" replace />
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader kicker="Configure the copilot" title="Settings" />
       <nav aria-label="Settings sections" className="flex flex-wrap gap-1 border-b border-line">
-        {TABS.map(({ id, label, icon: Icon }) => (
+        {VISIBLE_TABS.map(({ id, label, icon: Icon }) => (
           <NavLink
             key={id}
             to={`/settings/${id}`}
@@ -83,6 +108,8 @@ export function SettingsPage() {
 
 function TabContent({ tab }: { tab: TabId }) {
   switch (tab) {
+    case 'deliverables':
+      return <DeliverablesSettings />
     case 'formats':
       return <FormatsSettings />
     case 'skills':
@@ -97,6 +124,10 @@ function TabContent({ tab }: { tab: TabId }) {
       )
     case 'languages':
       return <LanguagesSettings />
+    case 'connections':
+      return <ConnectionsSettings />
+    case 'backup':
+      return <BackupSettings />
     case 'theme':
       return <ThemeSettings />
   }

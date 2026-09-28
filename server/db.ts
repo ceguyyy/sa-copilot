@@ -58,7 +58,12 @@ async function ensureDatabase(): Promise<void> {
   }
 }
 
+/** Applies db/schema.sql (idempotent: create-if-not-exists + additive alters). */
+export async function applySchema(): Promise<void> {
+  await pool.query(await readFile(config.schemaFile, 'utf8'))
+}
+
 export async function setupDatabase(): Promise<void> {
   await ensureDatabase()
-  await pool.query(await readFile(config.schemaFile, 'utf8'))
+  await applySchema()
 }

@@ -16,6 +16,7 @@ import { processMeetingNotes } from './meeting.ts'
 import { findQuestions } from './questions.ts'
 import { summarizeVersionDiff } from './versionDiff.ts'
 import { generateDemoScenarios } from './demoScenarios.ts'
+import { generatePocDraft } from './pocDraft.ts'
 import { loadAttachments, loadProjectContext, renderContextText } from './context.ts'
 import { SUBMIT_TOOL, parseJsonObject } from './extract.ts'
 import { resolveEffort, systemPrompt, toolEvents, toolsFor } from './common.ts'
@@ -59,6 +60,7 @@ ai.post('/meeting-notes', streamed(processMeetingNotes))
 ai.post('/find-questions', streamed(findQuestions))
 ai.post('/version-diff', streamed(summarizeVersionDiff))
 ai.post('/demo-scenarios', streamed(generateDemoScenarios))
+ai.post('/poc-draft', streamed(generatePocDraft))
 
 ai.get('/models', async (c) => {
   const [models, selected, effort] = await Promise.all([listModels(), activeModel(), getEffort()])
@@ -254,12 +256,21 @@ function buildTask(
       'It is the pitch deck: write the content of template slides 31–40 for THIS client — end-to-end architecture, CRM data flow, marketing journey, three WhatsApp use-case mockups (realistic chat in the project language, fake names), CRM / kanban / analytics mockups with realistic sample data, and the timeline prerequisites. Tailor every slide to the requirements and the Cekat features that actually exist (check the docs). Keep each text short enough for a slide.',
     )
   }
+  if (docType === 'user_journey') lines.push(USER_JOURNEY_TASK.replace('<today dd/mm/yyyy>', new Date().toLocaleDateString('en-GB')))
   if (docType === 'sow_cekat' || docType === 'sow_cif') {
     lines.push('Durations and milestones MUST come from the Timeline document in the context (its SLA/Days are the mandays set by the SA). If no timeline exists, write "TBD — timeline belum dibuat".')
   }
   lines.push(instruction ? `Instruction from the SA: ${instruction}` : 'No extra instruction — follow the skill guidance.')
   return lines.join('\n')
 }
+
+const USER_JOURNEY_TASK = [
+  'It is the User Journey AI Agent Workflow in the Cekat "Template User Journey Workflows" format: the scripts (redaksional) the AI Agent will say, grouped into topic sheets.',
+  'Sheets: one per flow-based topic or menu — e.g. "Greeting, Main Menu" (sections Greeting + Main Menu), one sheet per main use case from the requirements (e.g. booking, tracking, cek tagihan), and "Unknown, CSAT, Live Agent" (sections CSAT (Survey Satisfaction) and Human Agent Transfer). Add knowledge sheets (FAQ, Produk, Promo, Lokasi Cabang) only for content that is not served by an API. Sheet names ≤ 31 characters.',
+  'Each script: no = number within the sheet; parent = "root" (session start, e.g. the greeting), "random" (reachable from any state, e.g. main menu, CSAT, live agent) or the parent script number; scenario; trigger = sample user input or condition, dynamic input in brackets e.g. "[no resi]"; response = the exact reply; note = API (GET/POST endpoint), validation rule, set label, routing team, connect agent…; revision = "added <today dd/mm/yyyy>".',
+  'Tips from the template: give the AI Agent a persona name and greet the user by name; use emoticons; add an idle follow-up after 5 minutes of silence where it matters (Followup section); validate phone numbers, emails, bill/order numbers and IDs; add a reply for API errors wherever an API is hit; show buttons/lists as "[button] Label" / "[List Menu] Title"; write dynamic API data as [variable], e.g. [name user].',
+  'Write every response in the project language.',
+].join('\n')
 
 /** Which part of the project the SA is looking at (the project page tab), so answers stay on topic. */
 function focusNote(focus: unknown): string {

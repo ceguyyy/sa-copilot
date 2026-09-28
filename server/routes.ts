@@ -178,6 +178,52 @@ api.get('/projects/:id/documents', async (c) =>
   c.json(await query('select * from documents where project_id = $1 order by updated_at desc', [idParam(c)])),
 )
 
+api.get('/projects/:id/pocs', async (c) =>
+  c.json(await query('select * from pocs where project_id = $1 order by updated_at desc', [idParam(c)])),
+)
+
+api.get('/pocs/:id', async (c) => c.json(notFound(await queryOne('select * from pocs where id = $1', [idParam(c)]), 'POC')))
+
+api.post('/projects/:id/pocs', async (c) => {
+  const projectId = idParam(c)
+  const p = await parseJson(c, (await import('./validation.ts')).pocInput)
+  if (p.projectId && p.projectId !== projectId) throw new HttpError(400, 'Project mismatch')
+  const row = await withTransaction(async (tx) => {
+    const { rows } = await tx.query<{ id: string; project_id: string; name: string; config: unknown; created_at: string; updated_at: string }>(
+      `insert into pocs (project_id, name, config) values ($1, $2, $3) returning *`,
+      [projectId, p.name, p.config],
+    )
+    const inserted = rows[0]
+    await tx.query(`insert into poc_versions (poc_id, config, origin, note) values ($1, $2, 'manual', 'Created POC')`, [inserted.id, inserted.config])
+    return inserted
+  })
+  return c.json(row, 201)
+})
+
+api.patch('/pocs/:id', async (c) => {
+  const id = idParam(c)
+  const patch = await parseJson(c, (await import('./validation.ts')).pocPatch)
+  const set = toSetClause(patch, 2)
+  const row = await queryOne(`update pocs set ${set.sql} where id = $1 returning *`, [id, ...set.values])
+  return c.json(notFound(row, 'POC'))
+})
+
+api.delete('/pocs/:id', async (c) => {
+  await query('delete from pocs where id = $1', [idParam(c)])
+  return c.body(null, 204)
+})
+
+api.get('/pocs/:id/versions', async (c) =>
+  c.json(await query('select * from poc_versions where poc_id = $1 order by version_no desc', [idParam(c)])),
+)
+
+api.post('/pocs/:id/versions', async (c) => {
+  const id = idParam(c)
+  const v = await parseJson(c, (await import('./validation.ts')).pocVersionInput)
+  const row = await queryOne('insert into poc_versions (poc_id, config, origin, note) values ($1, $2, $3, $4) returning *', [id, v.config, v.origin, v.note])
+  return c.json(row, 201)
+})
+
 /** Documents flagged as knowledge, across all projects (shown on the Knowledge page). */
 api.get('/documents/knowledge', async (c) =>
   c.json(
@@ -271,7 +317,7 @@ api.get('/dashboard', async (c) =>
     await query(
       `select p.id, p.name, p.client_name, p.industry, p.package, p.status, p.language, p.updated_at,
          (select count(distinct d.type) from documents d
-            where d.project_id = p.id and d.type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'deck'))::int as drafted,
+            where d.project_id = p.id and d.type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'user_journey', 'deck'))::int as drafted,
          (select count(*) from documents d where d.project_id = p.id and d.type = 'custom')::int as custom_docs,
          (select count(*) from documents d where d.project_id = p.id and d.type = 'diagram')::int as diagrams,
          (select count(*) from open_questions q where q.project_id = p.id and q.status = 'open')::int as open_questions,

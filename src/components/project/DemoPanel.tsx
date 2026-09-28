@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import clsx from 'clsx'
-import { Copy, ExternalLink, MonitorPlay, Pencil, Send, Sparkles, Trash2, X } from 'lucide-react'
+import { MonitorPlay, Pencil, Send, Sparkles, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { generateDemoScenarios } from '../../lib/ai'
-import { demoApi, type DemoScenario, type DemoState } from '../../lib/api'
+import { demoApi, type DemoScenario } from '../../lib/api'
+import { LiveDemoOverlay } from './LiveDemoOverlay'
 import { Badge, Button, ErrorNote, Input, Select, Spinner, Textarea } from '../ui'
 
 
@@ -21,8 +21,6 @@ const STATUS: Record<Status, { label: string; tone: 'ok' | 'warn' | 'neutral' | 
   draft: { label: 'not pushed', tone: 'neutral' },
   missing: { label: 'removed from demo', tone: 'ember' },
 }
-
-const scenarioLink = (state: DemoState, id: string) => `${state.categoryLink}/scenario/${id}`
 
 function ScenarioEditor({ scenario, onClose }: { scenario: DemoScenario; onClose: () => void }) {
   const qc = useQueryClient()
@@ -60,8 +58,8 @@ export function DemoPanel({ projectId }: { projectId: string }) {
   const [status, setStatus] = useState('')
   const [genError, setGenError] = useState<unknown>(null)
   const [editing, setEditing] = useState<string | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  /** Open full-screen demo, optionally starting at one scenario. */
+  const [live, setLive] = useState<{ scenario: string | null } | null>(null)
 
   const push = useMutation({ mutationFn: (ids?: string[]) => demoApi.push(projectId, ids), onSuccess: refresh })
   const remove = useMutation({ mutationFn: demoApi.remove, onSuccess: refresh })
@@ -86,13 +84,7 @@ export function DemoPanel({ projectId }: { projectId: string }) {
   if (state.isLoading) return <Spinner />
   if (!state.data) return <ErrorNote error={state.error} />
   const d = state.data
-  const previewUrl = preview ? scenarioLink(d, preview) : d.categoryLink
 
-  async function copy(url: string) {
-    await navigator.clipboard.writeText(url)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
 
   return (
     <div className="space-y-6">
@@ -148,7 +140,7 @@ export function DemoPanel({ projectId }: { projectId: string }) {
                     </div>
                     <Badge tone={STATUS[st].tone}>{STATUS[st].label}</Badge>
                     <div className="flex gap-1">
-                      <Button variant="ghost" className="px-2" title="Preview" icon={<MonitorPlay className="size-4" />} disabled={st === 'draft' || st === 'missing'} onClick={() => setPreview(s.id)} />
+                      <Button variant="ghost" className="px-2" title="Present full screen" icon={<MonitorPlay className="size-4" />} disabled={st === 'draft' || st === 'missing'} onClick={() => setLive({ scenario: s.id })} />
                       <Button variant="ghost" className="px-2" title="Edit JSON" icon={<Pencil className="size-4" />} onClick={() => setEditing(editing === s.id ? null : s.id)} />
                       <Button
                         variant="ghost"
@@ -177,31 +169,24 @@ export function DemoPanel({ projectId }: { projectId: string }) {
       </section>
 
       {d.configured && (
-        <section className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-panel p-4">
+          <div>
             <h3 className="font-display text-lg font-semibold">Live demo</h3>
-            <div className="flex gap-2">
-              <Button variant="outline" icon={<Copy className="size-4" />} onClick={() => copy(previewUrl)}>
-                {copied ? 'Copied' : 'Copy link'}
-              </Button>
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-md border border-line bg-panel px-3 py-1.5 text-sm font-medium transition hover:border-forest"
-              >
-                <ExternalLink className="size-4" /> Open
-              </a>
-            </div>
+            <p className="text-xs text-muted">Opens full screen for presenting — pick a scenario at the top, Esc to close.</p>
           </div>
-          <iframe
-            key={previewUrl}
-            title="Healthcare demo preview"
-            src={previewUrl}
-            className={clsx('h-[720px] w-full rounded-xl border border-line bg-white')}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
+          <Button icon={<MonitorPlay className="size-4" />} onClick={() => setLive({ scenario: null })}>
+            Open live demo
+          </Button>
         </section>
+      )}
+
+      {live && (
+        <LiveDemoOverlay
+          categoryLink={d.categoryLink}
+          scenarios={d.scenarios.filter((s) => s.pushed_at).map((s) => ({ id: s.id, title: s.payload.title }))}
+          initial={live.scenario}
+          onClose={() => setLive(null)}
+        />
       )}
     </div>
   )

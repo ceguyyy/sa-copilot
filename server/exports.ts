@@ -13,6 +13,7 @@ import { config } from './config.ts'
 import { query, queryOne } from './db.ts'
 import { buildDeckPptx } from './deck/build.ts'
 import { HttpError } from './http.ts'
+import { openCommand } from './opener.ts'
 
 const RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)$/i
 
@@ -163,12 +164,13 @@ export async function deleteProjectFile(projectId: string, name: string): Promis
   await query('update documents set export_files = array_remove(export_files, $2) where project_id = $1', [projectId, file])
 }
 
-/** Opens a folder (or a file with its default app) in Windows Explorer on this machine. */
+/** Opens a folder (or a file with its default app) in Explorer / Finder on this machine. */
 export async function revealInExplorer(target: string, isDir: boolean): Promise<void> {
-  if (process.platform !== 'win32') throw new HttpError(501, 'Opening folders is only supported on Windows')
+  const opener = openCommand(process.platform, target)
+  if (!opener) throw new HttpError(501, 'Opening folders is only supported on Windows and macOS')
   if (isDir) await mkdir(target, { recursive: true })
   else await stat(target).catch(() => {
     throw new HttpError(404, 'File not found')
   })
-  spawn('explorer.exe', [target], { detached: true, stdio: 'ignore' }).unref()
+  spawn(opener.command, opener.args, { detached: true, stdio: 'ignore' }).unref()
 }

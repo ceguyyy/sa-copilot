@@ -1,0 +1,43 @@
+appId: ai.cekat.sacopilot
+productName: SA Copilot
+copyright: Copyright © 2026 Christian Gunawan
+directories:
+  output: release
+  buildResources: build
+# Unpacked: embedded Postgres, 9router and Python are real executables/folders that child processes run.
+asar: false
+files:
+  - package.json
+  - electron-dist/**
+  - server-dist/**
+  - dist/**
+  - db/schema.sql
+  - "!**/*.map"
+extraResources:
+  - from: build/python/${os}-${arch}
+    to: python
+  - from: build/templates
+    to: templates
+  - from: server/deck/build_deck.py
+    to: deck/build_deck.py
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName} Setup ${version}.${ext}
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  icon: build/icon.png
+  # Ad-hoc signature only (no Apple Developer account); see docs/BUILD.md for opening it.
+  identity: "-"
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}

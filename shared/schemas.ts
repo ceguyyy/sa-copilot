@@ -11,6 +11,7 @@ export const DOC_TYPES = [
   'sow_cekat',
   'sow_cif',
   'onboarding',
+  'user_journey',
   'diagram',
   'custom',
   'deck',
@@ -28,13 +29,14 @@ export const DOC_LABELS: Record<DocType, string> = {
   sow_cekat: 'SOW — Cekat',
   sow_cif: 'SOW — CIF Meta',
   onboarding: 'Onboarding Form',
+  user_journey: 'User Journey',
   diagram: 'Diagram',
   custom: 'Custom deliverable',
   deck: 'Pitch deck (PPTX)',
 }
 
 /** Pipeline order shown on the project overview. Diagrams are free-floating. */
-export const PIPELINE: DocType[] = ['assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'deck']
+export const PIPELINE: DocType[] = ['assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'user_journey', 'deck']
 
 export const DIAGRAM_KINDS = [
   'activity',
@@ -103,6 +105,41 @@ export interface OnboardingContent {
   }[]
 }
 
+/** One scripted AI Agent turn (a row of the Cekat "Template User Journey Workflows" sheet). */
+export interface UserJourneyScript {
+  /** Script number within the sheet ("1", "2", …). */
+  no: string
+  /** "root" (session start), "random" (reachable from any state) or the parent script number. */
+  parent: string
+  scenario: string
+  /** Sample user input or the condition the system reads, e.g. "halo", "[no resi]". */
+  trigger: string
+  /** What the AI Agent replies; dynamic API data as [variable], buttons as "[button] Label". */
+  response: string
+  /** API (GET/POST), validation, labels, routing, connect agent… */
+  note: string
+  revision: string
+}
+
+/** A titled group of scripts inside a sheet (the blue section rows, e.g. "Greeting", "Main Menu"). */
+export interface UserJourneySection {
+  title: string
+  scripts: UserJourneyScript[]
+}
+
+/** One topic sheet (e.g. "Greeting, Main Menu", "Tracking Paket", "Unknown, CSAT, Live Agent", FAQ). */
+export interface UserJourneySheet {
+  name: string
+  sections: UserJourneySection[]
+}
+
+export interface UserJourneyContent {
+  title: string
+  /** AI Agent persona name, used in the greeting. */
+  persona: string
+  sheets: UserJourneySheet[]
+}
+
 export interface DiagramContent {
   kind: DiagramKind
   title: string
@@ -117,6 +154,7 @@ export interface DocContentMap {
   sow_cekat: SowContent
   sow_cif: SowContent
   onboarding: OnboardingContent
+  user_journey: UserJourneyContent
   diagram: DiagramContent
   /** User-defined deliverable (see doc_templates): same shape as a SOW. */
   custom: SowContent
@@ -200,6 +238,31 @@ export const DOC_SCHEMAS: Record<DocType, JsonSchema> = {
       }),
     ),
   }),
+  user_journey: obj({
+    title: str,
+    persona: { type: 'string', description: 'AI Agent persona name, e.g. "Clara"' },
+    sheets: arr(
+      obj({
+        name: { type: 'string', description: 'Topic sheet name, max 31 characters, e.g. "Greeting, Main Menu"' },
+        sections: arr(
+          obj({
+            title: str,
+            scripts: arr(
+              obj({
+                no: str,
+                parent: { type: 'string', description: '"root", "random" or the parent script number' },
+                scenario: str,
+                trigger: str,
+                response: str,
+                note: str,
+                revision: str,
+              }),
+            ),
+          }),
+        ),
+      }),
+    ),
+  }),
   diagram: obj({
     kind: { type: 'string', enum: [...DIAGRAM_KINDS] },
     title: str,
@@ -228,6 +291,8 @@ export function validateContent(type: DocType, content: unknown): string | null 
       return Array.isArray(c.meta) && Array.isArray(c.sections) ? null : 'Missing meta[] or sections[]'
     case 'onboarding':
       return Array.isArray(c.sections) ? null : 'Missing sections[]'
+    case 'user_journey':
+      return Array.isArray(c.sheets) ? null : 'Missing sheets[]'
     case 'diagram':
       return typeof c.mermaid === 'string' && c.mermaid.trim() ? null : 'Missing mermaid source'
     case 'deck':
@@ -245,6 +310,7 @@ export function emptyContent<T extends DocType>(type: T): DocContentMap[T] {
     custom: { meta: [], sections: [] },
     deck: emptyDeck(),
     onboarding: { title: 'Onboarding Form', sections: [] },
+    user_journey: { title: 'User Journey AI Agent Workflow', persona: '', sheets: [] },
     diagram: { kind: 'activity', title: 'New diagram', mermaid: 'flowchart TD\n  A[Start] --> B[End]', explanation: '' },
   }
   return empty[type]

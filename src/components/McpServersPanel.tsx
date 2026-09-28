@@ -62,6 +62,10 @@ export function McpServersPanel() {
                 <Badge tone="warn">unreachable</Badge>
               )}
             </div>
+            {s.builtin ? (
+              <Badge>.env</Badge>
+            ) : (
+            <>
             <Button
               variant="ghost"
               aria-pressed={s.enabled}
@@ -71,6 +75,8 @@ export function McpServersPanel() {
               onClick={() => toggle.mutate(s)}
             />
             <Button variant="danger" aria-label={`Remove ${s.name}`} icon={<Trash2 className="size-4" />} onClick={() => confirm(`Remove "${s.name}"?`) && remove.mutate(s.id)} />
+            </>
+            )}
           </li>
         ))}
       </ul>

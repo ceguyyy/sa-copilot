@@ -8,6 +8,7 @@ import type {
   SowContent,
   TimelineContent,
   TorContent,
+  UserJourneyContent,
 } from '../../../shared/schemas.ts'
 import { DeckEditor } from './DeckEditor'
 import { DiagramEditor } from './DiagramEditor'
@@ -15,6 +16,7 @@ import { OnboardingEditor } from './OnboardingEditor'
 import { AssessmentEditor, TorEditor } from './SimpleEditors'
 import { SowEditor } from './SowEditor'
 import { TimelineEditor } from './TimelineEditor'
+import { UserJourneyEditor } from './UserJourneyEditor'
 
 interface Props {
   type: DocType
@@ -38,6 +40,8 @@ export function DocEditor({ type, value, onChange, readOnly }: Props) {
       return <SowEditor value={value as SowContent} onChange={onChange} readOnly={readOnly} />
     case 'onboarding':
       return <OnboardingEditor value={value as OnboardingContent} onChange={onChange} readOnly={readOnly} />
+    case 'user_journey':
+      return <UserJourneyEditor value={value as UserJourneyContent} onChange={onChange} readOnly={readOnly} />
     case 'deck':
       return <DeckEditor value={value as DeckContent} onChange={onChange} readOnly={readOnly} />
     case 'diagram':

@@ -3,6 +3,9 @@ import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 
+/** A path from the environment (the desktop app points these into its data/resources folders), else inside the repo. */
+const fromEnv = (name: string, fallback: string) => path.resolve(ROOT, process.env[name]?.trim() || fallback)
+
 function required(name: string): string {
   const value = process.env[name]?.trim()
   if (!value) throw new Error(`Missing ${name} — copy .env.example to .env and fill it in`)
@@ -23,7 +26,9 @@ export const config = {
   // Loopback only: the app has no login, so it must never be reachable from the network.
   host: '127.0.0.1',
   databaseUrl: required('DATABASE_URL'),
-  uploadDir: path.resolve(ROOT, process.env.UPLOAD_DIR ?? 'data/uploads'),
+  uploadDir: fromEnv('UPLOAD_DIR', 'data/uploads'),
+  // Where Backup & Restore writes the automatic backup taken before a restore.
+  backupDir: fromEnv('BACKUP_DIR', 'data/backups'),
   // Healthcare demo app (github.com/ceguyyy/Healthcare-demo-cekat): where scenarios are shown and the
   // Supabase REST endpoint + key they are stored with. The key stays on this server.
   demo: {
@@ -32,11 +37,25 @@ export const config = {
     supabaseKey: process.env.DEMO_SUPABASE_KEY?.trim() || '',
   },
   // PowerPoint template whose slides 31–40 the pitch deck replaces.
-  deckTemplate: path.resolve(ROOT, process.env.DECK_TEMPLATE ?? 'data/templates/deck.pptx'),
+  deckTemplate: fromEnv('DECK_TEMPLATE', 'data/templates/deck.pptx'),
   // Auto-exported deliverables, one folder per project.
-  docsDir: path.resolve(ROOT, process.env.DOCS_DIR ?? 'data/projects'),
-  distDir: path.join(ROOT, 'dist'),
-  schemaFile: path.join(ROOT, 'db', 'schema.sql'),
+  docsDir: fromEnv('DOCS_DIR', 'data/projects'),
+  // Outline wiki, exposed to the AI as a read-only MCP server when a key is set.
+  outline: {
+    apiUrl: process.env.OUTLINE_API_URL?.trim() || 'https://wiki.cekat.ai/api',
+    apiKey: process.env.OUTLINE_API_KEY?.trim() || '',
+    // Bundled outline-mcp-server stdio entry (desktop app); empty = run it through npx.
+    mcpEntry: process.env.OUTLINE_MCP_ENTRY?.trim() ? path.resolve(process.env.OUTLINE_MCP_ENTRY.trim()) : '',
+  },
+  // "Send to Notion": an Internal Integration Secret and the page projects are written under.
+  notion: {
+    token: process.env.NOTION_TOKEN?.trim() || '',
+    parentPage: process.env.NOTION_PARENT_PAGE?.trim() || '',
+  },
+  distDir: fromEnv('DIST_DIR', 'dist'),
+  schemaFile: fromEnv('SCHEMA_FILE', 'db/schema.sql'),
+  deckScript: fromEnv('DECK_SCRIPT', 'server/deck/build_deck.py'),
+  appVersion: process.env.SA_APP_VERSION?.trim() || 'dev',
   maxUploadBytes: 50 * 1024 * 1024,
   markitdown: {
     // Python interpreter that has markitdown installed (pip install "markitdown[all]").

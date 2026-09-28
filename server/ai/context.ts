@@ -1,4 +1,5 @@
 import { DOC_LABELS, type DocType } from '../../shared/schemas.ts'
+import { renderN8nCatalog, type N8nNodeSkillInput } from '../../shared/n8nNodes.ts'
 import { query, queryOne } from '../db.ts'
 import { HttpError } from '../http.ts'
 import { readUpload } from '../storage.ts'
@@ -33,6 +34,8 @@ export interface ProjectContext {
   knowledgeDocs: (DocSnapshot & { project_name: string })[]
   /** Open and answered client questions (dropped ones are left out). */
   questions: { question: string; status: 'open' | 'answered'; answer: string }[]
+  /** Global Cekat n8n node catalog (Knowledge → Cekat n8n nodes). */
+  n8nNodes: N8nNodeSkillInput[]
 }
 
 // Latest version of each document, joined laterally so one query covers all documents.
@@ -49,7 +52,7 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
   const project = await queryOne('select * from projects where id = $1', [projectId])
   if (!project) throw new HttpError(404, 'Project not found')
 
-  const [sources, docs, knowledgeDocs, questions] = await Promise.all([
+  const [sources, docs, knowledgeDocs, questions, n8nNodes] = await Promise.all([
     query<SourceRow>(
       `select id, project_id, kind, name, mime_type, storage_path, extracted_text
        from sources where (project_id = $1 or project_id is null) and enabled order by created_at`,
@@ -64,8 +67,9 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
       `select question, status, answer from open_questions where project_id = $1 and status <> 'dropped' order by created_at`,
       [projectId],
     ),
+    query<N8nNodeSkillInput>('select name, node_type, kind, description, example from n8n_node_skills order by kind desc, node_type, name'),
   ])
-  return { project, sources, docs, knowledgeDocs, questions }
+  return { project, sources, docs, knowledgeDocs, questions, n8nNodes }
 }
 
 /** Global knowledge only (no project): used by the skill assistant. */
@@ -113,6 +117,9 @@ export function renderContextText(ctx: ProjectContext): string {
     parts.push('# OPEN QUESTIONS (not confirmed yet — mark anything depending on them as needing confirmation)')
     parts.push(open.map((q) => `- ${q.question}`).join('\n'))
   }
+
+  const n8nCatalog = renderN8nCatalog(ctx.n8nNodes)
+  if (n8nCatalog) parts.push(n8nCatalog)
 
   if (ctx.knowledgeDocs.length) {
     parts.push('# REFERENCE DOCUMENTS FROM OTHER PROJECTS (flagged as knowledge — reuse their structure and standard wording, never their client-specific facts)')

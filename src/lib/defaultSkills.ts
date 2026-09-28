@@ -174,6 +174,17 @@ const diagram: SkillInput = {
 Rules: output valid Mermaid only (no fences) in "mermaid"; quote labels containing parentheses, slashes or colons, e.g. A["Get Promo (API)"]; keep node ids alphanumeric; ≤ 40 nodes. "title" is short and specific. "explanation" is 2-5 sentences in the SA's language describing the flow.`,
 }
 
+const userJourney: SkillInput = {
+  name: 'User Journey — Cekat AI Agent workflow',
+  output_type: 'user_journey',
+  is_default: true,
+  description: 'AI Agent scripts per topic sheet in the Cekat "Template User Journey Workflows" format (.xlsx).',
+  instructions: `Write the user journey the client will review before the AI Agent is built.
+- Start from the use cases in the requirements/TOR and the API integrations of the POC; one sheet per menu/use case, plus "Greeting, Main Menu" and "Unknown, CSAT, Live Agent".
+- For every API call cover the success reply, "not found / invalid input" and the API-error reply, and note the endpoint (GET/POST).
+- Keep replies short, friendly, in the persona's voice; the main menu lists the use cases as [button] items.`,
+}
+
 export const DEFAULT_SKILLS: SkillInput[] = [
   chat,
   assessment,
@@ -183,5 +194,6 @@ export const DEFAULT_SKILLS: SkillInput[] = [
   sowCekat,
   sowCif,
   onboarding,
+  userJourney,
   diagram,
 ]

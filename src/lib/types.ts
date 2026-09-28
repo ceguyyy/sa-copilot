@@ -13,6 +13,8 @@ export interface Project {
   description: string | null
   /** Language the AI writes this project's documents and replies in. */
   language: string
+  /** Notion page the project was last sent to ("Send to Notion"), if any. */
+  notion_page_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -85,6 +87,86 @@ export interface KnowledgeDocument extends DocumentRow {
   project_name: string
 }
 
+export type PocLabel = {
+  name: string
+  condition: string
+}
+
+export type PocPipelineStep = {
+  order: number
+  status: string
+  condition: string
+}
+
+export type PocKnowledgeBase = {
+  textSections: Array<{ title: string; content: string }>
+  websites: Array<{ url: string; note: string }>
+  qna: Array<{ question: string; answer: string }>
+  files: Array<{ name: string; size: number }>
+}
+
+export type PocApiIntegration = {
+  name: string
+  httpMethod: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  description: string
+  webhookAddress: string
+  apiKey?: string
+  aiInput: Record<string, unknown>
+  /** Client API endpoint the n8n workflow calls (e.g. Doctor Assist), and its login endpoint when it needs a token. */
+  targetMethod: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  targetUrl: string
+  authUrl: string
+}
+
+export type { CrmBoard, CrmColumn, CrmColumnType, CrmOption, PocCrm } from '../../shared/pocCrm.ts'
+
+export type PocAdditionalSettings = {
+  aiHistoryLimit: number
+  aiReadFileLimit: number
+  aiContextLimit: number
+  aiTemperature: 'low' | 'balanced' | 'creative'
+  messageAwait: number
+  aiMessageLimit: number
+  watcher: 'off' | 'standard' | 'strict'
+  timezone: string
+  sessionOnlyMemory: 'off' | 'session_only' | 'per_thread'
+  ignoreTeamHandoff: boolean
+}
+
+export type PocConfig = {
+  agentBehavior: string
+  welcomeMessage: string
+  welcomeImage?: string | null
+  agentTransferConditions: string
+  stopAiAfterHandoff: boolean
+  silentAgentHandoff: boolean
+  labels: PocLabel[]
+  pipeline: PocPipelineStep[]
+  knowledgeBase: PocKnowledgeBase
+  apiIntegrations: PocApiIntegration[]
+  crm: import('../../shared/pocCrm.ts').PocCrm
+  additionalSettings: PocAdditionalSettings
+}
+
+export interface PocRow {
+  id: string
+  project_id: string
+  name: string
+  config: PocConfig
+  created_at: string
+  updated_at: string
+}
+
+export interface PocVersion {
+  id: string
+  poc_id: string
+  version_no: number
+  config: PocConfig
+  note: string
+  origin: 'manual' | 'ai' | 'restore'
+  created_at: string
+}
+
 export interface DocTemplate {
   id: string
   name: string
@@ -104,6 +186,8 @@ export interface McpServer {
   created_at: string
   /** Tools the AI can use from this server (empty when disabled or unreachable). */
   tools: string[]
+  /** Configured in .env (e.g. the Outline wiki): shown, but not editable here. */
+  builtin?: boolean
 }
 
 export interface ProjectFile {
@@ -134,3 +218,27 @@ export interface AiModelList {
   effort: EffortSetting
   proxied: boolean
 }
+
+export type N8nNodeKind = 'trigger' | 'action'
+
+/** One entry of the global Cekat n8n node catalog (Knowledge → Cekat n8n nodes). */
+export interface N8nNodeSkill {
+  id: string
+  name: string
+  node_type: string
+  kind: N8nNodeKind
+  description: string
+  example: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type N8nNodeSkillInput = Pick<N8nNodeSkill, 'name' | 'node_type' | 'kind' | 'description' | 'example'>
+
+export interface BackupInspect {
+  manifest: { appVersion: string; createdAt: string; tables: Record<string, number>; files: number }
+  summary: { projects: number; documents: number; files: number }
+  warnings: string[]
+}
+
+export type BackupRestoreResult = BackupInspect & { safetyBackup: string }

@@ -9,6 +9,7 @@ import type {
   SowContent,
   TimelineContent,
   TorContent,
+  UserJourneyContent,
 } from './schemas.ts'
 import { computeSchedule } from './timeline.ts'
 
@@ -83,6 +84,23 @@ export function toMarkdown(type: DocType, title: string, content: AnyDocContent)
             s.fields.map((f) => [f.label, f.options.length ? `${f.type}: ${f.options.map((o) => o.trim()).filter(Boolean).join(' / ')}` : f.type, f.required ? 'Yes' : '', f.value, f.help]),
           ),
         )
+      }
+      break
+    }
+    case 'user_journey': {
+      const c = content as UserJourneyContent
+      if (c.persona) out.push(`**Persona AI Agent:** ${c.persona}`)
+      for (const sheet of c.sheets) {
+        out.push(`## ${sheet.name}`)
+        for (const section of sheet.sections) {
+          if (section.title) out.push(`### ${section.title}`)
+          out.push(
+            mdTable(
+              ['Script No', 'Parent', 'Scenario', 'Trigger / Condition', 'Ekspektasi Respon', 'Note', 'Revision History'],
+              section.scripts.map((s) => [s.no, s.parent, s.scenario, s.trigger, s.response, s.note, s.revision]),
+            ),
+          )
+        }
       }
       break
     }

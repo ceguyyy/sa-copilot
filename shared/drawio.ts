@@ -11,16 +11,22 @@ async function deflateRawBase64(text: string): Promise<string> {
   return btoa(binary)
 }
 
+/** What the source is: Mermaid text, or draw.io's own mxGraph XML. */
+export type DrawioSourceType = 'mermaid' | 'xml'
+
 /** draw.io's `#create=` payload: {type, compressed, data: base64(deflateRaw(encodeURIComponent(source)))}. */
-export async function drawioCreatePayload(mermaid: string): Promise<{ type: 'mermaid'; compressed: true; data: string }> {
-  return { type: 'mermaid', compressed: true, data: await deflateRawBase64(encodeURIComponent(mermaid)) }
+export async function drawioCreatePayload<T extends DrawioSourceType = 'mermaid'>(
+  source: string,
+  type: T = 'mermaid' as T,
+): Promise<{ type: T; compressed: true; data: string }> {
+  return { type, compressed: true, data: await deflateRawBase64(encodeURIComponent(source)) }
 }
 
-/** URL that opens the Mermaid diagram as an editable draw.io diagram. */
-export async function drawioUrl(mermaid: string, options: { dark?: boolean } = {}): Promise<string> {
+/** URL that opens the diagram (Mermaid by default, or mxGraph XML) as an editable draw.io diagram. */
+export async function drawioUrl(source: string, options: { dark?: boolean; type?: DrawioSourceType } = {}): Promise<string> {
   const params = new URLSearchParams({ grid: '0', pv: '0', border: '10', edit: '_blank' })
   if (options.dark) params.set('dark', '1')
-  return `${DRAWIO_BASE}?${params}#create=${encodeURIComponent(JSON.stringify(await drawioCreatePayload(mermaid)))}`
+  return `${DRAWIO_BASE}?${params}#create=${encodeURIComponent(JSON.stringify(await drawioCreatePayload(source, options.type ?? 'mermaid')))}`
 }
 
 /** A Windows Internet Shortcut (.url) that opens the diagram in draw.io when double-clicked. */

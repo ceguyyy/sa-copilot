@@ -1,11 +1,12 @@
 import clsx from 'clsx'
-import { BookOpen, FolderKanban, Settings } from 'lucide-react'
+import { BookOpen, FolderKanban, MonitorPlay, Settings } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { CurrentModel } from './CurrentModel'
 
 const NAV = [
   { to: '/', label: 'Projects', icon: FolderKanban, end: true },
   { to: '/knowledge', label: 'Knowledge', icon: BookOpen, end: false },
+  { to: '/demo', label: 'Demo', icon: MonitorPlay, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]
 

@@ -52,6 +52,28 @@ create table if not exists documents (
 );
 create index if not exists documents_project_idx on documents (project_id, type);
 
+create table if not exists pocs (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects on delete cascade,
+  name text not null check (char_length(name) between 1 and 120),
+  config jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists pocs_project_idx on pocs (project_id, updated_at desc);
+
+create table if not exists poc_versions (
+  id uuid primary key default gen_random_uuid(),
+  poc_id uuid not null references pocs on delete cascade,
+  version_no integer not null,
+  config jsonb not null,
+  note text not null default '',
+  origin text not null default 'manual' check (origin in ('manual', 'ai', 'restore')),
+  created_at timestamptz not null default now(),
+  unique (poc_id, version_no)
+);
+create index if not exists poc_versions_poc_idx on poc_versions (poc_id, version_no desc);
+
 -- Immutable history: rows are only ever inserted. Restore = insert a copy.
 create table if not exists document_versions (
   id uuid primary key default gen_random_uuid(),
@@ -84,9 +106,21 @@ begin
   return new;
 end $$;
 
+create or replace function set_poc_version_no()
+returns trigger language plpgsql as $$
+begin
+  select coalesce(max(version_no), 0) + 1 into new.version_no
+  from poc_versions where poc_id = new.poc_id;
+  return new;
+end $$;
+
 create or replace trigger document_versions_number
 before insert on document_versions
 for each row execute function set_version_no();
+
+create or replace trigger poc_versions_number
+before insert on poc_versions
+for each row execute function set_poc_version_no();
 
 create or replace function touch_document()
 returns trigger language plpgsql as $$
@@ -95,9 +129,20 @@ begin
   return new;
 end $$;
 
+create or replace function touch_poc()
+returns trigger language plpgsql as $$
+begin
+  update pocs set updated_at = now() where id = new.poc_id;
+  return new;
+end $$;
+
 create or replace trigger document_versions_touch
 after insert on document_versions
 for each row execute function touch_document();
+
+create or replace trigger poc_versions_touch
+after insert on poc_versions
+for each row execute function touch_poc();
 
 -- Versions are append-only; enforced in the DB since there is no RLS locally.
 create or replace function forbid_version_change()
@@ -106,9 +151,19 @@ begin
   raise exception 'document_versions is append-only';
 end $$;
 
+create or replace function forbid_poc_version_change()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'poc_versions is append-only';
+end $$;
+
 create or replace trigger document_versions_immutable
 before update on document_versions
 for each row execute function forbid_version_change();
+
+create or replace trigger poc_versions_immutable
+before update on poc_versions
+for each row execute function forbid_poc_version_change();
 
 create or replace function touch_updated_at()
 returns trigger language plpgsql as $$
@@ -122,6 +177,8 @@ for each row execute function touch_updated_at();
 create or replace trigger skills_touch before update on skills
 for each row execute function touch_updated_at();
 create or replace trigger documents_touch before update on documents
+for each row execute function touch_updated_at();
+create or replace trigger pocs_touch before update on pocs
 for each row execute function touch_updated_at();
 
 -- ---------- app settings ----------
@@ -168,12 +225,15 @@ alter table documents add column if not exists is_knowledge boolean not null def
 alter table documents add column if not exists export_files text[] not null default '{}';
 alter table documents add column if not exists template_id uuid references doc_templates on delete set null;
 
+-- Notion page the project was last sent to ("Send to Notion" replaces it).
+alter table projects add column if not exists notion_page_id text;
+
 alter table documents drop constraint if exists documents_type_check;
 alter table documents add constraint documents_type_check
-  check (type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'diagram', 'custom', 'deck'));
+  check (type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'user_journey', 'diagram', 'custom', 'deck'));
 alter table skills drop constraint if exists skills_output_type_check;
 alter table skills add constraint skills_output_type_check
-  check (output_type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'diagram', 'custom', 'deck', 'chat'));
+  check (output_type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'user_journey', 'diagram', 'custom', 'deck', 'chat'));
 
 -- ---------- files attached to instructions ----------
 
@@ -242,6 +302,32 @@ begin
 end $$;
 create or replace trigger document_versions_audit after insert on document_versions
 for each row execute function audit_version();
+
+create or replace function audit_poc_version() returns trigger language plpgsql as $$
+declare p pocs;
+begin
+  select * into p from pocs where id = new.poc_id;
+  perform audit(p.project_id, 'poc.version',
+    format('%s v%s (%s): %s', p.name, new.version_no, new.origin, new.note),
+    jsonb_build_object('pocId', p.id, 'versionId', new.id, 'origin', new.origin));
+  return new;
+end $$;
+create or replace trigger poc_versions_audit after insert on poc_versions
+for each row execute function audit_poc_version();
+
+create or replace function audit_poc() returns trigger language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    perform audit(old.project_id, 'poc.delete', format('Deleted POC "%s"', old.name), jsonb_build_object('pocId', old.id));
+    return old;
+  end if;
+  if new.name is distinct from old.name then
+    perform audit(new.project_id, 'poc.rename', format('Renamed POC "%s" → "%s"', old.name, new.name), jsonb_build_object('pocId', new.id));
+  end if;
+  return new;
+end $$;
+create or replace trigger pocs_audit after update or delete on pocs
+for each row execute function audit_poc();
 
 create or replace function audit_document() returns trigger language plpgsql as $$
 begin
@@ -390,3 +476,19 @@ begin
 end $$;
 create or replace trigger demo_scenarios_audit after insert or update or delete on demo_scenarios
 for each row execute function audit_demo();
+
+-- ---------- Cekat n8n node catalog (global knowledge for n8n workflows) ----------
+
+create table if not exists n8n_node_skills (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 120),
+  node_type text not null check (char_length(node_type) between 1 and 200),
+  kind text not null default 'action' check (kind in ('trigger', 'action')),
+  description text not null default '',
+  -- The node as n8n exports it (parameters, typeVersion, credential type), without ids or credential ids.
+  example jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create or replace trigger n8n_node_skills_touch before update on n8n_node_skills
+for each row execute function touch_updated_at();

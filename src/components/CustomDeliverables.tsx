@@ -1,16 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
-import { LayoutTemplate, Sparkles } from 'lucide-react'
+import { LayoutTemplate } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { templatesApi } from '../lib/api'
 import type { DocumentRow } from '../lib/types'
-import { Badge, Button, Select } from './ui'
+import { Badge, Select } from './ui'
+import { AiDraftButton } from './AiDraftButton'
 
 interface Props {
   projectId: string
   docs: DocumentRow[]
   running: boolean
-  onGenerate: (templateId: string) => void
+  onGenerate: (templateId: string, instruction: string) => void
 }
 
 /** Deliverables beyond the built-in pipeline, written by the AI from a user-defined template. */
@@ -40,9 +41,7 @@ export function CustomDeliverables({ projectId, docs, running, onGenerate }: Pro
                 </option>
               ))}
             </Select>
-            <Button variant="ai" icon={<Sparkles className="size-4" />} loading={running} disabled={!chosen || running} onClick={() => onGenerate(chosen)}>
-              Draft with AI
-            </Button>
+            <AiDraftButton label="Draft with AI" isLoading={running} isDisabled={!chosen || running} onRun={(instruction) => onGenerate(chosen, instruction)} />
           </div>
         )}
       </div>

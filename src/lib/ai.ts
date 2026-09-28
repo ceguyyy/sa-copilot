@@ -1,6 +1,7 @@
 // Client for the local server's /api/ai endpoints. Responses are NDJSON streams.
 import type { DocType } from '../../shared/schemas.ts'
 import type { ConsistencyCheck } from './api'
+import type { PocRow } from './types'
 
 export type StreamEvent =
   | { type: 'delta'; text: string }
@@ -178,3 +179,7 @@ export function summarizeVersionDiff(params: { documentId: string; fromVersionId
 
 export const generateDemoScenarios = (params: { projectId: string; count: number; instruction?: string }, handlers?: JobHandlers) =>
   job<{ added: number; skipped: number }>('/demo-scenarios', params, handlers)
+
+/** Drafts every section of a POC from the project sources; the server saves it as a new `ai` version. */
+export const draftPoc = (params: { pocId: string; instruction?: string; scope?: 'all' | 'crm' }, handlers?: JobHandlers) =>
+  job<PocRow>('/poc-draft', params, handlers)
