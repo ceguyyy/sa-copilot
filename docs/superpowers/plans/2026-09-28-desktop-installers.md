@@ -25,6 +25,24 @@
 - Out of scope: code signing, auto-update, Linux, multi-user, cloud migration.
 - Commits: this repo's owner commits only on request — each task ends with a commit step; run it only if the user has approved committing during execution, otherwise leave changes staged-ready and continue.
 
+## Deferred POC and n8n Requirements
+
+> Planning only. Do not implement these changes until the user explicitly gives the go-ahead. The POC Flow rules are intentionally TBD and must come from the user before its behavior is designed.
+
+- **One n8n workflow for curl cases:** represent all supported curl cases in one n8n workflow. A workflow can contain multiple curl commands, with each case represented and routed distinctly.
+- **n8n workflow skills format:** revise the n8n workflow skill format to follow the exported workflow structure in the supplied `Siloam Procurement Gateway - POC 01.json`, including its nodes, parameters, connections, and workflow metadata.
+- **Zero-based select values:** for select fields in n8n skills, the first option/value is `0`; do not start select values at `1`.
+- **POC Flow tab:** add a tab named `POC Flow` for non-AI workflows. It must support multiple workflows and must not invoke AI. Detailed workflow rules and behavior remain blocked on the user's forthcoming specification.
+- **POC agent text limits:** enforce a maximum of 3000 characters for Labels/labels and for description.
+- **Implementation gate:** keep this work documented in Markdown for now. Before implementation starts, push the approved plan changes to Git; do not include unrelated worktree changes in that push.
+
+### Deferred acceptance criteria
+
+- All curl cases are represented in one n8n workflow, and multiple curl commands can be included in it.
+- n8n workflow skills can represent/import the supplied exported workflow format, and select option values are zero-based.
+- The `POC Flow` tab supports multiple workflows without AI; its detailed rules are added only after the user provides them.
+- POC agent Labels/labels and description reject values longer than 3000 characters.
+
 ## Review Focus
 
 1. **Ports already taken** (device runs PostgreSQL on 5432, 9router tray on 20128, something on 3000) → app starts anyway: free ports for Postgres/server, reuses the running 9router. Pinned in Task 5 (`freePort`) and Task 7 (`findRunningRouter`).
