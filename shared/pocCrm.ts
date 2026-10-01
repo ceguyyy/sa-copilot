@@ -75,6 +75,35 @@ export interface PocCrm {
 
 export const hasOptions = (type: CrmColumnType): boolean => type === 'select' || type === 'dropdown'
 
+/** How n8n must fill Select/Dropdown columns when it creates or updates Cekat CRM items (part of the AI knowledge). */
+export const CEKAT_CRM_SELECT_RULE = [
+  '# CEKAT CRM VIA N8N — SELECT/DROPDOWN VALUES',
+  'When an n8n workflow creates or updates an item in the Cekat CRM (n8n-nodes-base.cekatCrm), a Select or Dropdown column takes the NUMBER of the option, never the label text. The number is zero-based: the first option is 0, the second 1, and so on — never start at 1.',
+  'Example: a Select column with options Invoice, PO, Delivery (in that order) → n8n sends 0 for Invoice, 1 for PO, 2 for Delivery.',
+  'In the Cekat CRM node such a column is { "columnName": "<column>", "valueType": "select", "selectValue": "=<number or expression>" }, e.g. "selectValue": "=0" for the first option.',
+  'So the n8n workflow must map the label the AI or the client system gives to that number before the Cekat CRM node (e.g. a Code/Set node, or a Switch), and every workflow description, happy case or test that creates CRM items must state the number next to the label (e.g. "Stage = 1 (PO)").',
+].join('\n')
+
+/** The number n8n must send for a Select/Dropdown option: its zero-based position, matched on the label (case-insensitive). */
+export function selectOptionValue(options: Pick<CrmOption, 'label'>[], label: string): number | null {
+  const wanted = label.trim().toLowerCase()
+  const index = options.findIndex((o) => o.label.trim().toLowerCase() === wanted)
+  return index === -1 ? null : index
+}
+
+/** Per board, every Select/Dropdown column with the number of each option ('' when there are none). */
+export function crmN8nValueGuide(crm: PocCrm): string {
+  return crm.boards
+    .map((board) => {
+      const columns = board.columns
+        .filter((c) => hasOptions(c.type) && c.options.length)
+        .map((c) => `- ${c.name} (${c.type}): ${c.options.map((o, i) => `${i} = ${o.label}`).join(', ')}`)
+      return columns.length ? [`Board "${board.name}"`, ...columns].join('\n') : ''
+    })
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 const isType = (v: unknown): v is CrmColumnType => typeof v === 'string' && (CRM_COLUMN_TYPES as readonly string[]).includes(v)
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v : v == null ? '' : String(v)).slice(0, max)
 const records = (v: unknown): Record<string, unknown>[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : [])
@@ -144,6 +173,17 @@ export function boardFromAi(raw: Record<string, unknown>): CrmBoard {
   const wanted = text(raw.kanbanColumn, 120).trim().toLowerCase()
   const byName = columns.find((c) => hasOptions(c.type) && c.name.trim().toLowerCase() === wanted)?.key ?? ''
   return { name: text(raw.name, 120), description: text(raw.description, 2_000), columns, rows, kanbanColumn: resolveKanban(byName, columns) }
+}
+
+/** A stored board in the AI's shape (the inverse of boardFromAi), so the AI can revise it. */
+export function boardToAi(board: CrmBoard) {
+  return {
+    name: board.name,
+    description: board.description,
+    columns: board.columns.map(({ name, type, options }) => ({ name, type, options })),
+    kanbanColumn: board.columns.find((c) => c.key === board.kanbanColumn)?.name ?? '',
+    rows: board.rows.map((row) => ({ values: board.columns.map((c) => row[c.key] ?? '') })),
+  }
 }
 
 export interface KanbanLane {

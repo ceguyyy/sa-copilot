@@ -1,3 +1,4 @@
+import type { AiRunOptions } from '../../lib/useOutputLimit'
 import { GitBranch } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -10,7 +11,7 @@ interface Props {
   projectId: string
   diagrams: DocumentRow[]
   running: boolean
-  onGenerate: (diagramKind: string, instruction: string) => void
+  onGenerate: (diagramKind: string, instruction: string, options: AiRunOptions) => void
 }
 
 /** Mermaid diagrams of the project; each opens with full-screen preview, draw.io and split-per-lane. */
@@ -33,7 +34,7 @@ export function DiagramsPanel({ projectId, diagrams, running, onGenerate }: Prop
             isLoading={running}
             isDisabled={running}
             placeholder="e.g. fokus ke alur eskalasi ke human agent, tampilkan integrasi Doctor Assist…"
-            onRun={(instruction) => onGenerate(kind, instruction)}
+            onRun={(instruction, options) => onGenerate(kind, instruction, options)}
           />
         </div>
       </div>

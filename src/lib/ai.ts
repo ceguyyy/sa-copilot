@@ -1,11 +1,12 @@
 // Client for the local server's /api/ai endpoints. Responses are NDJSON streams.
 import type { DocType } from '../../shared/schemas.ts'
 import type { ConsistencyCheck } from './api'
-import type { PocRow } from './types'
+import type { PocConfig, PocRow } from './types'
+import type { PocReviseTarget } from '../../shared/pocRevise.ts'
 
 export type StreamEvent =
   | { type: 'delta'; text: string }
-  | { type: 'progress'; chars: number }
+  | { type: 'progress'; chars: number; done?: number; total?: number }
   | { type: 'tool'; name: string; input: unknown }
   | { type: 'proposal'; data: Record<string, unknown> }
   | { type: 'result'; data: unknown }
@@ -85,6 +86,8 @@ export interface GenerateRequest {
   diagramKind?: string
   templateId?: string
   attachmentIds?: string[]
+  /** Max output tokens for this run; undefined = the job's default. */
+  maxTokens?: number
 }
 
 export function generate(params: GenerateRequest, onProgress: (chars: number) => void, onTool?: (label: string) => void) {
@@ -139,14 +142,15 @@ export function summarizeAudit(params: { projectId: string; days?: number; quest
 
 /** Runs a streamed AI job that ends with one `result` event; reports progress and tool activity. */
 export interface JobHandlers {
-  onProgress?: (chars: number) => void
+  /** Characters written so far; `parts` when the job writes several things in parallel (e.g. n8n workflows). */
+  onProgress?: (chars: number, parts?: { done: number; total: number }) => void
   onTool?: (label: string) => void
 }
 
 async function job<T>(path: string, params: Record<string, unknown>, handlers: JobHandlers = {}): Promise<T> {
   let result: T | undefined
   await post(path, params, (e) => {
-    if (e.type === 'progress') handlers.onProgress?.(e.chars)
+    if (e.type === 'progress') handlers.onProgress?.(e.chars, e.total ? { done: e.done ?? 0, total: e.total } : undefined)
     else if (e.type === 'tool') handlers.onTool?.(describeTool(e.name, e.input))
     else if (e.type === 'result') result = e.data as T
   })
@@ -181,5 +185,24 @@ export const generateDemoScenarios = (params: { projectId: string; count: number
   job<{ added: number; skipped: number }>('/demo-scenarios', params, handlers)
 
 /** Drafts every section of a POC from the project sources; the server saves it as a new `ai` version. */
-export const draftPoc = (params: { pocId: string; instruction?: string; scope?: 'all' | 'crm' }, handlers?: JobHandlers) =>
+export type PocDraftScope = 'all' | 'crm' | 'flow' | 'n8n'
+
+export const draftPoc = (params: { pocId: string; instruction?: string; scope?: PocDraftScope; maxTokens?: number }, handlers?: JobHandlers) =>
   job<PocRow>('/poc-draft', params, handlers)
+
+/** A proposed revision of one POC section or text field; nothing is saved until the SA accepts it. */
+export type PocRevision = { kind: 'field'; text: string } | { kind: 'section'; patch: Partial<PocConfig> }
+
+export const revisePoc = (params: { pocId: string; config: PocConfig; target: PocReviseTarget; instruction?: string; maxTokens?: number }, handlers?: JobHandlers) =>
+  job<PocRevision>('/poc-revise', params, handlers)
+
+export type PocN8nReview = {
+  summary: string
+  findings: { severity: 'critical' | 'high' | 'medium' | 'low' | 'info'; nodeName: string; issue: string; impact: string; recommendation: string }[]
+  proposedWorkflowJson: string
+}
+
+export const reviewN8nWorkflow = (
+  params: { pocId: string; workflowJson: string },
+  handlers?: JobHandlers,
+) => job<PocN8nReview>('/poc-n8n-review', params, handlers)

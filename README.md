@@ -43,7 +43,9 @@ Nothing else needs installing. The app bundles and starts on its own:
 - **Deliverables:** structured documents with dedicated editors (tables, sections, Gantt, User Journey). **Draft with AI** accepts an additional prompt every time. Built-in and custom formats can be edited in Settings, with AI help.
 - **POC:**
   - **POC Agent:** the AI agent setup and tools. API integrations go through Cekat n8n webhooks (`https://workflows.cekat.ai/webhook/…`); n8n then authenticates and calls the client's system. Each tool has an AI Input Schema.
-  - **POC CRM:** CRM boards as an Excel-like table plus a kanban, generated with AI. Boards can be viewed as SVG, full screen, or opened in draw.io.
+  - **POC CRM:** CRM boards as an Excel-like table plus a kanban, generated with AI. Boards can be viewed as SVG, full screen, or opened in draw.io. Select/Dropdown values are sent to n8n as **zero-based** option numbers (first option = 0).
+  - **n8n Workflow:** ONE gateway workflow per POC: one webhook, input validation, then **Switch Action** routes each API integration by its `"action"`. **1 use case = 1 cURL**, each with its own Copy button. Create it with **Generate with AI**, **Build from POC** (no AI, built from the API integrations), or **Import workflow** (an n8n export; its use cases are read from the Switch). **Export n8n** downloads the workflows exactly as they are in the tab.
+  - Label names and label descriptions are limited to 3000 characters.
   - **POC Marketing:** coming soon.
 - **Version history:** versions are immutable. Every save, AI revision or restore creates a new version, and any version can be diffed against the current one.
 - **Skills library:** the instructions Claude follows per output type. They import and export as `SKILL.md`.
@@ -51,23 +53,100 @@ Nothing else needs installing. The app bundles and starts on its own:
   - per document: `.md`, `.docx`, `.xlsx` (timeline with Gantt bars), `.svg` for diagrams, and `.pptx` for the pitch deck;
   - per project: the whole project as one Markdown file, or **Send to Notion** (one page per project).
 
-## Run from the repo (development)
+## Run from the repo (Windows and macOS)
 
-Needs Node 24 and a PostgreSQL server (pgAdmin is fine; the `sa_copilot` database is created on first start).
+Running from the repo needs **three things running at the same time**:
 
-1. Copy `.env.example` to `.env` and set at least:
-   - `DATABASE_URL`
-   - `ANTHROPIC_API_KEY`: a Claude key, **or** a 9router key together with `ANTHROPIC_BASE_URL=http://localhost:20128` (run `npx 9router` first).
+| What | Where | Check it with |
+|---|---|---|
+| **PostgreSQL** | port 5432 | pgAdmin (Windows) / `brew services list` (macOS) |
+| **9router** (the AI router: every AI call goes through it) | http://localhost:20128 | open http://localhost:20128 in the browser; it shows the dashboard |
+| **SA Copilot server** | http://localhost:3000 | the terminal says `SA Copilot running at http://localhost:3000` |
 
-   The other variables (Outline, demo app, Notion, deck template, folders) are optional and documented in `.env.example`.
-2. Optional: `pip install "markitdown[all]" python-pptx` for file conversion and the pitch deck.
-3. Start it with `npm start` (or double-click `SACopilot.bat` on Windows), then open http://localhost:3000.
+If 9router is not running, every **Generate / Draft with AI / Chat** fails with *Cannot reach the AI endpoint … is 9router running?*. If the SA Copilot server is not running, the page shows **Failed to fetch**.
+
+### One-time setup
+
+**Windows**
+
+1. Install [Node.js 24](https://nodejs.org), [PostgreSQL](https://www.postgresql.org/download/windows/) (with pgAdmin; remember the `postgres` password) and, optionally, [Python 3](https://www.python.org/downloads/) (tick *Add python.exe to PATH*).
+2. In this folder:
+   ```powershell
+   npm install
+   pip install "markitdown[all]" python-pptx   # optional: file conversion + pitch deck
+   copy .env.example .env
+   ```
+3. Start 9router and create a key (next section), then fill in `.env`:
+   ```
+   DATABASE_URL=postgres://postgres:YOUR_PASSWORD@localhost:5432/sa_copilot
+   9ROUTER_API_KEY=<key from the 9router dashboard>
+   ANTHROPIC_BASE_URL=http://localhost:20128
+   ```
+
+**macOS** (Apple Silicon or Intel, with [Homebrew](https://brew.sh))
+
+1. Install the tools and start PostgreSQL in the background (it then also starts on every login):
+   ```bash
+   brew install node@24 postgresql@16 python
+   brew link --overwrite node@24
+   brew services start postgresql@16
+   ```
+2. In this folder:
+   ```bash
+   npm install
+   pip3 install "markitdown[all]" python-pptx   # optional: file conversion + pitch deck
+   cp .env.example .env
+   ```
+3. Start 9router and create a key (next section), then fill in `.env`. Homebrew's PostgreSQL uses your Mac username and no password (`whoami` prints it):
+   ```
+   DATABASE_URL=postgres://YOUR_MAC_USERNAME@localhost:5432/sa_copilot
+   9ROUTER_API_KEY=<key from the 9router dashboard>
+   ANTHROPIC_BASE_URL=http://localhost:20128
+   ```
+   On macOS the app calls `python3` by default; set `MARKITDOWN_PYTHON` only if markitdown is installed in another Python (e.g. a venv).
+
+The `sa_copilot` database and its tables are created automatically on the first start.
+
+### 9router (the AI router)
+
+1. In a separate terminal: `npx 9router`. Keep this terminal open: closing it stops the AI.
+2. Open http://localhost:20128 → connect a provider (e.g. your Claude account) → create an **API key**.
+3. Paste the key into `.env` as `9ROUTER_API_KEY=…` and restart the SA Copilot server. `.env` is read only when the server starts.
+
+### Every day
+
+Open **two terminals** in this folder (Windows: PowerShell; macOS: Terminal):
+
+```bash
+# terminal 1 — the AI router (leave it open)
+npx 9router
+
+# terminal 2 — SA Copilot
+npm start          # builds the UI, then runs the server
+```
+
+Then open **http://localhost:3000**. PostgreSQL already runs as a service on both Windows and macOS. On Windows you can also double-click `SACopilot.bat` instead of `npm start`.
+
+After `git pull`, run `npm install` once, then `npm start` (it rebuilds the UI). `npm run serve` skips the build and is faster when nothing changed.
+
+### Troubleshooting
+
+| You see | Means | Fix |
+|---|---|---|
+| **Failed to fetch** in the page | The SA Copilot server is not running | `npm start` in a terminal and keep it open |
+| *Cannot reach … is 9router running?* | 9router is not running | `npx 9router` in another terminal |
+| *9ROUTER_API_KEY is not set in .env* / *API key is invalid* | Key missing or wrong | Create a key in the 9router dashboard, put it in `.env`, restart the server |
+| *Missing DATABASE_URL* / connection refused on 5432 | PostgreSQL is not running or the URL is wrong | Windows: start the *postgresql* service; macOS: `brew services start postgresql@16`. Check user/password in `DATABASE_URL` |
+| Uploads are not converted / the pitch deck fails | Python packages missing | `pip install "markitdown[all]" python-pptx` (macOS: `pip3`), or set `MARKITDOWN_PYTHON` |
+| Port 3000 already in use | Another app uses it | Set `PORT=3001` in `.env` and open http://localhost:3001 |
+
+### Commands
 
 | Command | What it does |
 |---|---|
 | `npm start` | Build the UI and run the server on http://localhost:3000 |
 | `npm run serve` | Run the server with the last build |
-| `npm run dev` + `npm run dev:server` | Vite on :5173 (proxies `/api`) + server with `--watch` |
+| `npm run dev` + `npm run dev:server` | Vite on :5173 (proxies `/api`) + server with `--watch`, for development |
 | `npm run desktop` | Build and run the Electron desktop app from the repo (`SA_COPILOT_DATA_DIR` = throwaway data folder) |
 | `npm run dist:win` / `npm run dist:mac` | Build the installers into `release/`; see [docs/BUILD.md](docs/BUILD.md) |
 | `npm test` | Vitest unit and integration tests |

@@ -94,7 +94,7 @@ describe('buildServerEnv', () => {
       DATABASE_URL: 'postgres://postgres:p%40ss%20w@127.0.0.1:54329/sa_copilot',
       PORT: '51234',
       ANTHROPIC_BASE_URL: 'http://127.0.0.1:20128',
-      ANTHROPIC_API_KEY: 'sk-9',
+      '9ROUTER_API_KEY': 'sk-9',
       UPLOAD_DIR: path.join('/D', 'uploads'),
       BACKUP_DIR: path.join('/D', 'backups'),
       DOCS_DIR: path.join('/Docs', 'SA Copilot'),

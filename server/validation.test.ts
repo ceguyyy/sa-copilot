@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, it, test } from 'vitest'
 import { HttpError } from './http.ts'
-import { pocInput, pocPatch, projectInput, skillInput, skillPatch, sourceUploadFields, toSetClause } from './validation.ts'
+import { pocConfig, pocInput, pocPatch, projectInput, skillInput, skillPatch, sourceScrape, sourceUploadFields, toSetClause } from './validation.ts'
+import { POC_LABEL_MAX_CHARS } from '../shared/pocLimits.ts'
 
 describe('skill schemas', () => {
   test('create fills defaults for description and is_default', () => {
@@ -38,6 +39,13 @@ describe('projectInput', () => {
 describe('sourceUploadFields', () => {
   test('rejects a projectId that is not a uuid', () => {
     expect(() => sourceUploadFields.parse({ projectId: '1 or 1=1', kind: 'knowledge', extractedText: '' })).toThrow()
+  })
+})
+
+describe('sourceScrape', () => {
+  test('accepts HTTP(S) URLs and rejects other protocols', () => {
+    expect(sourceScrape.parse({ projectId: null, url: 'https://example.com' }).url).toBe('https://example.com')
+    expect(() => sourceScrape.parse({ projectId: null, url: 'file:///etc/passwd' })).toThrow()
   })
 })
 
@@ -114,6 +122,38 @@ describe('poc schemas', () => {
     expect(parsed.config.apiIntegrations[0].name).toBe('')
   })
 
+  test('n8n workflow keeps one cURL per use case', () => {
+    const cases = [
+      { action: 'create_ticket', title: 'Create a ticket', curl: 'curl -X POST x' },
+      { action: 'get_ticket', curl: 'curl -X POST y' },
+    ]
+    const parsed = pocConfig.parse({ n8n: { workflows: [{ name: 'Gateway', json: '{}', cases }] } })
+    expect(parsed.n8n.workflows[0]).toEqual({
+      name: 'Gateway',
+      description: '',
+      json: '{}',
+      cases: [cases[0], { ...cases[1], title: '' }],
+      testNotes: '',
+    })
+    expect(pocConfig.parse({ n8n: { workflows: [{ name: 'Gateway', json: '{}' }] } }).n8n.workflows[0].cases).toEqual([])
+  })
+
+  test('n8n workflow saved before use cases keeps its cURL as one use case', () => {
+    const legacy = { name: 'Buat tiket', tool: 'buat_tiket', description: '', json: '{}', curl: 'curl x', testNotes: '' }
+    expect(pocConfig.parse({ n8n: { workflows: [legacy] } }).n8n.workflows[0].cases).toEqual([{ action: 'buat_tiket', title: 'Buat tiket', curl: 'curl x' }])
+  })
+
+  test('label name and description accept up to 3000 characters and reject longer ones', () => {
+    const atLimit = 'a'.repeat(POC_LABEL_MAX_CHARS)
+    const tooLong = `${atLimit}a`
+    expect(POC_LABEL_MAX_CHARS).toBe(3000)
+    expect(pocConfig.parse({ labels: [{ name: atLimit, condition: atLimit }] }).labels[0]).toEqual({ name: atLimit, condition: atLimit })
+    expect(() => pocConfig.parse({ labels: [{ name: tooLong, condition: '' }] })).toThrow()
+    expect(() => pocConfig.parse({ labels: [{ name: 'Urgent', condition: tooLong }] })).toThrow()
+    expect(() => pocPatch.parse({ config: { labels: [{ name: tooLong }] } })).toThrow()
+    expect(() => pocPatch.parse({ config: { labels: [{ condition: tooLong }] } })).toThrow()
+  })
+
   test('patch ignores undefined values and rejects invalid names', () => {
     expect(pocPatch.parse({ name: 'Renamed' })).toEqual({ name: 'Renamed' })
     expect(() => pocPatch.parse({ name: '   ' })).toThrow()
@@ -130,5 +170,18 @@ describe('toSetClause', () => {
 
   test('an empty patch is a 400, not a broken UPDATE', () => {
     expect(() => toSetClause({})).toThrow(HttpError)
+  })
+})
+
+describe('pocConfig welcome image', () => {
+  const png = `data:image/png;base64,${Buffer.alloc(3000).toString('base64')}`
+
+  it('accepts an image picked from disk (embedded) as well as a link', () => {
+    expect(pocConfig.parse({ welcomeImage: png }).welcomeImage).toBe(png)
+    expect(pocConfig.parse({ welcomeImage: 'https://cdn.example.com/w.png' }).welcomeImage).toBe('https://cdn.example.com/w.png')
+  })
+
+  it('rejects embedded files that are not a supported image', () => {
+    expect(() => pocConfig.parse({ welcomeImage: 'data:text/html;base64,PGgxPg==' })).toThrow(/Welcome image/)
   })
 })

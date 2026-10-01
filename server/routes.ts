@@ -11,6 +11,7 @@ import { buildDeckPptx } from './deck/build.ts'
 import { languageForNewProject } from './languages.ts'
 import { exportDocumentFiles, exportProjectFiles, removeExportedFiles } from './exports.ts'
 import { convertToMarkdown, shouldConvert } from './markitdown.ts'
+import { scrapeWebPage } from './scrape.ts'
 import { deleteUpload, resolveKey, saveUpload } from './storage.ts'
 import {
   documentInput,
@@ -21,6 +22,7 @@ import {
   skillInput,
   skillPatch,
   sourcePatch,
+  sourceScrape,
   sourceText,
   sourceUploadFields,
   toSetClause,
@@ -92,6 +94,18 @@ api.post('/sources/text', async (c) => {
     `insert into sources (project_id, kind, name, extracted_text, mime_type)
      values ($1, $2, $3, $4, 'text/plain') returning *`,
     [s.projectId, s.kind, s.name, s.text],
+  )
+  return c.json(row, 201)
+})
+
+api.post('/sources/scrape', async (c) => {
+  const request = await parseJson(c, sourceScrape)
+  const page = await scrapeWebPage(request.url)
+  const name = `${page.title || page.url.hostname} (${page.url.hostname})`.slice(0, 300)
+  const row = await queryOne(
+    `insert into sources (project_id, kind, name, mime_type, extracted_text, size_bytes)
+     values ($1, 'knowledge', $2, 'text/html', $3, $4) returning *`,
+    [request.projectId, name, page.text, Buffer.byteLength(page.text)],
   )
   return c.json(row, 201)
 })
@@ -222,6 +236,11 @@ api.post('/pocs/:id/versions', async (c) => {
   const v = await parseJson(c, (await import('./validation.ts')).pocVersionInput)
   const row = await queryOne('insert into poc_versions (poc_id, config, origin, note) values ($1, $2, $3, $4) returning *', [id, v.config, v.origin, v.note])
   return c.json(row, 201)
+})
+
+api.post('/pocs/:id/versions/:versionId/restore', async (c) => {
+  const { restorePocVersion } = await import('./pocVersions.ts')
+  return c.json(await restorePocVersion(idParam(c), idParam(c, 'versionId')))
 })
 
 /** Documents flagged as knowledge, across all projects (shown on the Knowledge page). */

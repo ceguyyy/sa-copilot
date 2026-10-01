@@ -17,10 +17,12 @@ import { findQuestions } from './questions.ts'
 import { summarizeVersionDiff } from './versionDiff.ts'
 import { generateDemoScenarios } from './demoScenarios.ts'
 import { generatePocDraft } from './pocDraft.ts'
+import { revisePoc } from './pocRevise.ts'
+import { reviewPocN8nWorkflow } from './pocN8nReview.ts'
 import { loadAttachments, loadProjectContext, renderContextText } from './context.ts'
 import { SUBMIT_TOOL, parseJsonObject } from './extract.ts'
 import { resolveEffort, systemPrompt, toolEvents, toolsFor } from './common.ts'
-import { runModel, type ToolDef } from './llm/index.ts'
+import { cutOffMessage, runModel, withOutputLimit, type ToolDef } from './llm/index.ts'
 import { callMcpTool } from './mcp.ts'
 import { activeModel, getEffort, listModels, selectModel, setEffort } from './models.ts'
 import { streamResponse, type Stream } from './stream.ts'
@@ -38,8 +40,8 @@ ai.post('/', async (c) => {
   if (typeof body.projectId !== 'string' || !UUID_RE.test(body.projectId)) throw new HttpError(400, 'Invalid projectId')
   requireApiKey()
 
-  if (body.action === 'chat') return streamResponse((s) => handleChat(body, s))
-  if (body.action === 'generate') return streamResponse((s) => handleGenerate(body, s))
+  if (body.action === 'chat') return streamResponse((s) => withOutputLimit(body, () => handleChat(body, s)))
+  if (body.action === 'generate') return streamResponse((s) => withOutputLimit(body, () => handleGenerate(body, s)))
   throw new HttpError(400, 'Unknown action')
 })
 
@@ -49,7 +51,7 @@ const streamed = (run: (body: unknown, out: Stream) => Promise<void>) => async (
     throw new HttpError(400, 'Invalid JSON body')
   })
   requireApiKey()
-  return streamResponse((s) => run(body, s))
+  return streamResponse((s) => withOutputLimit(body, () => run(body, s)))
 }
 
 ai.post('/assist', streamed(assist))
@@ -61,6 +63,8 @@ ai.post('/find-questions', streamed(findQuestions))
 ai.post('/version-diff', streamed(summarizeVersionDiff))
 ai.post('/demo-scenarios', streamed(generateDemoScenarios))
 ai.post('/poc-draft', streamed(generatePocDraft))
+ai.post('/poc-revise', streamed(revisePoc))
+ai.post('/poc-n8n-review', streamed(reviewPocN8nWorkflow))
 
 ai.get('/models', async (c) => {
   const [models, selected, effort] = await Promise.all([listModels(), activeModel(), getEffort()])
@@ -81,7 +85,7 @@ ai.put('/effort', async (c) => {
 })
 
 function requireApiKey() {
-  if (!config.anthropic.apiKey) throw new HttpError(500, 'ANTHROPIC_API_KEY is not set in .env')
+  if (!config.anthropic.apiKey) throw new HttpError(500, '9ROUTER_API_KEY is not set in .env — add your 9router API key and restart')
 }
 
 // ---------------- chat ----------------
@@ -207,7 +211,7 @@ async function handleGenerate(body: Body, out: Stream) {
     onToolUse: toolEvents(out),
   })
   if (result.stopReason === 'refusal') throw new HttpError(422, 'The model declined this request.')
-  if (result.stopReason === 'max_tokens') throw new HttpError(502, 'Output was cut off (max_tokens). Try a narrower instruction.')
+  if (result.stopReason === 'max_tokens') throw new HttpError(502, cutOffMessage(`The ${template?.name ?? DOC_LABELS[docType]} document`, 64000, model.maxOutput, 'or a narrower instruction'))
 
   let content = result.stopInput ?? parseJsonObject(result.text)
   if (!content) throw new HttpError(502, 'Model did not return the document as JSON — try again or pick another model.')

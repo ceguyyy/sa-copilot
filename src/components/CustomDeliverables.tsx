@@ -1,3 +1,4 @@
+import type { AiRunOptions } from '../lib/useOutputLimit'
 import { useQuery } from '@tanstack/react-query'
 import { LayoutTemplate } from 'lucide-react'
 import { useState } from 'react'
@@ -11,7 +12,7 @@ interface Props {
   projectId: string
   docs: DocumentRow[]
   running: boolean
-  onGenerate: (templateId: string, instruction: string) => void
+  onGenerate: (templateId: string, instruction: string, options: AiRunOptions) => void
 }
 
 /** Deliverables beyond the built-in pipeline, written by the AI from a user-defined template. */
@@ -41,7 +42,7 @@ export function CustomDeliverables({ projectId, docs, running, onGenerate }: Pro
                 </option>
               ))}
             </Select>
-            <AiDraftButton label="Draft with AI" isLoading={running} isDisabled={!chosen || running} onRun={(instruction) => onGenerate(chosen, instruction)} />
+            <AiDraftButton label="Draft with AI" isLoading={running} isDisabled={!chosen || running} onRun={(instruction, options) => onGenerate(chosen, instruction, options)} />
           </div>
         )}
       </div>

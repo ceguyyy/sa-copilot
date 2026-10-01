@@ -79,6 +79,9 @@ export const sourcesApi = {
   addText(params: { projectId: string | null; kind: Source['kind']; name: string; text: string }): Promise<Source> {
     return send('Save note', 'POST', '/sources/text', params)
   },
+  scrape(params: { projectId: string | null; url: string }): Promise<Source> {
+    return send('Import website', 'POST', '/sources/scrape', params)
+  },
   setEnabled: (id: string, enabled: boolean) => send<Source>('Update source', 'PATCH', `/sources/${id}`, { enabled }),
   remove: (source: Source) => send<void>('Delete source', 'DELETE', `/sources/${source.id}`),
 }
@@ -144,6 +147,7 @@ export const pocVersionsApi = {
   create(pocId: string, config: PocConfig, origin: 'manual' | 'ai' | 'restore', note: string): Promise<PocVersion> {
     return send('Save POC version', 'POST', `/pocs/${pocId}/versions`, { config, origin, note })
   },
+  restore: (pocId: string, versionId: string) => send<{ poc: PocRow; version: PocVersion }>('Restore POC version', 'POST', `/pocs/${pocId}/versions/${versionId}/restore`, {}),
 }
 
 // ---------- chat ----------

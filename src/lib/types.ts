@@ -119,6 +119,8 @@ export type PocApiIntegration = {
 }
 
 export type { CrmBoard, CrmColumn, CrmColumnType, CrmOption, PocCrm } from '../../shared/pocCrm.ts'
+export type { HappyCase, HappyCaseStep, PocFlow } from '../../shared/pocFlow.ts'
+export type { PocN8n, PocN8nWorkflow } from '../../shared/pocN8n.ts'
 
 export type PocAdditionalSettings = {
   aiHistoryLimit: number
@@ -145,6 +147,8 @@ export type PocConfig = {
   knowledgeBase: PocKnowledgeBase
   apiIntegrations: PocApiIntegration[]
   crm: import('../../shared/pocCrm.ts').PocCrm
+  flow: import('../../shared/pocFlow.ts').PocFlow
+  n8n: import('../../shared/pocN8n.ts').PocN8n
   additionalSettings: PocAdditionalSettings
 }
 

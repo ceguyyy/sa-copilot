@@ -77,7 +77,7 @@ function timelineSheet(wb: Workbook, title: string, c: TimelineContent) {
   ws.addRow([c.title || title])
   ws.getRow(1).font = { bold: true, size: 14 }
   ws.addRow([])
-  ws.addRow([...fixed, `Weeks (${s.totalDays} Mandays)`])
+  ws.addRow([...fixed, `Weeks (${s.totalMandays} Mandays)`])
   ws.addRow([...fixed.map(() => ''), ...Array.from({ length: weeks }, (_, i) => i + 1)])
   ws.mergeCells(3, fixed.length + 1, 3, fixed.length + weeks)
   fixed.forEach((_, i) => ws.mergeCells(3, i + 1, 4, i + 1))
@@ -87,6 +87,14 @@ function timelineSheet(wb: Workbook, title: string, c: TimelineContent) {
   for (const r of s.rows) {
     const row = ws.addRow([r.no, r.activity, r.module, r.function, r.pic, r.days])
     for (const w of weeksCovered(r.startDay, r.endDay)) row.getCell(fixed.length + w).fill = BAR_FILL
+  }
+  for (const [label, value] of [
+    ['Total Mandays', s.totalMandays],
+    ['IT Delivery Mandays (AI Setting + Integration & APIs)', s.itDeliveryMandays],
+  ] as const) {
+    const total = ws.addRow(['', label, '', '', '', value])
+    total.font = { bold: true }
+    ws.mergeCells(total.number, 2, total.number, 5)
   }
   ws.columns.forEach((col, i) => (col.width = [5, 28, 26, 44, 16, 10][i] ?? 5))
   borderAll(ws, 3)

@@ -1,6 +1,9 @@
 // Request body schemas. Zod strips unknown keys, so parsed objects only ever contain writable columns.
 import { z } from 'zod'
 import { CRM_COLUMN_TYPES, normalizeCrm } from '../shared/pocCrm.ts'
+import { isValidWelcomeImage } from '../shared/pocImage.ts'
+import { POC_LABEL_MAX_CHARS } from '../shared/pocLimits.ts'
+import { type LegacyWorkflow, workflowCases } from '../shared/pocN8n.ts'
 import { DOC_TYPES, SKILL_OUTPUT_TYPES } from '../shared/schemas.ts'
 import { HttpError, UUID_RE } from './http.ts'
 
@@ -39,6 +42,12 @@ export const sourceText = z.object({
   kind: z.enum(['requirement', 'knowledge']),
   name: z.string().trim().min(1).max(300),
   text: z.string().max(5_000_000),
+})
+
+export const sourceScrape = z.object({
+  projectId: uuid.nullable(),
+  url: z.string().trim().min(1).max(2_000)
+    .refine((value) => /^https?:\/\//i.test(value) && URL.canParse(value), 'Must be an http(s) URL'),
 })
 
 export const sourceUploadFields = z.object({
@@ -131,6 +140,58 @@ const pocCrm = z.preprocess(
   }),
 )
 
+// Complete n8n workflows (JSON kept as text so it can be edited) with one cURL per use case (action) to test it.
+const pocN8nCase = z.object({
+  action: z.string().trim().max(120).default(''),
+  title: z.string().max(500).default(''),
+  curl: z.string().max(20_000),
+})
+const isRecord = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+/** Workflows saved before use cases existed keep their single cURL as one use case. */
+const upgradeLegacyN8n = (v: unknown) =>
+  isRecord(v) && Array.isArray(v.workflows)
+    ? { ...v, workflows: v.workflows.map((w) => (isRecord(w) && !('cases' in w) ? { ...w, cases: workflowCases(w as LegacyWorkflow) } : w)) }
+    : v
+const pocN8n = z.preprocess(upgradeLegacyN8n, z.object({
+  workflows: z
+    .array(
+      z.object({
+        name: z.string().trim().max(200),
+        description: z.string().max(5_000).default(''),
+        json: z.string().max(500_000),
+        cases: z.array(pocN8nCase).max(50).default([]),
+        testNotes: z.string().max(5_000).default(''),
+      }),
+    )
+    .max(30)
+    .default([]),
+}))
+
+// Conversation flowchart (Mermaid) and happy cases to try the agent in Cekat.
+const pocFlow = z.object({
+  mermaid: z.string().max(50_000).default(''),
+  happyCases: z
+    .array(
+      z.object({
+        title: z.string().trim().max(200),
+        goal: z.string().max(2_000).default(''),
+        steps: z.array(z.object({ user: z.string().max(5_000), ai: z.string().max(5_000), action: z.string().max(2_000) })).max(40),
+      }),
+    )
+    .max(20)
+    .default([]),
+})
+
+// A link, or an image picked from disk embedded as a data URL (max 2 MB). Short legacy values stay accepted.
+const MAX_LEGACY_IMAGE_CHARS = 500
+const welcomeImage = z
+  .string()
+  .max(3_000_000)
+  .refine(
+    (v) => isValidWelcomeImage(v) || (v.length <= MAX_LEGACY_IMAGE_CHARS && !v.startsWith('data:')),
+    'Welcome image must be a link or a PNG, JPEG, GIF or WebP image up to 2 MB',
+  )
+
 const pocApiIntegration = z.object({
   name: z.string().trim().max(64).refine((v) => v === '' || /^[a-z][a-z0-9_]{0,63}$/.test(v), 'Must be a valid API name or blank'),
   httpMethod: pocApiMethod,
@@ -147,11 +208,11 @@ const pocApiIntegration = z.object({
 export const pocConfig = z.object({
   agentBehavior: z.string().max(200_000).default(''),
   welcomeMessage: z.string().max(5_000).default(''),
-  welcomeImage: z.string().max(500).nullable().optional(),
+  welcomeImage: welcomeImage.nullable().optional(),
   agentTransferConditions: z.string().max(5_000).default(''),
   stopAiAfterHandoff: z.boolean().default(false),
   silentAgentHandoff: z.boolean().default(false),
-  labels: z.array(z.object({ name: z.string().trim().max(80).default(''), condition: z.string().max(2_000).default('') })).default([]),
+  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).default(''), condition: z.string().max(POC_LABEL_MAX_CHARS).default('') })).default([]),
   pipeline: pocPipeline,
   knowledgeBase: pocKnowledgeBase.default({
     textSections: [],
@@ -161,6 +222,8 @@ export const pocConfig = z.object({
   } as const),
   apiIntegrations: z.array(pocApiIntegration).default([]),
   crm: pocCrm.default({ boards: [] }),
+  flow: pocFlow.default({ mermaid: '', happyCases: [] }),
+  n8n: pocN8n.default({ workflows: [] }),
   additionalSettings: z
     .object({
       aiHistoryLimit: z.number().int().min(0).default(20),
@@ -190,7 +253,7 @@ export const pocConfig = z.object({
 
 const pocConfigPatch = pocConfig.partial().extend({
   knowledgeBase: pocKnowledgeBasePatch.optional(),
-  labels: z.array(z.object({ name: z.string().trim().max(80).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
+  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).optional(), condition: z.string().max(POC_LABEL_MAX_CHARS).default('').optional() }).partial()).optional(),
   pipeline: z.array(z.object({ order: z.number().int().min(1).optional(), status: z.string().trim().max(120).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
   apiIntegrations: z.array(pocApiIntegration.partial()).optional(),
   additionalSettings: z.object({
@@ -227,6 +290,8 @@ export const pocInput = z.object({
     },
     apiIntegrations: [],
     crm: { boards: [] },
+    flow: { mermaid: '', happyCases: [] },
+    n8n: { workflows: [] },
     additionalSettings: {
       aiHistoryLimit: 20,
       aiReadFileLimit: 3,

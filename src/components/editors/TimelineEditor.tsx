@@ -30,14 +30,17 @@ export function TimelineEditor({ value, onChange, readOnly }: { value: TimelineC
         </Field>
       </div>
 
-      <dl className="grid grid-cols-3 gap-3">
-        <Stat label="Total mandays" value={schedule.totalDays} />
-        <Stat label="Weeks" value={schedule.totalWeeks} />
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Stat label="Total mandays" value={schedule.totalMandays} />
+        <Stat label="IT delivery mandays" value={schedule.itDeliveryMandays} />
+        <Stat label="Duration" value={`${schedule.durationDays} days · ${schedule.totalWeeks} wk`} />
         <Stat label="Go-live / end" value={schedule.endDate ?? '—'} />
       </dl>
 
       <p className="text-xs text-muted">
-        <strong>SLA/Days</strong> = mandays you set. Tick <strong>∥</strong> to run a row in parallel with the one above it.
+        <strong>SLA/Days</strong> = mandays you set. Tick <strong>∥</strong> to run a row in parallel with the one above it. <strong>Total mandays</strong> adds up every row
+        (parallel ones too); <strong>IT delivery</strong> is the AI Setting and Integration &amp; APIs rows (marked <span className="font-mono">IT</span>); <strong>Duration</strong> is the
+        calendar length in working days.
       </p>
 
       <TableEditor
@@ -62,10 +65,15 @@ export function TimelineEditor({ value, onChange, readOnly }: { value: TimelineC
             const covered = new Set(weeksCovered(s.startDay, s.endDay))
             return (
               <div className="flex flex-col gap-1">
-                <div className="flex gap-px" aria-label={`Weeks ${[...covered].join(', ')}`}>
+                <div className="flex items-center gap-px" aria-label={`Weeks ${[...covered].join(', ')}`}>
                   {Array.from({ length: weeks }, (_, w) => (
                     <span key={w} className={`h-4 w-5 rounded-[2px] ${covered.has(w + 1) ? 'bg-ember' : 'bg-line/50'}`} />
                   ))}
+                  {s.isItDelivery && (
+                    <span className="ml-1 rounded bg-forest-soft px-1 font-mono text-[10px] text-forest" title="Counted in IT delivery mandays">
+                      IT
+                    </span>
+                  )}
                 </div>
                 {s.startDate && (
                   <span className="font-mono text-[10px] whitespace-nowrap text-muted">

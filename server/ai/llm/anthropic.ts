@@ -31,9 +31,11 @@ function toMessages(req: RunRequest): Msg[] {
   return messages
 }
 
-function systemBlocks(system: string[]): Anthropic.Beta.BetaTextBlockParam[] {
+export function systemBlocks(system: string[]): Anthropic.Beta.BetaTextBlockParam[] {
+  // The API rejects empty text blocks (and cache_control on them); helpers without project context send one.
+  const blocks = system.filter((text) => text.trim())
   // The last block is the large, stable project context — cache it.
-  return system.map((text, i) => (i === system.length - 1 ? { type: 'text', text, cache_control: { type: 'ephemeral' } } : { type: 'text', text }))
+  return blocks.map((text, i) => (i === blocks.length - 1 ? { type: 'text', text, cache_control: { type: 'ephemeral' } } : { type: 'text', text }))
 }
 
 export async function runAnthropic(req: RunRequest): Promise<RunResult> {

@@ -45,6 +45,7 @@
     "micromark-extension-gfm": "^3.0.0",
     "openai": "^7.23.0",
     "outline-mcp-server": "^5.8.5",
+    "parse5": "^8.0.1",
     "pdfjs-dist": "^6.3.289",
     "pg": "^8.23.0",
     "react": "^19.2.8",

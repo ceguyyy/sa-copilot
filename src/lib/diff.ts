@@ -38,3 +38,21 @@ export function lineDiff(before: string, after: string): DiffLine[] {
   while (j < b.length) out.push({ op: 'add', text: b[j++] })
   return out
 }
+
+export type CompactLine = DiffLine | { op: 'skip'; count: number }
+
+/** Only the changed lines with `context` unchanged lines around them; longer unchanged runs fold into one "skip". */
+export function compactDiff(lines: DiffLine[], context = 2): CompactLine[] {
+  const near = lines.map((_, i) => lines.slice(Math.max(0, i - context), i + context + 1).some((l) => l.op !== 'same'))
+  const out: CompactLine[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (near[i]) {
+      out.push(lines[i])
+      continue
+    }
+    const last = out.at(-1)
+    if (last?.op === 'skip') out[out.length - 1] = { op: 'skip', count: last.count + 1 }
+    else out.push({ op: 'skip', count: 1 })
+  }
+  return out
+}

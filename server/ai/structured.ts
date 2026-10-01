@@ -4,7 +4,7 @@ import { config } from '../config.ts'
 import { HttpError } from '../http.ts'
 import { resolveEffort, toolsFor } from './common.ts'
 import { SUBMIT_TOOL, parseJsonObject } from './extract.ts'
-import { runModel, type Attachment, type Effort } from './llm/index.ts'
+import { cutOffMessage, runModel, type Attachment, type Effort } from './llm/index.ts'
 import { callMcpTool } from './mcp.ts'
 import { activeModel, type ModelInfo } from './models.ts'
 
@@ -51,7 +51,7 @@ export async function runStructured(req: StructuredRequest): Promise<{ data: Rec
     onToolUse: req.onToolUse,
   })
   if (result.stopReason === 'refusal') throw new HttpError(422, 'The model declined this request.')
-  if (result.stopReason === 'max_tokens') throw new HttpError(502, 'Output was cut off (max_tokens) — try again with less input.')
+  if (result.stopReason === 'max_tokens') throw new HttpError(502, cutOffMessage(`The ${req.resultName}`, req.maxTokens ?? 32000, model.maxOutput))
   const data = result.stopInput ?? parseJsonObject(result.text)
   if (!data) throw new HttpError(502, `The model did not return the ${req.resultName} — try again or pick another model.`)
   return { data, model }

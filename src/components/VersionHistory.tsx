@@ -1,18 +1,26 @@
 import clsx from 'clsx'
 import { History } from 'lucide-react'
-import type { DocumentVersion } from '../lib/types'
 import { Badge } from './ui'
 
 const ORIGIN_TONE = { ai: 'ember', manual: 'forest', restore: 'neutral' } as const
 
-interface Props {
-  versions: DocumentVersion[]
-  selectedId: string | null
-  latestId: string | undefined
-  onSelect: (v: DocumentVersion | null) => void
+/** The fields the list needs; document and POC versions both have them. */
+export interface VersionEntry {
+  id: string
+  version_no: number
+  origin: keyof typeof ORIGIN_TONE
+  note: string
+  created_at: string
 }
 
-export function VersionHistory({ versions, selectedId, latestId, onSelect }: Props) {
+interface Props<V extends VersionEntry> {
+  versions: V[]
+  selectedId: string | null
+  latestId: string | undefined
+  onSelect: (v: V | null) => void
+}
+
+export function VersionHistory<V extends VersionEntry>({ versions, selectedId, latestId, onSelect }: Props<V>) {
   return (
     <section className="rounded-xl border border-line bg-panel">
       <h2 className="flex items-center gap-2 border-b border-line px-4 py-3 font-display text-lg font-semibold">

@@ -55,7 +55,9 @@ export function toMarkdown(type: DocType, title: string, content: AnyDocContent)
     case 'timeline': {
       const c = content as TimelineContent
       const s = computeSchedule(c.rows, c.start_date || undefined)
-      out.push(`Total: **${s.totalDays} mandays** (${s.totalWeeks} weeks)${s.endDate ? ` · ${c.start_date} → ${s.endDate}` : ''}`)
+      out.push(
+        `Total: **${s.totalMandays} mandays** · IT delivery: **${s.itDeliveryMandays} mandays** · duration ${s.durationDays} working days (${s.totalWeeks} weeks)${s.endDate ? ` · ${c.start_date} → ${s.endDate}` : ''}`,
+      )
       out.push(
         mdTable(
           ['No', 'Activity', 'Module', 'Function', 'PIC', 'SLA/Days', 'Start', 'End'],

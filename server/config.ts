@@ -59,10 +59,12 @@ export const config = {
   maxUploadBytes: 50 * 1024 * 1024,
   markitdown: {
     // Python interpreter that has markitdown installed (pip install "markitdown[all]").
-    python: process.env.MARKITDOWN_PYTHON?.trim() || 'python',
+    // macOS/Linux only ship `python3`.
+    python: process.env.MARKITDOWN_PYTHON?.trim() || (process.platform === 'win32' ? 'python' : 'python3'),
   },
   anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
+    // 9router API key; ANTHROPIC_API_KEY still works for older .env files.
+    apiKey: process.env['9ROUTER_API_KEY']?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || undefined,
     baseURL: anthropicBaseUrl,
     model: process.env.ANTHROPIC_MODEL?.trim() || 'claude-opus-5-5',
     chatEffort: effort('CHAT_EFFORT', 'medium'),

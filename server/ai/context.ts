@@ -1,5 +1,8 @@
-import { DOC_LABELS, type DocType } from '../../shared/schemas.ts'
+import { DOC_LABELS, type DocType, type TimelineContent } from '../../shared/schemas.ts'
 import { renderN8nCatalog, type N8nNodeSkillInput } from '../../shared/n8nNodes.ts'
+import { CEKAT_CRM_SELECT_RULE } from '../../shared/pocCrm.ts'
+import { N8N_WORKFLOW_RULES } from '../../shared/pocN8n.ts'
+import { computeSchedule } from '../../shared/timeline.ts'
 import { query, queryOne } from '../db.ts'
 import { HttpError } from '../http.ts'
 import { readUpload } from '../storage.ts'
@@ -90,6 +93,13 @@ const knowledgeDocBlock = (d: ProjectContext['knowledgeDocs'][number]) =>
   `<reference_document from_project="${d.project_name}" type="${d.type}" title="${d.title}">\n${JSON.stringify(d.content)}\n</reference_document>`
 
 /** Stable, cacheable text block describing the project, its sources and current documents. */
+/** The Timeline's computed totals, so every document quotes the same mandays. */
+function timelineTotals(content: unknown): string {
+  const c = content as Partial<TimelineContent>
+  const s = computeSchedule(Array.isArray(c.rows) ? c.rows : [], c.start_date || undefined)
+  return `Timeline totals: ${s.totalMandays} total mandays (every row, parallel ones included), ${s.itDeliveryMandays} IT delivery mandays (AI Setting + Integration & APIs), duration ${s.durationDays} working days (${s.totalWeeks} weeks)${s.endDate ? `, go-live ${s.endDate}` : ''}.`
+}
+
 export function renderContextText(ctx: ProjectContext): string {
   const p = ctx.project
   const parts: string[] = [
@@ -120,6 +130,7 @@ export function renderContextText(ctx: ProjectContext): string {
 
   const n8nCatalog = renderN8nCatalog(ctx.n8nNodes)
   if (n8nCatalog) parts.push(n8nCatalog)
+  parts.push(CEKAT_CRM_SELECT_RULE, N8N_WORKFLOW_RULES)
 
   if (ctx.knowledgeDocs.length) {
     parts.push('# REFERENCE DOCUMENTS FROM OTHER PROJECTS (flagged as knowledge — reuse their structure and standard wording, never their client-specific facts)')
@@ -130,7 +141,7 @@ export function renderContextText(ctx: ProjectContext): string {
     parts.push('# CURRENT PROJECT DOCUMENTS (latest versions, JSON)')
     for (const d of ctx.docs) {
       parts.push(
-        `<document id="${d.id}" type="${d.type}" label="${DOC_LABELS[d.type]}" title="${d.title}" version="${d.version}">\n${JSON.stringify(d.content)}\n</document>`,
+        `<document id="${d.id}" type="${d.type}" label="${DOC_LABELS[d.type]}" title="${d.title}" version="${d.version}">\n${JSON.stringify(d.content)}${d.type === 'timeline' ? `\n${timelineTotals(d.content)}` : ''}\n</document>`,
       )
     }
   }

@@ -43,6 +43,16 @@
 - The `POC Flow` tab supports multiple workflows without AI; its detailed rules are added only after the user provides them.
 - POC agent Labels/labels and description reject values longer than 3000 characters.
 
+### Status (2026-10-01)
+
+Go-ahead given; implemented except the POC Flow tab. Decisions taken with the user:
+
+- **n8n:** ONE gateway workflow per POC — one webhook, `Validate & Extract Payload` → `Is Payload Valid?` → `Switch Action` on `$json.action` → one branch per use case → shared `Respond to Webhook`. **1 use case = 1 cURL**: each workflow stores `cases: { action, title, curl }[]` (replaces `tool` + single `curl`; legacy POCs are upgraded on read by `normalizeN8n` / the `pocN8n` schema). AI writes it in one call (`draftN8nWorkflow`); every POC Agent "Copy cURL" adds `"action": "<integration name>"`.
+- **Skill format:** `N8N_WORKFLOW_RULES` follows the Siloam export (node names, types/typeVersions, parameter shapes incl. `cekatCrm` `columns.column[{ columnName, valueType: "select", selectValue }]`, connections, `settings`). `completeWorkflowExport` adds `pinData`, `settings`, `active`, `tags` and webhook `webhookId`s. Importing an export reads its use cases from its Switch (v1 `value2` or v3 conditions on `$json.action`).
+- **Zero-based selects:** `CEKAT_CRM_SELECT_RULE`, `selectOptionValue`, `crmN8nValueGuide` and the happy-case prompt.
+- **3000 limit:** label name and label description (condition) — `POC_LABEL_MAX_CHARS` in `shared/pocLimits.ts`, used by the schema, AI mapping and the editor inputs.
+- **POC Flow tab:** still blocked on the user's rules.
+
 ## Review Focus
 
 1. **Ports already taken** (device runs PostgreSQL on 5432, 9router tray on 20128, something on 3000) → app starts anyway: free ports for Postgres/server, reuses the running 9router. Pinned in Task 5 (`freePort`) and Task 7 (`findRunningRouter`).
