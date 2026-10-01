@@ -53,10 +53,10 @@ describe('boardFromAi', () => {
         { name: 'Nomor Telepon', type: 'phone', options: [] },
       ],
       kanbanColumn: 'status',
-      rows: [{ values: ['David Raditya', 'New Lead', '62818840899'] }],
+      rows: [{ values: ['Budi Santoso', 'New Lead', '6281234567890'] }],
     })
     expect(board.kanbanColumn).toBe('c2')
-    expect(board.rows).toEqual([{ c1: 'David Raditya', c2: 'New Lead', c3: '62818840899' }])
+    expect(board.rows).toEqual([{ c1: 'Budi Santoso', c2: 'New Lead', c3: '6281234567890' }])
   })
 })
 

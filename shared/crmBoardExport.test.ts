@@ -12,7 +12,7 @@ const board = boardFromAi({
     { name: 'Nomor Telepon', type: 'phone', options: [] },
   ],
   kanbanColumn: 'Status',
-  rows: [{ values: ['David Raditya', 'New Lead', '62818840899'] }, { values: ['Ridhwan & Co', 'Qualified', ''] }],
+  rows: [{ values: ['Budi Santoso', 'New Lead', '6281234567890'] }, { values: ['Maju & Co', 'Qualified', ''] }],
 })
 
 describe('layoutBoard', () => {
@@ -28,7 +28,7 @@ describe('layoutBoard', () => {
     expect(texts).toContain('New Lead (1)')
     expect(texts).toContain('Qualified (1)')
     expect(texts).toContain('Sudah isi data')
-    expect(texts).toContain('David Raditya\nNomor Telepon: 62818840899')
+    expect(texts).toContain('Budi Santoso\nNomor Telepon: 6281234567890')
   })
 })
 
@@ -37,7 +37,7 @@ describe('boardSvg / boardDrawioXml', () => {
     const svg = boardSvg(board, 'table')
     expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true)
     expect(svg).toContain('Leads &lt;KPR&gt;')
-    expect(svg).toContain('Ridhwan &amp; Co')
+    expect(svg).toContain('Maju &amp; Co')
     expect(svg).not.toContain('<KPR>')
   })
 
@@ -45,7 +45,7 @@ describe('boardSvg / boardDrawioXml', () => {
     const drawio = boardDrawioXml(board, 'kanban')
     expect(drawio.startsWith('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>')).toBe(true)
     expect(drawio.match(/vertex="1"/g)?.length).toBe(layoutBoard(board, 'kanban').shapes.length)
-    expect(drawio).toContain('David Raditya&lt;br&gt;Nomor Telepon: 62818840899')
+    expect(drawio).toContain('Budi Santoso&lt;br&gt;Nomor Telepon: 6281234567890')
   })
 
   it('can be sent to draw.io as an xml create payload', async () => {
