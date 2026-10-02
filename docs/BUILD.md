@@ -1,5 +1,14 @@
 # Building the SA Copilot installers
 
+## On GitHub Actions (no Mac needed)
+
+The [Installers workflow](../.github/workflows/installers.yml) builds both `.dmg` files on a macOS runner and the `.exe` on a Windows runner.
+
+- **Manually:** GitHub → **Actions → Installers → Run workflow**. When it finishes, download `sa-copilot-macos` / `sa-copilot-windows` from the run's **Artifacts** (kept 14 days). The button only appears once the workflow file is on `main`.
+- **Release:** push a tag such as `git tag v1.0.1 && git push origin v1.0.1`. The installers are attached to a GitHub Release for that tag. Bump `version` in `package.json` first so the file names match.
+
+CI has no `DECK_TEMPLATE`, so these installers ask for the pitch deck template in Settings → Connections. The repo is private, so macOS runner minutes count 10× against the Actions quota (a Mac build takes roughly 20–30 minutes).
+
 ## Windows (.exe) — on Windows 10/11 x64
 
 1. Node 22+ and this repo with `npm install` done.

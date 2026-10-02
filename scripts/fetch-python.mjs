@@ -19,7 +19,11 @@ const spec = JSON.stringify({ triple, PACKAGES })
 if (existsSync(stamp) && readFileSync(stamp, 'utf8').startsWith(spec)) {
   console.log(`Python for ${os}-${arch} is up to date`)
 } else {
-  const release = await (await fetch('https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest', { headers: { 'User-Agent': 'sa-copilot-build' } })).json()
+  // In CI, GITHUB_TOKEN lifts the API rate limit that a shared runner IP hits easily.
+  const auth = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}
+  const res = await fetch('https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest', { headers: { 'User-Agent': 'sa-copilot-build', ...auth } })
+  if (!res.ok) throw new Error(`GitHub API ${res.status} while looking up the portable Python release`)
+  const release = await res.json()
   const asset = release.assets.find((a) => a.name.startsWith('cpython-3.12.') && a.name.endsWith(`-${triple}-install_only_stripped.tar.gz`))
   if (!asset) throw new Error(`No CPython 3.12 build for ${triple} in ${release.tag_name}`)
   mkdirSync(path.join('build', 'cache'), { recursive: true })
