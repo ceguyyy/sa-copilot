@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Download, Plus, RotateCcw, Save, Star, Trash2, Upload } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { DOC_LABELS, SKILL_OUTPUT_TYPES, type SkillOutputType } from '../../../shared/schemas.ts'
 import { AssistantChat } from '../../components/AssistantChat'
 import { ReferenceFiles } from '../../components/ReferenceFiles'
@@ -10,6 +10,7 @@ import { DEFAULT_SKILLS } from '../../lib/defaultSkills'
 import { downloadBlob, slugify } from '../../lib/download'
 import { parseSkillMarkdown, skillToMarkdown } from '../../lib/skillFile'
 import type { Skill, SkillInput } from '../../lib/types'
+import { useResetState } from '../../lib/useResetState'
 
 const label = (t: SkillOutputType) => (t === 'chat' ? 'Chat persona' : t === 'custom' ? 'Custom deliverables (all)' : DOC_LABELS[t])
 
@@ -24,14 +25,10 @@ export function SkillsSettings() {
   const qc = useQueryClient()
   const skills = useQuery({ queryKey: ['skills'], queryFn: skillsApi.list })
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
-  const [form, setForm] = useState<SkillInput>(BLANK)
+  const selected = skills.data?.find((s) => s.id === selectedId)
+  const [form, setForm] = useResetState<SkillInput>(selected && `${selected.id}:${selected.updated_at}`, () => pick(selected!), BLANK)
   const [filter, setFilter] = useState<SkillOutputType | 'all'>('all')
   const importInput = useRef<HTMLInputElement>(null)
-
-  const selected = skills.data?.find((s) => s.id === selectedId)
-  useEffect(() => {
-    if (selected) setForm(pick(selected))
-  }, [selected?.id, selected?.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['skills'] })
 

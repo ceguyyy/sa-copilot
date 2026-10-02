@@ -1,21 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Plus, Save, Star, Trash2, Undo2 } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Button, ErrorNote, Input, Spinner } from '../../components/ui'
 import { languagesApi, type LanguageSettings } from '../../lib/api'
 import { useLanguages } from '../../lib/useLanguages'
+import { useResetState } from '../../lib/useResetState'
 
 /** CRUD for the project language dropdown, with one main language used by default for new projects. */
 export function LanguagesSettings() {
   const qc = useQueryClient()
   const languages = useLanguages()
-  const [draft, setDraft] = useState<LanguageSettings | null>(null)
+  const [draft, setDraft] = useResetState<LanguageSettings | null>(languages.data, () => languages.data ?? null, null)
   const [newName, setNewName] = useState('')
-
-  useEffect(() => {
-    if (languages.data) setDraft(languages.data)
-  }, [languages.data])
 
   const save = useMutation({
     mutationFn: languagesApi.save,

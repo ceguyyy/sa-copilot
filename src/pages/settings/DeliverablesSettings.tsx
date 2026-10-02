@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Lock, RotateCcw, Save, Star } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { DOC_LABELS, DOC_SCHEMAS, PIPELINE, type DocType } from '../../../shared/schemas.ts'
 import { schemaOutline } from '../../../shared/schemaOutline.ts'
 import { AssistantChat } from '../../components/AssistantChat'
@@ -10,6 +10,7 @@ import { skillsApi } from '../../lib/api'
 import { DEFAULT_SKILLS } from '../../lib/defaultSkills'
 import { STEP_HINT } from '../../lib/deliverables'
 import type { Skill, SkillInput } from '../../lib/types'
+import { useResetState } from '../../lib/useResetState'
 
 const STARTERS = [
   'Update format ini mengikuti file template terbaru yang saya lampirkan',
@@ -36,15 +37,15 @@ export function DeliverablesSettings() {
   const skills = useQuery({ queryKey: ['skills'], queryFn: skillsApi.list })
   const [type, setType] = useState<DocType>(PIPELINE[0])
   const [skillId, setSkillId] = useState<string | null>(null)
-  const [form, setForm] = useState<SkillInput>(() => builtIn(PIPELINE[0]))
 
   const ofType = useMemo(() => (skills.data ?? []).filter((s) => s.output_type === type), [skills.data, type])
   const selected = ofType.find((s) => s.id === skillId) ?? activeSkill(skills.data ?? [], type)
   const outline = useMemo(() => schemaOutline(DOC_SCHEMAS[type] as never), [type])
-
-  useEffect(() => {
-    setForm(selected ? pick(selected) : builtIn(type))
-  }, [selected?.id, selected?.updated_at, type]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [form, setForm] = useResetState<SkillInput>(
+    `${type}:${selected?.id ?? ''}:${selected?.updated_at ?? ''}`,
+    () => (selected ? pick(selected) : builtIn(type)),
+    builtIn(PIPELINE[0]),
+  )
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['skills'] })
 

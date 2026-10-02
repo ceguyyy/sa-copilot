@@ -94,3 +94,5 @@ export function usePocRevise({ pocId, draft, setDraft, resetKey, isDisabled }: O
 
   return { button, preview, run, isBusy }
 }
+
+export type PocRevise = ReturnType<typeof usePocRevise>
