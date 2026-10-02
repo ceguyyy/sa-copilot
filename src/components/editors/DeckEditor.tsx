@@ -6,6 +6,8 @@ import { deckVisuals, type DeckContent } from '../../../shared/deck/index.ts'
 import type { TimelineContent } from '../../../shared/schemas.ts'
 import { documentsApi, versionsApi } from '../../lib/api'
 import { Textarea } from '../ui'
+import { svgToPng } from '../../lib/copyImage'
+import { CopyImageButton } from '../CopyImageButton'
 
 interface Props {
   value: DeckContent
@@ -106,7 +108,12 @@ export function DeckEditor({ value, onChange, readOnly }: Props) {
         <div className="rounded-xl border border-line bg-white p-3">
           {visual ? (
             // Our own SVG builder: every text value is escaped, no scripts or external references.
-            <div className="flex justify-center [&>svg]:h-auto [&>svg]:max-h-[460px] [&>svg]:w-auto [&>svg]:max-w-full" dangerouslySetInnerHTML={{ __html: visual.svg }} />
+            <div className="space-y-2">
+              <div className="flex justify-end">
+                <CopyImageButton getImage={() => svgToPng(visual.svg)} />
+              </div>
+              <div className="flex justify-center [&>svg]:h-auto [&>svg]:max-h-[460px] [&>svg]:w-auto [&>svg]:max-w-full" dangerouslySetInnerHTML={{ __html: visual.svg }} />
+            </div>
           ) : (
             <p className="p-6 text-center text-sm text-muted">
               {active.slide === 1

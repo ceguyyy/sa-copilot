@@ -11,6 +11,7 @@ import { KnowledgePage } from './pages/KnowledgePage'
 import { ProjectPage } from './pages/ProjectPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { DemoPage } from './pages/DemoPage'
+import { QaTestingPage } from './pages/QaTestingPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SetupPage } from './pages/SetupPage'
 
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="projects/:projectId/docs/:documentId" element={<DocumentPage />} />
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="demo" element={<DemoPage />} />
+          <Route path="qa" element={<QaTestingPage />} />
           <Route path="settings/:tab?" element={<SettingsPage />} />
           {/* Old addresses of pages that moved into Settings */}
           <Route path="skills" element={<Navigate to="/settings/skills" replace />} />

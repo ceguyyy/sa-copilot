@@ -149,6 +149,9 @@ export type PocConfig = {
   crm: import('../../shared/pocCrm.ts').PocCrm
   flow: import('../../shared/pocFlow.ts').PocFlow
   n8n: import('../../shared/pocN8n.ts').PocN8n
+  chatFlows: import('../../shared/pocChatFlow.ts').ChatFlows
+  /** Cekat Web Livechat link for QA runs of the happy cases. */
+  livechatUrl: string
   additionalSettings: PocAdditionalSettings
 }
 

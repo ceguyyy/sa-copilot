@@ -7,6 +7,8 @@ type Props = {
   value: string | null
   pocName: string
   onChange: (value: string | null) => void
+  /** Field label; the picker is also used for the POC Flow message image. */
+  label?: string
 }
 
 const readAsDataUrl = (file: File) =>
@@ -18,7 +20,7 @@ const readAsDataUrl = (file: File) =>
   })
 
 /** Welcome image picked from disk (embedded in the POC) or given as a link, with a preview. */
-export function WelcomeImagePicker({ value, pocName, onChange }: Props) {
+export function WelcomeImagePicker({ value, pocName, onChange, label = 'Welcome Image' }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const image = value ?? ''
@@ -39,7 +41,7 @@ export function WelcomeImagePicker({ value, pocName, onChange }: Props) {
   }
 
   return (
-    <Field label="Welcome Image">
+    <Field label={label}>
       <div className="space-y-3">
         <input ref={input} type="file" hidden accept={WELCOME_IMAGE_TYPES.join(',')} onChange={(e) => void pick(e.target.files?.[0])} />
         <div className="flex flex-wrap items-center gap-2">

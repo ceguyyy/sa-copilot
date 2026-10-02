@@ -65,4 +65,12 @@ describe('pocChanges n8n workflows', () => {
     expect(changes.map((c) => c.label)).toEqual(['n8n workflows'])
     expect(changes[0].after).toContain('### create_ticket — Create\ncurl b')
   })
+
+  it('shows POC Flow edits as the flow outline', () => {
+    const flow = (text: string) => ({ flows: [{ id: 'f', name: 'Inbound', start: { id: 'c', kind: 'conditions', branches: [{ id: 'b', condition: { type: 'firstMessageText', text }, next: null }], elseId: 'e', elseNext: null } }] })
+    const changes = pocChanges({ ...base, chatFlows: flow('PROMO') }, { ...base, chatFlows: flow('DISKON') })
+    expect(changes.map((c) => c.label)).toEqual(['POC Flow'])
+    expect(changes[0].after).toContain('Condition (First Message Text): DISKON')
+    expect(pocSectionTexts(base).chatFlows).toBe('')
+  })
 })

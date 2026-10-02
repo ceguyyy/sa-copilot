@@ -74,6 +74,48 @@ create table if not exists poc_versions (
 );
 create index if not exists poc_versions_poc_idx on poc_versions (poc_id, version_no desc);
 
+-- POC Agent QA: each run of the happy cases on the Cekat livechat, with the judged report (shared/pocQa.ts QaReport).
+create table if not exists poc_qa_runs (
+  id uuid primary key default gen_random_uuid(),
+  poc_id uuid not null references pocs on delete cascade,
+  report jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists poc_qa_runs_poc_idx on poc_qa_runs (poc_id, created_at desc);
+
+-- QA Testing (sidebar): stand-alone test suites for any Cekat livechat, not tied to a project.
+create table if not exists qa_suites (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 200),
+  livechat_url text not null default '',
+  -- What the agent under test is for (persona, scope, rules); helps the AI write and judge cases.
+  context text not null default '',
+  -- Test cases in the happy-case shape: [{ title, goal, steps: [{ user, ai, action }] }].
+  cases jsonb not null default '[]',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Knowledge of a suite: the text of uploaded files (converted, file not kept) or pasted notes; ground truth for judging.
+create table if not exists qa_suite_knowledge (
+  id uuid primary key default gen_random_uuid(),
+  suite_id uuid not null references qa_suites on delete cascade,
+  name text not null,
+  mime_type text,
+  extracted_text text not null default '',
+  size_bytes bigint,
+  created_at timestamptz not null default now()
+);
+create index if not exists qa_suite_knowledge_suite_idx on qa_suite_knowledge (suite_id, created_at);
+
+create table if not exists qa_suite_runs (
+  id uuid primary key default gen_random_uuid(),
+  suite_id uuid not null references qa_suites on delete cascade,
+  report jsonb not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists qa_suite_runs_suite_idx on qa_suite_runs (suite_id, created_at desc);
+
 -- Immutable history: rows are only ever inserted. Restore = insert a copy.
 create table if not exists document_versions (
   id uuid primary key default gen_random_uuid(),

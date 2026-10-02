@@ -1,5 +1,6 @@
 // Compares two POC configs section by section (for the POC version history). Each section is rendered to
 // stable text so a line diff shows what changed; API keys and embedded image data are never shown.
+import { flowOutline, normalizeChatFlows } from './pocChatFlow.ts'
 import { happyCaseScript, type HappyCase } from './pocFlow.ts'
 import { type LegacyWorkflow, type PocN8nCase, workflowCases } from './pocN8n.ts'
 
@@ -14,6 +15,7 @@ export const POC_SECTIONS = [
   { key: 'crm', label: 'CRM' },
   { key: 'flow', label: 'Flow & happy cases' },
   { key: 'n8n', label: 'n8n workflows' },
+  { key: 'chatFlows', label: 'POC Flow' },
   { key: 'settings', label: 'Additional settings' },
 ] as const
 
@@ -88,6 +90,7 @@ export function pocSectionTexts(config: LooseConfig): Record<PocSectionKey, stri
     crm: pretty(config.crm ?? { boards: [] }),
     flow: flowText(config.flow),
     n8n: n8nText(config.n8n),
+    chatFlows: normalizeChatFlows(config.chatFlows).flows.map(flowOutline).join('\n\n'),
     settings: pretty(config.additionalSettings ?? {}),
   }
 }

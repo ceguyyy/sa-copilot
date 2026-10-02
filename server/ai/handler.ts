@@ -18,6 +18,9 @@ import { summarizeVersionDiff } from './versionDiff.ts'
 import { generateDemoScenarios } from './demoScenarios.ts'
 import { generatePocDraft } from './pocDraft.ts'
 import { revisePoc } from './pocRevise.ts'
+import { prepareQa } from './pocQaPrepare.ts'
+import { runQa, stopQa } from './pocQaRun.ts'
+import { generateSuiteCases, prepareSuiteQa, runSuiteQa } from './qaSuite.ts'
 import { reviewPocN8nWorkflow } from './pocN8nReview.ts'
 import { loadAttachments, loadProjectContext, renderContextText } from './context.ts'
 import { SUBMIT_TOOL, parseJsonObject } from './extract.ts'
@@ -65,6 +68,12 @@ ai.post('/demo-scenarios', streamed(generateDemoScenarios))
 ai.post('/poc-draft', streamed(generatePocDraft))
 ai.post('/poc-revise', streamed(revisePoc))
 ai.post('/poc-n8n-review', streamed(reviewPocN8nWorkflow))
+ai.post('/poc-qa-prepare', streamed(prepareQa))
+ai.post('/poc-qa-run', streamed(runQa))
+ai.post('/qa-suite-cases', streamed(generateSuiteCases))
+ai.post('/qa-suite-prepare', streamed(prepareSuiteQa))
+ai.post('/qa-suite-run', streamed(runSuiteQa))
+ai.post('/poc-qa-stop', (c) => c.json({ isStopping: stopQa() }))
 
 ai.get('/models', async (c) => {
   const [models, selected, effort] = await Promise.all([listModels(), activeModel(), getEffort()])

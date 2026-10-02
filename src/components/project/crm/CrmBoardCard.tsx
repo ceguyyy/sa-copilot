@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom'
 import { boardDrawioXml, boardSvg } from '../../../../shared/crmBoardExport.ts'
 import { drawioUrl } from '../../../../shared/drawio.ts'
 import { downloadBlob, slugify } from '../../../lib/download'
+import { svgToPng } from '../../../lib/copyImage'
+import { CopyImageButton } from '../../CopyImageButton'
 import { CRM_COLUMN_LABELS, hasOptions, nextColumnKey } from '../../../../shared/pocCrm.ts'
 import type { CrmBoard, CrmColumn, CrmColumnType } from '../../../lib/types'
 import { Button, Input, Textarea } from '../../ui'
@@ -102,6 +104,7 @@ export function CrmBoardCard({ board, onChange, onRemove }: Props) {
           <Button variant="ghost" icon={isFull ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />} onClick={() => setIsFull((v) => !v)}>
             {isFull ? 'Exit' : 'Full screen'}
           </Button>
+          <CopyImageButton variant="ghost" getImage={() => svgToPng(boardSvg(board, view))} />
           <Button variant="ghost" icon={<Download className="size-4" />} onClick={downloadSvg} title={`Download the ${view} view as SVG`}>
             SVG
           </Button>

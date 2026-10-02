@@ -51,7 +51,7 @@ Go-ahead given; implemented except the POC Flow tab. Decisions taken with the us
 - **Skill format:** `N8N_WORKFLOW_RULES` follows the Siloam export (node names, types/typeVersions, parameter shapes incl. `cekatCrm` `columns.column[{ columnName, valueType: "select", selectValue }]`, connections, `settings`). `completeWorkflowExport` adds `pinData`, `settings`, `active`, `tags` and webhook `webhookId`s. Importing an export reads its use cases from its Switch (v1 `value2` or v3 conditions on `$json.action`).
 - **Zero-based selects:** `CEKAT_CRM_SELECT_RULE`, `selectOptionValue`, `crmN8nValueGuide` and the happy-case prompt.
 - **3000 limit:** label name and label description (condition) — `POC_LABEL_MAX_CHARS` in `shared/pocLimits.ts`, used by the schema, AI mapping and the editor inputs.
-- **POC Flow tab:** rules received 2026-10-02 (below); implementation still waits for the go-ahead.
+- **POC Flow tab:** implemented 2026-10-02 per the rules below — `shared/pocChatFlow.ts` (model, Cekat-style validation, outline, Mermaid tree), `config.chatFlows` (recursive zod schema with depth/node/image/id guards), `src/components/project/chatflow/` (tab UI with copy per field), "POC Flow" section in version diffs. "Generate with AI" (scope `chatFlow`, requested 2026-10-02): the model writes flat nodes linked by ref (`server/ai/pocChatFlowDraft.ts`), `shared/pocChatFlowAi.ts` builds the tree (repeat references become Jumps, Cekat limits clipped); the flows themselves stay rule-based. Interactive canvas (React Flow, `@xyflow/react`, lazy-loaded) next to the Mermaid tree: layout in `shared/pocChatFlowGraph.ts`, click a node to highlight its path and jump to its fields, red placeholders for open paths, dotted jump edges.
 
 ### POC Flow rules (from the user, 2026-10-02)
 
@@ -2963,3 +2963,26 @@ Expected: all pass. Report the installer size and installed size (`(Get-ChildIte
 git add scripts/smoke-win.ps1
 git commit -m "test: Windows installer smoke test"
 ```
+
+## POC Agent QA: run happy cases on the Cekat livechat (requested 2026-10-02)
+
+Only for the AI Agent (Flow & Happy Case tab), not for POC Flow.
+
+- **Entry point:** the POC stores a Cekat Web Livechat link; "Run happy cases" opens it with Playwright and plays each happy case as the customer.
+- **Browser:** visible (headed) by default so the SA can watch; a headless toggle.
+- **Data:** before the run, AI lists the data each happy case needs (order number, name, date…); the SA fills each in a free-text field or clicks "Generate dummy". The run then goes without pauses.
+- **Judging:** AI judges each AI reply against the expected reply → pass / fail with a reason. Expected actions (label, pipeline, handoff, API tool) are not visible in the livechat → marked "Needs manual check" and the SA ticks pass/fail in the report.
+- **Report:** per happy case and per step: sent message, actual reply, expected, verdict, reason; totals; AI summary; a revision prompt.
+- **Revision:** the prompt can be copied, and a button runs the existing POC Agent "Revise with AI" with it (diff preview, accept/reject).
+- **Implemented 2026-10-02** (example link `https://live.cekat.ai/?chat=BPKH-W9CZ8P9r`, inspected read-only; no message was sent). The widget has a pre-chat form `#contact-form` (fields vary per inbox, e.g. Phone *, DOB, Name *), `#chat-input` + `#chat-submit`, agent bubbles `.incoming-bubble` in `#chat-messages-inner`, `#typing-indicator`.
+  - Driver `server/qa/livechat.ts` (playwright-core with the installed Edge/Chrome; navigation locked to live.cekat.ai; per-turn cap). Fixture test: `QA_BROWSER_TESTS=1 npm test`.
+  - `POST /api/ai/poc-qa-prepare` (reads the form, AI finds case data + dummies), `/poc-qa-run` (one fresh browser session per case, AI adapts messages optionally, judges, summarises, saves to `poc_qa_runs`), `/poc-qa-stop`; one run at a time.
+  - UI: Flow & Happy Case tab → "QA AI Agent on the livechat"; livechat link saved in `config.livechatUrl`.
+
+## QA Testing page (sidebar, requested 2026-10-02)
+
+Stand-alone test suites, not tied to a project: knowledge (uploaded files → text only, or pasted text) → optional "about the agent" → test cases (by hand or AI from the knowledge, append/replace) → run on a livechat with the shared runner. The knowledge is the reference the replies are judged against; the revision prompt is copy-only (no POC to revise).
+
+- Tables `qa_suites`, `qa_suite_knowledge`, `qa_suite_runs` (in backups). Routes `server/routes/qaSuites.ts`; AI `server/ai/qaSuite.ts` (`/qa-suite-cases`, `/qa-suite-prepare`, `/qa-suite-run`).
+- Shared runner `server/qa/runner.ts` and planner `buildQaPlan` serve both the POC and the suites; the UI runner `QaRunner` takes an adapter.
+- Both POC QA and QA Testing: after Prepare every case has a checkbox; only checked cases run ("Run 3 of 4").

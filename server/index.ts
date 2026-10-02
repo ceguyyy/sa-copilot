@@ -15,6 +15,7 @@ import { n8nNodes } from './routes/n8nNodes.ts'
 import { themes } from './themes.ts'
 import { languages } from './languages.ts'
 import { questions } from './routes/questions.ts'
+import { qaSuites } from './routes/qaSuites.ts'
 import { demo } from './demo.ts'
 import { attachments, purgeOldRequestFiles } from './attachments.ts'
 import { seedDefaultServers } from './ai/mcp.ts'
@@ -35,6 +36,7 @@ app.route('/api', backup)
 app.route('/api', themes)
 app.route('/api', languages)
 app.route('/api', questions)
+app.route('/api', qaSuites)
 app.route('/api', demo)
 app.route('/api', attachments)
 app.route('/api/ai', ai)

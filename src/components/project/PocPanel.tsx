@@ -13,6 +13,8 @@ import { CrmSection } from './crm/CrmSection'
 import { PocFlowSection } from './PocFlowSection'
 import { PocN8nSection } from './PocN8nSection'
 import { PocHistory } from './PocHistory'
+import { ChatFlowSection } from './chatflow/ChatFlowSection'
+import { QaSection } from './qa/QaSection'
 import { WelcomeImagePicker } from './WelcomeImagePicker'
 import { ReviseField, ReviseHeading } from './PocReviseParts'
 import { usePocRevise } from './usePocRevise'
@@ -21,6 +23,7 @@ import { CEKAT_WEBHOOK_BASE, cekatWebhookUrl } from '../../../shared/pocWebhook.
 import { normalizeCrm } from '../../../shared/pocCrm.ts'
 import { emptyFlow, normalizeFlow } from '../../../shared/pocFlow.ts'
 import { emptyN8n, normalizeN8n } from '../../../shared/pocN8n.ts'
+import { emptyChatFlows, normalizeChatFlows } from '../../../shared/pocChatFlow.ts'
 import { aiActionsPrompt } from '../../../shared/pocActions.ts'
 import { curlForIntegration } from '../../../shared/pocCurl.ts'
 import { POC_LABEL_MAX_CHARS } from '../../../shared/pocLimits.ts'
@@ -45,6 +48,8 @@ const emptyConfig = (): PocConfig => ({
   crm: { boards: [] },
   flow: emptyFlow(),
   n8n: emptyN8n(),
+  chatFlows: emptyChatFlows(),
+  livechatUrl: '',
   additionalSettings: {
     aiHistoryLimit: 20,
     aiReadFileLimit: 3,
@@ -74,10 +79,11 @@ const defaultApiIntegration = (): PocApiIntegration => ({
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 
-type PocSection = 'agent' | 'flow' | 'n8n' | 'crm' | 'marketing'
+type PocSection = 'agent' | 'flow' | 'chatFlow' | 'n8n' | 'crm' | 'marketing'
 const POC_SECTIONS: { id: PocSection; label: string; disabled?: boolean }[] = [
   { id: 'agent', label: 'POC Agent' },
   { id: 'flow', label: 'Flow & Happy Case' },
+  { id: 'chatFlow', label: 'POC Flow' },
   { id: 'n8n', label: 'n8n Workflows' },
   { id: 'crm', label: 'POC CRM' },
   { id: 'marketing', label: 'POC Marketing', disabled: true },
@@ -91,6 +97,8 @@ function normalizeConfig(config: PocConfig): PocConfig {
     crm: normalizeCrm(config.crm),
     flow: normalizeFlow(config.flow),
     n8n: normalizeN8n(config.n8n),
+    chatFlows: normalizeChatFlows(config.chatFlows),
+    livechatUrl: config.livechatUrl ?? '',
   }
 }
 
@@ -164,7 +172,7 @@ export function PocPanel({ projectId, clientName }: { projectId: string; clientN
       if (!selected) return
       setAiStartedAt(Date.now())
       setAiStatus('Reading project sources…')
-      const what = { all: 'POC', crm: 'CRM structure', flow: 'flowchart & happy cases', n8n: 'n8n workflows' }[scope]
+      const what = { all: 'POC', crm: 'CRM structure', flow: 'flowchart & happy cases', n8n: 'n8n workflows', chatFlow: 'POC Flow' }[scope]
       await draftPoc(
         { pocId: selected.id, scope, instruction: instruction || undefined, maxTokens },
         {
@@ -210,6 +218,13 @@ export function PocPanel({ projectId, clientName }: { projectId: string; clientN
     const replaces = draft.n8n.workflows.length ? ' (replaces the current workflows; the POC stays in version history)' : ''
     if (!confirm(`Generate the n8n workflows from the saved POC${replaces}. Unsaved edits are lost — save first if needed. Continue?`)) return
     draftAi.mutate({ scope: 'n8n', instruction, maxTokens })
+  }
+
+  const confirmGenerateChatFlow = (instruction: string, { maxTokens }: AiRunOptions) => {
+    if (!selected) return
+    const replaces = draft.chatFlows.flows.length ? ' (replaces the current flows; the POC stays in version history)' : ''
+    if (!confirm(`Generate the POC Flow from the saved POC${replaces}. Unsaved edits are lost — save first if needed. Continue?`)) return
+    draftAi.mutate({ scope: 'chatFlow', instruction, maxTokens })
   }
 
   const remove = useMutation({
@@ -325,6 +340,30 @@ export function PocPanel({ projectId, clientName }: { projectId: string; clientN
                   status={aiStatus && <AiJobStatus text={aiStatus} startedAt={aiStartedAt} />}
                   reviseAction={draft.flow.mermaid || draft.flow.happyCases.length ? revise.button({ kind: 'section', section: 'flow' }) : undefined}
                   revisePreview={revise.preview({ kind: 'section', section: 'flow' })}
+                />
+              )}
+              {section === 'flow' && (
+                <QaSection
+                  pocId={selected.id}
+                  pocName={name || selected.name}
+                  livechatUrl={draft.livechatUrl}
+                  onLivechatUrlChange={(livechatUrl) => setDraft((prev) => ({ ...prev, livechatUrl }))}
+                  hasHappyCases={draft.flow.happyCases.length > 0}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  onRevise={(instruction) => revise.run({ kind: 'section', section: 'agent' }, instruction)}
+                  isReviseDisabled={revise.isBusy}
+                  revisePreview={revise.preview({ kind: 'section', section: 'agent' })}
+                />
+              )}
+              {section === 'chatFlow' && (
+                <ChatFlowSection
+                  chatFlows={draft.chatFlows}
+                  pocName={name || selected.name}
+                  onChange={(chatFlows) => setDraft((prev) => ({ ...prev, chatFlows }))}
+                  onGenerate={confirmGenerateChatFlow}
+                  isGenerating={draftAi.isPending && draftAi.variables?.scope === 'chatFlow'}
+                  isDisabled={draftAi.isPending}
+                  status={aiStatus && <AiJobStatus text={aiStatus} startedAt={aiStartedAt} />}
                 />
               )}
               {section === 'n8n' && (

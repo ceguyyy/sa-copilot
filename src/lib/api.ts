@@ -1,6 +1,7 @@
 // Data access layer (repository pattern) — every call to the local server's REST API lives here.
 import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
 import type { Theme, ThemeMode } from '../../shared/theme.ts'
+import type { QaKnowledge, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
 import type {
   AiModel,
   BackupInspect,
@@ -148,6 +149,33 @@ export const pocVersionsApi = {
     return send('Save POC version', 'POST', `/pocs/${pocId}/versions`, { config, origin, note })
   },
   restore: (pocId: string, versionId: string) => send<{ poc: PocRow; version: PocVersion }>('Restore POC version', 'POST', `/pocs/${pocId}/versions/${versionId}/restore`, {}),
+}
+
+export const qaRunsApi = {
+  list: (pocId: string) => request<QaRunRow[]>('Load QA runs', `/pocs/${pocId}/qa-runs`),
+  setActionCheck: (runId: string, caseIndex: number, stepIndex: number, actionCheck: 'pending' | 'pass' | 'fail') =>
+    send<QaRunRow>('Save action check', 'PATCH', `/qa-runs/${runId}/action-check`, { caseIndex, stepIndex, actionCheck }),
+  remove: (runId: string) => send<void>('Delete QA run', 'DELETE', `/qa-runs/${runId}`),
+}
+
+export const qaSuitesApi = {
+  list: () => request<QaSuite[]>('Load QA suites', '/qa-suites'),
+  create: (name: string) => send<QaSuite>('Create QA suite', 'POST', '/qa-suites', { name }),
+  update: (id: string, patch: Partial<Pick<QaSuite, 'name' | 'livechat_url' | 'context' | 'cases'>>) => send<QaSuite>('Save QA suite', 'PATCH', `/qa-suites/${id}`, patch),
+  remove: (id: string) => send<void>('Delete QA suite', 'DELETE', `/qa-suites/${id}`),
+  knowledge: (id: string) => request<QaKnowledge[]>('Load knowledge', `/qa-suites/${id}/knowledge`),
+  addText: (id: string, name: string, text: string) => send<QaKnowledge>('Save knowledge', 'POST', `/qa-suites/${id}/knowledge/text`, { name, text }),
+  upload(id: string, file: File, extractedText: string): Promise<QaKnowledge> {
+    const form = new FormData()
+    form.set('file', file)
+    form.set('extractedText', extractedText)
+    return request(`Upload ${file.name}`, `/qa-suites/${id}/knowledge/upload`, { method: 'POST', body: form })
+  },
+  removeKnowledge: (knowledgeId: string) => send<void>('Delete knowledge', 'DELETE', `/qa-knowledge/${knowledgeId}`),
+  runs: (id: string) => request<QaRunRow[]>('Load QA runs', `/qa-suites/${id}/runs`),
+  setActionCheck: (runId: string, caseIndex: number, stepIndex: number, actionCheck: 'pending' | 'pass' | 'fail') =>
+    send<QaRunRow>('Save action check', 'PATCH', `/qa-suite-runs/${runId}/action-check`, { caseIndex, stepIndex, actionCheck }),
+  removeRun: (runId: string) => send<void>('Delete QA run', 'DELETE', `/qa-suite-runs/${runId}`),
 }
 
 // ---------- chat ----------

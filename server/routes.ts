@@ -243,6 +243,26 @@ api.post('/pocs/:id/versions/:versionId/restore', async (c) => {
   return c.json(await restorePocVersion(idParam(c), idParam(c, 'versionId')))
 })
 
+// POC Agent QA runs on the Cekat livechat (created by /api/ai/poc-qa-run).
+api.get('/pocs/:id/qa-runs', async (c) => c.json(await query('select * from poc_qa_runs where poc_id = $1 order by created_at desc limit 50', [idParam(c)])))
+
+/** The SA's manual tick for an expected action the livechat cannot show (label, handoff, API tool). */
+api.patch('/qa-runs/:id/action-check', async (c) => {
+  const { qaActionCheck } = await import('./validation.ts')
+  const v = await parseJson(c, qaActionCheck)
+  const row = await queryOne(
+    `update poc_qa_runs set report = jsonb_set(report, array['cases', $2::text, 'steps', $3::text, 'actionCheck'], to_jsonb($4::text))
+     where id = $1 and jsonb_typeof(report #> array['cases', $2::text, 'steps', $3::text]) = 'object' returning *`,
+    [idParam(c), String(v.caseIndex), String(v.stepIndex), v.actionCheck],
+  )
+  return c.json(notFound(row, 'QA step'))
+})
+
+api.delete('/qa-runs/:id', async (c) => {
+  await query('delete from poc_qa_runs where id = $1', [idParam(c)])
+  return c.body(null, 204)
+})
+
 /** Documents flagged as knowledge, across all projects (shown on the Knowledge page). */
 api.get('/documents/knowledge', async (c) =>
   c.json(

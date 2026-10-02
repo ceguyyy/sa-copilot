@@ -3,6 +3,7 @@ import type { DocType } from '../../shared/schemas.ts'
 import type { ConsistencyCheck } from './api'
 import type { PocConfig, PocRow } from './types'
 import type { PocReviseTarget } from '../../shared/pocRevise.ts'
+import type { QaPlan, QaPlanCase, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
 
 export type StreamEvent =
   | { type: 'delta'; text: string }
@@ -12,6 +13,8 @@ export type StreamEvent =
   | { type: 'result'; data: unknown }
   | { type: 'done'; documentId?: string; versionId?: string; versionNo?: number; documentIds?: string[] }
   | { type: 'error'; error: string }
+  | { type: 'status'; text: string }
+  | { type: 'step'; caseIndex: number; stepIndex: number; sent: string; replies: string[] }
 
 type Done = Extract<StreamEvent, { type: 'done' }>
 
@@ -185,7 +188,7 @@ export const generateDemoScenarios = (params: { projectId: string; count: number
   job<{ added: number; skipped: number }>('/demo-scenarios', params, handlers)
 
 /** Drafts every section of a POC from the project sources; the server saves it as a new `ai` version. */
-export type PocDraftScope = 'all' | 'crm' | 'flow' | 'n8n'
+export type PocDraftScope = 'all' | 'crm' | 'flow' | 'n8n' | 'chatFlow'
 
 export const draftPoc = (params: { pocId: string; instruction?: string; scope?: PocDraftScope; maxTokens?: number }, handlers?: JobHandlers) =>
   job<PocRow>('/poc-draft', params, handlers)
@@ -206,3 +209,46 @@ export const reviewN8nWorkflow = (
   params: { pocId: string; workflowJson: string },
   handlers?: JobHandlers,
 ) => job<PocN8nReview>('/poc-n8n-review', params, handlers)
+
+// ---------- POC Agent QA on the Cekat livechat ----------
+
+export interface QaHandlers {
+  onStatus?: (text: string) => void
+  /** A customer message was sent and the agent's replies came back (live transcript). */
+  onStep?: (step: { caseIndex: number; stepIndex: number; sent: string; replies: string[] }) => void
+}
+
+async function qaJob<T>(path: string, params: Record<string, unknown>, handlers: QaHandlers): Promise<T> {
+  let result: T | undefined
+  await post(path, params, (e) => {
+    if (e.type === 'status') handlers.onStatus?.(e.text)
+    else if (e.type === 'step') handlers.onStep?.(e)
+    else if (e.type === 'tool') handlers.onStatus?.(describeTool(e.name, e.input))
+    else if (e.type === 'result') result = e.data as T
+  })
+  if (result === undefined) throw new Error('The QA run finished without a result — try again.')
+  return result
+}
+
+/** Reads the livechat form and finds the data each happy case needs (with dummies). Opens no conversation. */
+export const prepareQaRun = (params: { pocId: string; livechatUrl: string }, handlers: QaHandlers = {}) => qaJob<QaPlan>('/poc-qa-prepare', params, handlers)
+
+/** Plays the happy cases on the livechat (real conversations in that inbox), judges them and saves the report. */
+export const runQaRun = (params: { pocId: string; livechatUrl: string; cases: QaPlanCase[]; headless: boolean; adaptive: boolean }, handlers: QaHandlers = {}) =>
+  qaJob<QaRunRow>('/poc-qa-run', params, handlers)
+
+/** Stops the running QA run after its current step; the steps that ran are still judged and saved. */
+export async function stopQaRun(): Promise<boolean> {
+  const res = await fetch('/api/ai/poc-qa-stop', { method: 'POST' })
+  if (!res.ok) throw new Error(`Could not stop the QA run (${res.status})`)
+  return ((await res.json()) as { isStopping: boolean }).isStopping
+}
+
+/** AI writes test cases from the suite's knowledge and saves them on the suite. */
+export const generateSuiteCases = (params: { suiteId: string; count: number; instruction?: string; mode: 'append' | 'replace' }, handlers: QaHandlers = {}) =>
+  qaJob<QaSuite>('/qa-suite-cases', params, handlers)
+
+export const prepareSuiteRun = (params: { suiteId: string; livechatUrl: string }, handlers: QaHandlers = {}) => qaJob<QaPlan>('/qa-suite-prepare', params, handlers)
+
+export const runSuiteRun = (params: { suiteId: string; livechatUrl: string; cases: QaPlanCase[]; headless: boolean; adaptive: boolean }, handlers: QaHandlers = {}) =>
+  qaJob<QaRunRow>('/qa-suite-run', params, handlers)

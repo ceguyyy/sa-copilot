@@ -12,12 +12,14 @@ import { CRM_COLUMN_TYPES, crmN8nValueGuide } from '../../shared/pocCrm.ts'
 import { flowFromAi } from '../../shared/pocFlow.ts'
 import { n8nFromAi } from '../../shared/pocN8n.ts'
 import { draftN8nWorkflow, type N8nProgress } from './pocN8nDraft.ts'
+import { CHAT_FLOW_TASK, chatFlowSchema } from './pocChatFlowDraft.ts'
+import { chatFlowsFromAi } from '../../shared/pocChatFlowAi.ts'
 
 const input = z.object({
   pocId: z.string().regex(UUID_RE),
   instruction: z.string().max(2000).default(''),
-  /** 'crm' regenerates only the CRM structure, 'flow' only the flowchart and happy cases, 'n8n' only the n8n workflows; the rest of the POC is kept. */
-  scope: z.enum(['all', 'crm', 'flow', 'n8n']).default('all'),
+  /** 'crm' regenerates only the CRM structure, 'flow' only the flowchart and happy cases, 'n8n' only the n8n workflows, 'chatFlow' only the POC Flow (Cekat Flow builder); the rest of the POC is kept. */
+  scope: z.enum(['all', 'crm', 'flow', 'n8n', 'chatFlow']).default('all'),
 })
 
 export const GROUNDING =
@@ -139,6 +141,20 @@ function scopePlan(scope: Exclude<PocDraftScope, 'n8n'>, pocName: string, curren
       resultName: 'CRM structure',
       note: 'AI-generated CRM structure',
       apply: (data) => ({ ...current, crm: crmFromAi(data.crm) }),
+    }
+  }
+  if (scope === 'chatFlow') {
+    return {
+      task: [`Design the Cekat Flow builder flows (POC Flow) for the POC "${pocName}" of this project, consistent with its current configuration.`, currentPocSummary(current), CHAT_FLOW_TASK],
+      schema: chatFlowSchema,
+      resultName: 'POC Flow',
+      note: 'AI-generated POC Flow',
+      apply: (data) => {
+        const chatFlows = chatFlowsFromAi(data)
+        // Never replace the saved flows with nothing.
+        if (!chatFlows.flows.length) throw new HttpError(502, 'The model returned no flow — try again or pick another model.')
+        return { ...current, chatFlows }
+      },
     }
   }
   if (scope === 'flow') {

@@ -89,5 +89,8 @@ export function usePocRevise({ pocId, draft, setDraft, resetKey, isDisabled }: O
     return <RevisionPreview label={pending.label} changes={pending.changes} onAccept={accept} onDiscard={() => setPending(null)} />
   }
 
-  return { button, preview }
+  /** Runs a revision with a ready-made instruction (e.g. from a QA report); the preview shows where `preview(target)` is rendered. */
+  const run = (target: PocReviseTarget, instruction: string) => mutation.mutate({ target, instruction })
+
+  return { button, preview, run, isBusy }
 }

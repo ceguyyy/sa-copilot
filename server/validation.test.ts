@@ -138,6 +138,62 @@ describe('poc schemas', () => {
     expect(pocConfig.parse({ n8n: { workflows: [{ name: 'Gateway', json: '{}' }] } }).n8n.workflows[0].cases).toEqual([])
   })
 
+  test('POC Flow keeps the nested flow tree, and POCs saved before it get an empty list', () => {
+    const flow = {
+      id: 'f1',
+      name: 'Inbound',
+      start: {
+        id: 'c',
+        kind: 'conditions',
+        branches: [
+          {
+            id: 'b',
+            condition: { type: 'firstMessageText', text: 'PROMO' },
+            next: {
+              id: 'm',
+              kind: 'buttons',
+              message: 'Pilih',
+              image: null,
+              buttons: [{ id: 'k', label: 'Lacak pesanan', next: { id: 'e', kind: 'end', end: { type: 'ai', agent: 'Order Bot' } } }],
+              elseId: 'me',
+              elseNext: { id: 'a', kind: 'action', action: { type: 'jump', targetId: 'm' }, next: null },
+            },
+          },
+        ],
+        elseId: 'ce',
+        elseNext: { id: 'h', kind: 'end', end: { type: 'human', agents: ['Sari'] } },
+      },
+    }
+    expect(pocConfig.parse({ chatFlows: { flows: [flow] } }).chatFlows.flows[0]).toEqual(flow)
+    expect(pocConfig.parse({}).chatFlows).toEqual({ flows: [] })
+  })
+
+  test('POC Flow rejects more than 10 buttons, a button over 20 characters and a message over 10000', () => {
+    const buttons = (labels: string[]) => labels.map((label, i) => ({ id: `k${i}`, label, next: null }))
+    const withStep = (step: Record<string, unknown>) => ({ chatFlows: { flows: [{ id: 'f', name: 'F', start: step }] } })
+    const msg = (message: string, labels: string[]) => withStep({ id: 'm', kind: 'buttons', message, image: null, buttons: buttons(labels), elseId: 'e', elseNext: null })
+    expect(() => pocConfig.parse(msg('Hi', Array.from({ length: 11 }, (_, i) => `B${i}`)))).toThrow()
+    expect(() => pocConfig.parse(msg('Hi', ['x'.repeat(21)]))).toThrow()
+    expect(() => pocConfig.parse(msg('x'.repeat(10_001), ['Ok']))).toThrow()
+    expect(() => pocConfig.parse(msg('x'.repeat(10_000), ['x'.repeat(20)]))).not.toThrow()
+  })
+
+  test('POC Flow rejects repeated node ids, very deep trees and malformed times with a 400-style error', () => {
+    const end = (id: string) => ({ id, kind: 'end', end: { type: 'ai', agent: 'Bot' } })
+    const withStart = (start: unknown) => ({ chatFlows: { flows: [{ id: 'f', name: 'F', start }] } })
+    const dup = { id: 'a', kind: 'action', action: { type: 'addLabel', label: 'x' }, next: end('a') }
+    expect(() => pocConfig.parse(withStart(dup))).toThrow(/repeat/i)
+
+    let deep: unknown = end('leaf')
+    for (let i = 0; i < 5_000; i++) deep = { id: `a${i}`, kind: 'action', action: { type: 'addLabel', label: 'x' }, next: deep }
+    expect(() => pocConfig.parse(withStart(deep))).toThrow(/too deep/i)
+
+    const time = (from: string) => withStart({ id: 'c', kind: 'conditions', branches: [{ id: 'b', condition: { type: 'firstMessageTime', from, to: '17:00', days: ['Mon'] }, next: null }], elseId: 'e', elseNext: null })
+    expect(() => pocConfig.parse(time('8am'))).toThrow()
+    expect(() => pocConfig.parse(time(''))).not.toThrow()
+    expect(() => pocConfig.parse(time('08:00'))).not.toThrow()
+  })
+
   test('n8n workflow saved before use cases keeps its cURL as one use case', () => {
     const legacy = { name: 'Buat tiket', tool: 'buat_tiket', description: '', json: '{}', curl: 'curl x', testNotes: '' }
     expect(pocConfig.parse({ n8n: { workflows: [legacy] } }).n8n.workflows[0].cases).toEqual([{ action: 'buat_tiket', title: 'Buat tiket', curl: 'curl x' }])
