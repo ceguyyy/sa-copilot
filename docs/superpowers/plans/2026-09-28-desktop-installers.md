@@ -40,7 +40,7 @@
 
 - All curl cases are represented in one n8n workflow, and multiple curl commands can be included in it.
 - n8n workflow skills can represent/import the supplied exported workflow format, and select option values are zero-based.
-- The `POC Flow` tab supports multiple workflows without AI; its detailed rules are added only after the user provides them.
+- The `POC Flow` tab supports multiple workflows without AI and follows the "POC Flow rules" section below (node types, limits, Else paths, end-node validation).
 - POC agent Labels/labels and description reject values longer than 3000 characters.
 
 ### Status (2026-10-01)
@@ -51,7 +51,30 @@ Go-ahead given; implemented except the POC Flow tab. Decisions taken with the us
 - **Skill format:** `N8N_WORKFLOW_RULES` follows the Siloam export (node names, types/typeVersions, parameter shapes incl. `cekatCrm` `columns.column[{ columnName, valueType: "select", selectValue }]`, connections, `settings`). `completeWorkflowExport` adds `pinData`, `settings`, `active`, `tags` and webhook `webhookId`s. Importing an export reads its use cases from its Switch (v1 `value2` or v3 conditions on `$json.action`).
 - **Zero-based selects:** `CEKAT_CRM_SELECT_RULE`, `selectOptionValue`, `crmN8nValueGuide` and the happy-case prompt.
 - **3000 limit:** label name and label description (condition) — `POC_LABEL_MAX_CHARS` in `shared/pocLimits.ts`, used by the schema, AI mapping and the editor inputs.
-- **POC Flow tab:** still blocked on the user's rules.
+- **POC Flow tab:** rules received 2026-10-02 (below); implementation still waits for the go-ahead.
+
+### POC Flow rules (from the user, 2026-10-02)
+
+Models the Cekat **Flow** builder: a non-AI, rule-based chat flow that runs before an agent takes over.
+
+- **Direction:** Flow → AI Agent is allowed (a flow can hand the chat to an AI agent). AI → Flow is **not** possible.
+- **Entry:** an incoming channel chat enters at the **Start point**. From Start point you can add a **Condition** or an **End Flow**.
+- **Condition node** types:
+  - **First Message Text**: if the customer's first message matches the trigger text, take this path.
+  - **First Message Time**: a time range plus days of the week (shown as "First Message Time / Day" in the builder).
+  - Each set of sibling conditions automatically gets an **Else** path ("This path will be taken if other conditions are not met").
+- **After a condition**, a new node can be:
+  - **Action** with one of: **Add Label** (put the chat in a label), **Add Collaborator**, **Send Message** (send a chat to the customer when the node is reached), **Webhook** (no variables can be added), **Jump** (continue at another chosen node).
+  - **Message with Buttons**: message text up to **10,000** chars, an optional uploaded **image**, up to **10 buttons** of up to **20** chars each. It branches into one **Button Response** condition per button, plus an **Else** path.
+  - **End Flow**.
+- **End Flow** types: **Human Agent** (must select one or more human agents) or **AI Agent** (hand over to an AI agent). The usual reason to end at an AI agent: it calls an API with a customer variable (e.g. track an order by order number), which the flow itself can't do.
+- **Validation** (mirrors Cekat's "Flow must end with a configured Human or AI Agent"): every leaf path, including each Else, must end in an End node (error: `<Node> (<label>) - Add An End Node`). An End Human Agent with no agents selected gives `End N (Human Agent) - Select Human Agents`.
+
+### Answers (2026-10-02)
+
+- **First Message Text** is **case-sensitive**. Match mode was not stated; assume **exact match** until told otherwise.
+- **Chaining:** Action / Webhook nodes can be chained (Action → Action → End). **Jump** can target **any node** in the same flow.
+- **Output:** no Cekat import format. The tab gives (1) a **tree visual** of each flow and (2) **copy-paste fields**: every node's field values (condition text, time/day, label, message text, button labels, webhook URL, chosen agents) with a copy button each, so the SA can rebuild the flow by hand in Cekat. Validation errors are shown as in Cekat.
 
 ## Review Focus
 
