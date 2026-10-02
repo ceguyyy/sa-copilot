@@ -19,7 +19,7 @@ Download the installer for your OS (build it yourself with [docs/BUILD.md](docs/
 The installers are unsigned for now:
 
 - **Windows:** SmartScreen shows "Windows protected your PC". Click **More info → Run anyway**.
-- **macOS:** drag the app to Applications, then right-click it → **Open** → **Open** on first launch. If macOS says the app "is damaged", run `xattr -dr com.apple.quarantine "/Applications/SA Copilot.app"`.
+- **macOS:** macOS blocks it on first launch. See [Install on macOS, step by step](#install-on-macos-step-by-step).
 
 Nothing else needs installing. The app bundles and starts on its own:
 
@@ -33,6 +33,34 @@ Nothing else needs installing. The app bundles and starts on its own:
 **Where data lives:** `%APPDATA%\SA Copilot` on Windows, `~/Library/Application Support/SA Copilot` on macOS. It holds the database, uploads, automatic backups and logs, and is kept across updates and uninstalls. Settings → Connections lists every folder with an **Open** button. Exported deliverables go to `Documents/SA Copilot` by default.
 
 **Moving to another laptop:** Settings → Backup → **Download backup** creates one `.sacopilot` file with every project, document, POC, skill, format and uploaded file (keys are not included). On the new laptop, open Settings → Backup → **Restore**. The current data is backed up automatically before a restore.
+
+### Install on macOS, step by step
+
+1. **Find out which Mac you have.** Click  → **About This Mac**.
+   - It shows **Chip: Apple M1/M2/M3/M4…** → you need `SA Copilot-<version>-arm64.dmg`.
+   - It shows **Processor: … Intel …** → you need `SA Copilot-<version>-x64.dmg`.
+
+   The wrong one either does not open or runs slowly.
+2. **Get the `.dmg`.** Use the one you were given, or build it on a Mac with [docs/BUILD.md](docs/BUILD.md) (`npm run dist:mac` writes both into `release/`).
+3. **Install.** Double-click the `.dmg`, drag **SA Copilot** onto the **Applications** folder in the window that opens, then eject the disk image (the ⏏ next to it in Finder's sidebar).
+4. **Open it the first time.** The app is not signed by Apple yet, so macOS blocks the first launch:
+   - Open **Applications** and double-click **SA Copilot**. macOS says it *"cannot be opened because Apple cannot check it for malicious software"* (or *"…could not verify…"*). Click **Done** / **OK**.
+   - Open **System Settings → Privacy & Security**, scroll down to *"SA Copilot was blocked…"* and click **Open Anyway**. Enter your Mac password, then click **Open** once more.
+   - On macOS 14 (Sonoma) or older you can instead right-click the app → **Open** → **Open**.
+
+   This is only needed once; afterwards it opens normally from Launchpad, Spotlight or the Dock.
+5. **If macOS says the app "is damaged and can't be opened"**, the download was quarantined. Open **Terminal** and run:
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/SA Copilot.app"
+   ```
+   Then open the app again.
+6. **First start.** A splash screen shows while the bundled PostgreSQL, 9router and Python start (the very first start takes up to a minute). Then the **Setup** screen asks for a 9router API key: click **Open 9router dashboard**, connect a provider (e.g. your Claude account), create an API key, paste it and save. If macOS asks to allow incoming network connections, click **Allow**. Everything stays on `127.0.0.1`.
+
+**Updating:** quit SA Copilot (⌘Q), install the new `.dmg` the same way and choose **Replace**. Your projects are kept.
+
+**Uninstalling:** quit the app and drag **SA Copilot** from Applications to the Trash. Your data stays in `~/Library/Application Support/SA Copilot`. Delete that folder too (Finder → **Go → Go to Folder…**, paste the path) only if you want to remove every project. Download a backup first if you might need it.
+
+Prefer to run it from source instead (e.g. to develop)? See [Run from the repo](#run-from-the-repo-windows-and-macos) below. It has its own macOS setup with Homebrew.
 
 ## Features
 
