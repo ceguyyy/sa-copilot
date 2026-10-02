@@ -11,8 +11,9 @@ export function safeFileName(name: string): string {
 
 /** Resolves a stored key to an absolute path, refusing anything that could escape the upload dir. */
 export function resolveKey(key: string): string {
+  // Both separators on every OS: "\" is a separator on Windows but a plain character on macOS/Linux.
   const base = path.basename(key)
-  if (!base || base !== key) throw new Error(`Invalid storage key: ${key}`)
+  if (!base || base !== key || /[\\/]/.test(key) || key === '.' || key === '..') throw new Error(`Invalid storage key: ${key}`)
   return path.join(config.uploadDir, base)
 }
 
