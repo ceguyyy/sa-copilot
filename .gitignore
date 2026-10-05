@@ -45,3 +45,8 @@ build/python/
 build/cache/
 build/templates/
 .playwright-mcp/
+.venv/
+
+# local analysis and PowerShell cache
+graphify-out/
+Microsoft/Windows/PowerShell/ModuleAnalysisCache

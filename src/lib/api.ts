@@ -3,6 +3,16 @@ import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
 import type { Theme, ThemeMode } from '../../shared/theme.ts'
 import type { QaKnowledge, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
 import type { AiActivity } from '../../shared/activity.ts'
+import type { CloudStatus, UpdateStatus } from '../../shared/maintenance.ts'
+
+export const maintenanceApi = {
+  updates: () => request<UpdateStatus>('Load version', '/updates'),
+  check: () => send<UpdateStatus>('Check updates', 'POST', '/updates/check'),
+  upgrade: (commit: string) => send<UpdateStatus>('Upgrade', 'POST', '/updates/upgrade', { commit }),
+  cloud: () => request<CloudStatus>('Load cloud status', '/cloud'),
+  push: () => send<{ revision: number }>('Upload cloud backup', 'POST', '/cloud/push'),
+  pull: (revision: number) => send<{ revision: number; safetyBackup: string }>('Download cloud backup', 'POST', '/cloud/pull', { revision, confirm: 'RESTORE' }),
+}
 
 export const activityApi = { list: () => request<AiActivity[]>('Load AI activity', '/ai/activity') }
 import type {

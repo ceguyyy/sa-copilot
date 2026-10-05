@@ -64,6 +64,32 @@ Prefer to run it from source instead (e.g. to develop)? See [Run from the repo](
 
 ## Features
 
+### Git updates
+
+For a source installation, open **Settings → Updates → Check Git updates**. It checks the upstream of the currently checked-out branch (for example `feat/local-windows-app`), shows the commit IDs and offers **Upgrade to latest commit**.
+
+Upgrade saves a `.sacopilot` backup, performs a fast-forward Git update, runs `npm ci`, and builds the UI. Save your work and let active jobs finish first. Data changes are temporarily blocked during maintenance. When complete, stop the server and run `npm start` again so the new backend and database schema are loaded. Git credentials must already work on that computer. Local changes, untracked files, and local commits block upgrades; the app never discards them. If installation/build fails, fix the checkout and run `npm ci` and `npm start`; the Settings screen reports the failed stage and any saved backup.
+
+Installed `.exe`/`.dmg` apps have a GitHub Releases link instead. Install the new installer to upgrade them; their data is preserved. Source upgrades do not update installed desktop binaries.
+
+### Supabase cloud backup and sync between computers
+
+Use your **existing Supabase project**, with a dedicated private `sa_copilot_sync` schema. This feature does not alter the healthcare demo tables. It stores complete `.sacopilot` snapshots, including referenced upload files, and retains the latest ten revisions. Each compressed snapshot is limited to 100 MB.
+
+1. Run [db/supabase-sync.sql](db/supabase-sync.sql) in the Supabase SQL editor as the database owner.
+2. In Supabase **Connect**, copy the **Session pooler** PostgreSQL URL, with the database password. This is separate from `DEMO_SUPABASE_URL` and its REST key. The connection uses TLS with certificate verification and the official Supabase root CA bundled with the app.
+3. Source installs: add the following to `.env` on every computer, then restart the server:
+   ```dotenv
+   CLOUD_DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@SESSION_POOLER_HOST:5432/postgres
+   CLOUD_WORKSPACE=sa-team
+   ```
+   Desktop installs: use **Settings → Connections → Supabase cloud backup and sync**. The connection string is encrypted with the OS keychain. Use the same database and workspace on all computers. Keep each computer's normal `DATABASE_URL` pointed at its local database.
+4. On the first computer, open **Settings → Backup → Upload this computer to cloud**.
+5. On the next computer, refresh cloud status, type `RESTORE`, and **Download cloud and replace local data**. A local safety backup is saved first.
+6. Before switching computers, upload. On the next computer, download before editing, then upload your changes when done.
+
+Sync is **manual snapshot transfer**, not live collaboration or automatic merging. If another computer has uploaded a newer revision, your upload is rejected. Download a local backup to preserve unsynced work before replacing local data. Application `.env`/desktop credentials remain on each device; exported deliverable folders and custom deck template files are not included. Changing the cloud connection/workspace starts a new device sync state. The cloud database must be provisioned and reachable before cloud operations can be used.
+
 - **Projects:** one workspace per client deal, with a deliverables progress timeline.
 - **Sources:** PDF, DOCX, PPTX, XLSX, CSV/TXT/MD, images, or pasted notes. markitdown converts files to compact Markdown, which saves AI tokens.
 - **Knowledge:** project-level, plus a global knowledge base shared by every project. It includes the **Cekat n8n nodes** catalog (Cekat, Cekat Trigger, Cekat CRM), used when designing integrations.

@@ -29,6 +29,10 @@ export const config = {
   uploadDir: fromEnv('UPLOAD_DIR', 'data/uploads'),
   // Where Backup & Restore writes the automatic backup taken before a restore.
   backupDir: fromEnv('BACKUP_DIR', 'data/backups'),
+  cloud: {
+    databaseUrl: process.env.CLOUD_DATABASE_URL?.trim() || '',
+    workspace: process.env.CLOUD_WORKSPACE?.trim() || 'default',
+  },
   // Healthcare demo app (github.com/ceguyyy/Healthcare-demo-cekat): where scenarios are shown and the
   // Supabase REST endpoint + key they are stored with. The key stays on this server.
   demo: {

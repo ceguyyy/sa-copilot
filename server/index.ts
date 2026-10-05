@@ -20,10 +20,18 @@ import { demo } from './demo.ts'
 import { attachments, purgeOldRequestFiles } from './attachments.ts'
 import { seedDefaultServers } from './ai/mcp.ts'
 import { backup } from './backup/routes.ts'
+import { maintenance } from './maintenance/routes.ts'
+import { beginWrite } from './maintenance/lock.ts'
 
 import { office } from './routes/office.ts'
 
 const app = new Hono()
+
+app.use('/api/*', async (c, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) || /^\/api\/(cloud|updates)(\/|$)/.test(c.req.path)) return next()
+  const done = beginWrite()
+  try { await next() } finally { done() }
+})
 
 app.onError((e, c) => {
   const err = toHttpError(e)
@@ -36,6 +44,7 @@ app.route('/api', api)
 app.route('/api', extras)
 app.route('/api', n8nNodes)
 app.route('/api', backup)
+app.route('/api', maintenance)
 app.route('/api', themes)
 app.route('/api', languages)
 app.route('/api', questions)

@@ -83,8 +83,8 @@ describe('buildServerEnv', () => {
   const paths = resolvePaths({ isPackaged: true, appPath: '/A/app', resourcesPath: '/A', userData: '/D', documents: '/Docs', platform: 'darwin' })
   const ports = { postgres: 54329, router: 20128, server: 51234 }
   const cfg = {
-    values: { aiBaseUrl: '', aiModel: '', chatEffort: '', generateEffort: 'high', outlineApiUrl: '', demoSupabaseUrl: '', demoAppUrl: '', notionParentPage: 'https://notion.so/p-1a2b', docsDir: '', deckTemplate: '' },
-    secrets: { routerApiKey: 'sk-9', outlineApiKey: 'ol_1', demoSupabaseKey: '', notionToken: 'ntn_1' },
+    values: { aiBaseUrl: '', aiModel: '', chatEffort: '', generateEffort: 'high', outlineApiUrl: '', demoSupabaseUrl: '', demoAppUrl: '', notionParentPage: 'https://notion.so/p-1a2b', docsDir: '', deckTemplate: '', cloudWorkspace: '' },
+    secrets: { routerApiKey: 'sk-9', outlineApiKey: 'ol_1', demoSupabaseKey: '', notionToken: 'ntn_1', cloudDatabaseUrl: '' },
     pgPassword: 'p@ss w',
   }
 
