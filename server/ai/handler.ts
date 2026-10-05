@@ -29,6 +29,7 @@ import { cutOffMessage, runModel, withOutputLimit, type ToolDef } from './llm/in
 import { callMcpTool } from './mcp.ts'
 import { activeModel, getEffort, listModels, selectModel, setEffort } from './models.ts'
 import { streamResponse, type Stream } from './stream.ts'
+import { activitySnapshot, trackActivity } from './activity.ts'
 
 const HISTORY_LIMIT = 40
 const MAX_INSTRUCTION_CHARS = 8000
@@ -36,6 +37,7 @@ const MAX_INSTRUCTION_CHARS = 8000
 type Body = Record<string, unknown>
 
 export const ai = new Hono()
+ai.get('/activity', (c) => c.json(activitySnapshot(), 200, { 'Cache-Control': 'no-store' }))
 
 ai.post('/', async (c) => {
   const body = await c.req.json().catch(() => null)
@@ -43,8 +45,8 @@ ai.post('/', async (c) => {
   if (typeof body.projectId !== 'string' || !UUID_RE.test(body.projectId)) throw new HttpError(400, 'Invalid projectId')
   requireApiKey()
 
-  if (body.action === 'chat') return streamResponse((s) => withOutputLimit(body, () => handleChat(body, s)))
-  if (body.action === 'generate') return streamResponse((s) => withOutputLimit(body, () => handleGenerate(body, s)))
+  if (body.action === 'chat') return streamResponse((s) => trackActivity('chat', body, s, (out) => withOutputLimit(body, () => handleChat(body, out))))
+  if (body.action === 'generate') return streamResponse((s) => trackActivity(`generate ${body.docType ?? 'document'}`, body, s, (out) => withOutputLimit(body, () => handleGenerate(body, out))))
   throw new HttpError(400, 'Unknown action')
 })
 
@@ -54,7 +56,7 @@ const streamed = (run: (body: unknown, out: Stream) => Promise<void>) => async (
     throw new HttpError(400, 'Invalid JSON body')
   })
   requireApiKey()
-  return streamResponse((s) => withOutputLimit(body, () => run(body, s)))
+  return streamResponse((s) => trackActivity(c.req.path.split('/').pop() ?? 'AI task', body, s, (out) => withOutputLimit(body, () => run(body, out))))
 }
 
 ai.post('/assist', streamed(assist))

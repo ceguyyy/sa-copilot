@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { HomePage } from './pages/HomePage'
 import { Layout } from './components/Layout'
 import { ThemeSync } from './components/ThemeSync'
 import { skillsApi } from './lib/api'
@@ -46,6 +47,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<ProjectsPage />} />
+          <Route path="home" element={<HomePage />} />
           <Route path="projects/:projectId" element={<ProjectPage />} />
           <Route path="projects/:projectId/docs/:documentId" element={<DocumentPage />} />
           <Route path="knowledge" element={<KnowledgePage />} />

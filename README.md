@@ -200,3 +200,13 @@ db/schema.sql schema, applied automatically on every start (idempotent)
 - **Proxies and models:** drafting uses structured outputs and adaptive thinking. Models marked *(chat only)* can chat but cannot write documents.
 - **Mandays:** these come from the Timeline's `SLA/Days` column. A SOW shows a "timeline outdated" banner when the timeline changes after its last version.
 - **DOCX export:** the file follows each template's section structure, but not its exact Word styling or logo.
+
+## Home / Pixel workspace
+
+The Home sidebar entry (`/home`) displays a built-in pixel art workspace for SA Copilot AI jobs. Projects remains at `/`. No external office service is required.
+
+Each character shows its task, project, model, and current stage. Hover or focus a character for live metadata; click to pin full details, including output characters, model calls, tools, effort, output limit, and attachments. Escape dismisses the tooltip. Activity refreshes every two seconds and can be filtered by status.
+
+The server tracks SA Copilot jobs, including concurrent work, and keeps the latest 60 completed jobs in memory. History resets when the server restarts. Requests made directly to 9router by other applications are not included. Restart the backend after updating to enable the activity endpoint and metadata.
+
+The optional legacy Claude Office launcher remains available through `npm run office:start`, but Home uses the built-in workspace.

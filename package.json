@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "office:start": "node scripts/office-start.mjs",
     "dev:server": "node --env-file-if-exists=.env --watch server/index.ts",
     "build": "tsc -b && vite build",
     "start": "npm run build && node --env-file-if-exists=.env server/index.ts",

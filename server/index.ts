@@ -21,6 +21,8 @@ import { attachments, purgeOldRequestFiles } from './attachments.ts'
 import { seedDefaultServers } from './ai/mcp.ts'
 import { backup } from './backup/routes.ts'
 
+import { office } from './routes/office.ts'
+
 const app = new Hono()
 
 app.onError((e, c) => {
@@ -29,6 +31,7 @@ app.onError((e, c) => {
   return c.json({ error: err.message }, err.status as 400)
 })
 
+app.route('/api', office)
 app.route('/api', api)
 app.route('/api', extras)
 app.route('/api', n8nNodes)

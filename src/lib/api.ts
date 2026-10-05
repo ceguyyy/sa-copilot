@@ -2,6 +2,9 @@
 import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
 import type { Theme, ThemeMode } from '../../shared/theme.ts'
 import type { QaKnowledge, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
+import type { AiActivity } from '../../shared/activity.ts'
+
+export const activityApi = { list: () => request<AiActivity[]>('Load AI activity', '/ai/activity') }
 import type {
   AiModel,
   BackupInspect,
@@ -429,4 +432,8 @@ export const backupApi = {
   storage: () => request<{ uploads: string; exports: string; backups: string }>('Load storage folders', '/storage'),
   inspect: (file: File) => request<BackupInspect>('Read backup', '/backup/inspect', { method: 'POST', body: backupForm(file) }),
   restore: (file: File) => request<BackupRestoreResult>('Restore backup', '/backup/restore', { method: 'POST', body: backupForm(file, 'RESTORE') }),
+}
+
+export const officeApi = {
+  status: () => request<{ appUrl: string; connected: boolean; message: string | null }>('Load Claude Office', '/office'),
 }

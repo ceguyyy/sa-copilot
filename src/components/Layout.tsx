@@ -1,9 +1,10 @@
 import clsx from 'clsx'
-import { BookOpen, FlaskConical, FolderKanban, MonitorPlay, Settings } from 'lucide-react'
+import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, Settings } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { CurrentModel } from './CurrentModel'
 
 const NAV = [
+  { to: '/home', label: 'Home', icon: House, end: true },
   { to: '/', label: 'Projects', icon: FolderKanban, end: true },
   { to: '/knowledge', label: 'Knowledge', icon: BookOpen, end: false },
   { to: '/demo', label: 'Demo', icon: MonitorPlay, end: false },
@@ -14,7 +15,7 @@ const NAV = [
 export function Layout() {
   return (
     <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
-      <aside className="flex items-center justify-between gap-4 border-b border-line bg-forest px-4 py-3 text-paper md:sticky md:top-0 md:h-screen md:flex-col md:items-stretch md:justify-start md:border-b-0 md:px-5 md:py-6">
+      <aside className="flex flex-wrap items-center justify-between gap-4 border-b border-line bg-forest px-4 py-3 text-paper md:sticky md:top-0 md:h-screen md:flex-nowrap md:flex-col md:items-stretch md:justify-start md:border-b-0 md:px-5 md:py-6">
         <div className="flex items-center gap-3">
           <img src="/app-icon.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-xl object-cover ring-1 ring-paper/20" />
           <div>
@@ -27,6 +28,7 @@ export function Layout() {
             <NavLink
               key={to}
               to={to}
+              aria-label={label}
               end={end}
               className={({ isActive }) =>
                 clsx(
