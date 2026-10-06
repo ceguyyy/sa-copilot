@@ -1,10 +1,31 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Eye, EyeOff } from 'lucide-react'
+import type { InputHTMLAttributes } from 'react'
 import { authApi } from '../lib/api'
 import { Button, Card, ErrorNote, Field, Input } from '../components/ui'
 import { ConnectionsForm } from '../components/ConnectionsForm'
 import { RecoveryCode } from '../components/RecoveryCode'
 import { desktop } from '../lib/desktop'
+import appPackage from '../../package.json'
+
+function PasswordInput({ visible, onToggle, ...props }: InputHTMLAttributes<HTMLInputElement> & { visible: boolean; onToggle: () => void }) {
+  return (
+    <div className="relative">
+      <Input {...props} type={visible ? 'text' : 'password'} className="pr-10" />
+      <button
+        type="button"
+        aria-label={visible ? 'Hide password' : 'Show password'}
+        aria-pressed={visible}
+        title={visible ? 'Hide password' : 'Show password'}
+        onClick={onToggle}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-muted transition hover:text-ink"
+      >
+        {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  )
+}
 
 export function AccountPage({ configured, onDone, onRecoveryPending }: { configured: boolean; onDone: () => void; onRecoveryPending: () => void }) {
   const qc = useQueryClient()
@@ -13,6 +34,8 @@ export function AccountPage({ configured, onDone, onRecoveryPending }: { configu
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [recoveryCode, setRecoveryCode] = useState('')
+  const [passwordVisible, setPasswordVisible] = useState(false)
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [newCode, setNewCode] = useState('')
   const [message, setMessage] = useState('')
   const finish = () => { qc.clear(); onDone() }
@@ -31,9 +54,9 @@ export function AccountPage({ configured, onDone, onRecoveryPending }: { configu
       finish()
     },
   })
-  const changeMode = (next: typeof mode) => { setMode(next); setPassword(''); setConfirmPassword(''); setRecoveryCode(''); setMessage(''); submit.reset() }
+  const changeMode = (next: typeof mode) => { setMode(next); setPassword(''); setConfirmPassword(''); setRecoveryCode(''); setPasswordVisible(false); setConfirmPasswordVisible(false); setMessage(''); submit.reset() }
   return <main className="mx-auto max-w-xl space-y-5 p-8">
-    <h1 className="font-display text-3xl font-semibold">SA Copilot v2.0.1</h1>
+    <h1 className="font-display text-3xl font-semibold">SA Copilot v{appPackage.version}</h1>
     <p className="text-sm text-muted">Sign in or create an account to connect your cloud data and backups. Use the same account on another computer to restore your workspace.</p>
     <p className="text-sm text-muted">Existing local data will be linked to the first account that signs in. Each installation profile can only be used by one account.</p>
     {!configured && <Card className="space-y-3 p-5">
@@ -47,8 +70,8 @@ export function AccountPage({ configured, onDone, onRecoveryPending }: { configu
         {message && <p className="text-sm text-ok" role="status">{message}</p>}
         <Field label="Email"><Input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></Field>
         {mode === 'reset' && <Field label="Recovery code"><Input autoComplete="off" required minLength={43} maxLength={43} value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} /></Field>}
-        <Field label={mode === 'reset' ? 'New password' : 'Password'} hint="At least 12 characters"><Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} /></Field>
-        {mode === 'reset' && <Field label="Confirm new password"><Input type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></Field>}
+        <Field label={mode === 'reset' ? 'New password' : 'Password'} hint="At least 12 characters"><PasswordInput visible={passwordVisible} onToggle={() => setPasswordVisible(visible => !visible)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} /></Field>
+        {mode === 'reset' && <Field label="Confirm new password"><PasswordInput visible={confirmPasswordVisible} onToggle={() => setConfirmPasswordVisible(visible => !visible)} autoComplete="new-password" minLength={12} maxLength={128} required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></Field>}
         <ErrorNote error={submit.error} />
         <Button type="submit" loading={submit.isPending} disabled={!configured}>{mode === 'register' ? 'Register' : mode === 'reset' ? 'Reset password' : 'Sign in'}</Button>
         <Button type="button" variant="ghost" disabled={submit.isPending} onClick={() => changeMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Need an account? Register' : 'Back to sign in'}</Button>
