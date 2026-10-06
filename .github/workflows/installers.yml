@@ -6,6 +6,8 @@ name: Installers
 on:
   workflow_dispatch:
   push:
+    branches: [main, feat/local-windows-app]
+    paths: ['package.json', '.github/workflows/installers.yml']
     tags: ['v*']
 
 permissions:
