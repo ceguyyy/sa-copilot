@@ -53,18 +53,18 @@ const LATEST_DOCS = `
   ) v on true`
 
 export async function loadProjectContext(projectId: string): Promise<ProjectContext> {
-  const project = await queryOne('select * from projects where id = $1', [projectId])
+  const project = await queryOne('select * from projects where id = $1 and deleted_at is null', [projectId])
   if (!project) throw new HttpError(404, 'Project not found')
 
   const [sources, docs, knowledgeDocs, questions, n8nNodes] = await Promise.all([
     query<SourceRow>(
       `select id, project_id, kind, name, mime_type, storage_path, extracted_text
-       from sources where (project_id = $1 or project_id is null) and enabled order by created_at`,
+       from sources where (project_id = $1 or project_id is null) and enabled and deleted_at is null order by created_at`,
       [projectId],
     ),
     query<DocSnapshot>(`${LATEST_DOCS} where d.project_id = $1 order by d.created_at`, [projectId]),
     query<ProjectContext['knowledgeDocs'][number]>(
-      `${LATEST_DOCS} where d.is_knowledge and d.project_id <> $1 order by d.updated_at desc`,
+      `${LATEST_DOCS} where p.deleted_at is null and p.archived_at is null and d.is_knowledge and d.project_id <> $1 order by d.updated_at desc`,
       [projectId],
     ),
     query<ProjectContext['questions'][number]>(
@@ -79,8 +79,8 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
 /** Global knowledge only (no project): used by the skill assistant. */
 export async function loadGlobalKnowledgeText(): Promise<string> {
   const [sources, docs] = await Promise.all([
-    query<SourceRow>(`select * from sources where project_id is null and enabled order by created_at`),
-    query<ProjectContext['knowledgeDocs'][number]>(`${LATEST_DOCS} where d.is_knowledge order by d.updated_at desc`),
+    query<SourceRow>(`select * from sources where project_id is null and enabled and deleted_at is null order by created_at`),
+    query<ProjectContext['knowledgeDocs'][number]>(`${LATEST_DOCS} where p.deleted_at is null and p.archived_at is null and d.is_knowledge order by d.updated_at desc`),
   ])
   const parts = ['# GLOBAL KNOWLEDGE (Cekat products, pricing, standard practice)']
   for (const s of sources) if (s.extracted_text?.trim()) parts.push(sourceBlock(s))

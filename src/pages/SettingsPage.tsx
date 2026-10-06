@@ -4,7 +4,6 @@ import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { McpServersPanel } from '../components/McpServersPanel'
 import { ModelPicker } from '../components/ModelPicker'
 import { PageHeader } from '../components/ui'
-import { desktop } from '../lib/desktop'
 import { BackupSettings } from './settings/BackupSettings'
 import { AccountSettings } from './settings/AccountSettings'
 import { ConnectionsSettings } from './settings/ConnectionsSettings'
@@ -28,7 +27,7 @@ const TABS = [
     id: 'connections',
     label: 'Connections',
     icon: KeyRound,
-    intro: 'Every setting that used to live in .env — AI key and endpoint, model, Outline, Notion, the demo app and folders. Saving applies it immediately.',
+    intro: 'Configure AI, Outline, Notion, the demo app and cloud backup, or import settings from an ENV file. Desktop saves restart the server; source installations require a server restart.',
   },
   {
     id: 'formats',
@@ -76,8 +75,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id']
 
-/** Connections edits the desktop app's settings; in the browser/dev server they come from .env instead. */
-const VISIBLE_TABS = TABS.filter((t) => t.id !== 'connections' || desktop)
+const VISIBLE_TABS = TABS
 
 /** One place to configure everything: formats, skills, AI tools and the model. The tab lives in the URL. */
 export function SettingsPage() {

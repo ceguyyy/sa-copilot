@@ -11,12 +11,12 @@ import { exportDocumentFiles } from './exports.ts'
 import { HttpError, idParam, notFound, parseJson } from './http.ts'
 
 export async function enhancementInventory(projectId: string): Promise<EnhancementItem[]> {
-  notFound(await queryOne('select id from projects where id = $1', [projectId]), 'Project')
+  notFound(await queryOne('select id from projects where id = $1 and deleted_at is null', [projectId]), 'Project')
   const [docs, sources, demos] = await Promise.all([
     query<EnhancementItem>(`select d.id, d.title, d.type as "docType", v.content, v.id as "versionId", v.version_no as "versionNo"
       from documents d join lateral (select id, version_no, content from document_versions where document_id=d.id order by version_no desc limit 1) v on true
       where d.project_id=$1 order by d.created_at`, [projectId]),
-    query<{ id: string; name: string; kind: string; storage_path: string | null; extracted_text: string | null; enabled: boolean }>('select * from sources where project_id=$1 order by created_at', [projectId]),
+    query<{ id: string; name: string; kind: string; storage_path: string | null; extracted_text: string | null; enabled: boolean }>('select * from sources where project_id=$1 and deleted_at is null order by created_at', [projectId]),
     query<{ id: string; payload: Record<string, unknown> }>('select id, payload from demo_scenarios where project_id=$1 order by created_at', [projectId]),
   ])
   return [

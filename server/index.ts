@@ -1,3 +1,6 @@
+import { cleanupTrash, guardTrash } from './trash.ts'
+import { connections } from './connections.ts'
+import { inbox } from './inbox.ts'
 // Local SA Copilot server: REST API + AI stream + the built frontend, on 127.0.0.1 only.
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
@@ -48,7 +51,10 @@ app.onError((e, c) => {
   return c.json({ error: err.message }, err.status as 400)
 })
 
+app.use('/api/*', guardTrash)
 app.route('/api', office)
+app.route('/api', connections)
+app.route('/api', inbox)
 app.route('/api', api)
 app.route('/api', extras)
 app.route('/api', n8nNodes)
@@ -89,3 +95,7 @@ try {
 serve({ fetch: app.fetch, port: config.port, hostname: config.host }, ({ port }) => {
   console.log(`SA Copilot running at http://localhost:${port}`)
 })
+
+// Cleanup never runs alongside cloud restore or active writes. Busy maintenance retries next hour.
+void cleanupTrash().catch(e => console.error('Trash cleanup deferred:', e))
+setInterval(() => { void cleanupTrash().catch(e => console.error('Trash cleanup deferred:', e)) }, 60 * 60_000).unref()

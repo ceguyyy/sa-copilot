@@ -15,6 +15,8 @@ export interface Project {
   language: string
   /** Notion page the project was last sent to ("Send to Notion"), if any. */
   notion_page_id?: string | null
+  archived_at?: string | null
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }

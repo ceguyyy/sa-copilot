@@ -80,6 +80,7 @@ export async function restoreBackup(data: Uint8Array): Promise<{ manifest: Backu
     await withTransaction(async (tx) => {
       // Replica mode: no triggers (audit log, version numbering) and no FK checks while rows are re-inserted.
       await tx.query('set local session_replication_role = replica')
+      await tx.query('truncate table trash_file_cleanup')
       await tx.query(`truncate table ${BACKUP_TABLES.join(', ')} cascade`)
       for (const table of BACKUP_TABLES) await insertRows(tx, table, contents.tables[table] ?? [])
     })

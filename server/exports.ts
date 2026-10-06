@@ -41,7 +41,7 @@ function insideDocsDir(file: string): boolean {
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
 }
 
-async function removeFiles(files: string[]): Promise<void> {
+export async function removeFiles(files: string[]): Promise<void> {
   await Promise.all(
     files.filter(insideDocsDir).map((f) =>
       unlink(f).catch((e) => {

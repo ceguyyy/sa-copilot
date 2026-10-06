@@ -133,11 +133,14 @@ export function ProjectPage() {
     mutationFn: () => projectsApi.sendToNotion(projectId),
     onSuccess: refreshProject,
   })
+  const archiveProject = useMutation({
+    mutationFn: () => project.data?.archived_at ? projectsApi.unarchive(projectId) : projectsApi.archive(projectId),
+    onSuccess: async () => { await qc.invalidateQueries(); navigate('/') },
+  })
   const removeProject = useMutation({
     mutationFn: () => projectsApi.remove(projectId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['projects'] })
-      qc.invalidateQueries({ queryKey: ['dashboard'] })
+      void qc.invalidateQueries()
       navigate('/')
     },
   })
@@ -201,8 +204,10 @@ export function ProjectPage() {
               >
                 {p.notion_page_id ? 'Update Notion' : 'Send to Notion'}
               </Button>
-              <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => confirm(`Delete project "${p.name}" and all its documents?`) && removeProject.mutate()}>
-                Delete
+              <Button variant="outline" loading={archiveProject.isPending} onClick={() => archiveProject.mutate()}>{p.archived_at ? 'Unarchive' : 'Archive'}</Button>
+              <ErrorNote error={archiveProject.error} />
+              <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => confirm(`Move project "${p.name}" and all its contents to Trash? You can restore it within 30 days.`) && removeProject.mutate()}>
+                Move to Trash
               </Button>
             </>
           }

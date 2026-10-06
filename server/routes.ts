@@ -1,3 +1,4 @@
+import { trash } from './trash.ts'
 import { workspace } from './workspace.ts'
 // REST API for the data the frontend reads and writes (repository layer lives in src/lib/api.ts).
 import type { DeckContent } from '../shared/deck/types.ts'
@@ -34,6 +35,7 @@ import {
 export const api = new Hono()
 api.route('/', enhancement)
 api.route('/', workspace)
+api.route('/', trash)
 
 /** Disk export runs after the response; a failure is logged, never shown as a failed save. */
 function exportLater(run: () => Promise<unknown>): void {
@@ -42,7 +44,7 @@ function exportLater(run: () => Promise<unknown>): void {
 
 // ---------- projects ----------
 
-api.get('/projects', async (c) => c.json(await query('select * from projects order by updated_at desc')))
+api.get('/projects', async (c) => c.json(await query(`select * from projects where deleted_at is null and archived_at is ${c.req.query('archived') === 'true' ? 'not null' : 'null'} order by updated_at desc`)))
 
 api.get('/projects/:id', async (c) =>
   c.json(notFound(await queryOne('select * from projects where id = $1', [idParam(c)]), 'Project')),
@@ -70,13 +72,7 @@ api.patch('/projects/:id', async (c) => {
 
 api.delete('/projects/:id', async (c) => {
   const id = idParam(c)
-  const files = await query<{ storage_path: string }>(
-    'select storage_path from sources where project_id = $1 and storage_path is not null',
-    [id],
-  )
-  await removeExportedFiles({ projectId: id })
-  await query('delete from projects where id = $1', [id])
-  await Promise.all(files.map((f) => deleteUpload(f.storage_path)))
+  notFound(await queryOne('update projects set deleted_at=now() where id=$1 and deleted_at is null returning id', [id]), 'Project')
   return c.body(null, 204)
 })
 
@@ -87,8 +83,8 @@ api.get('/sources', async (c) => {
   const projectId = c.req.query('projectId')
   if (projectId && !UUID_RE.test(projectId)) throw new HttpError(400, 'Invalid projectId')
   const rows = projectId
-    ? await query('select * from sources where project_id = $1 order by created_at desc', [projectId])
-    : await query('select * from sources where project_id is null order by created_at desc')
+    ? await query('select * from sources where project_id = $1 and deleted_at is null order by created_at desc', [projectId])
+    : await query('select * from sources where project_id is null and deleted_at is null order by created_at desc')
   return c.json(rows)
 })
 
@@ -125,6 +121,8 @@ api.post('/sources/upload', bodyLimit({ maxSize: config.maxUploadBytes + 10 * 10
     extractedText: form.extractedText ?? '',
   })
 
+  if (fields.projectId) notFound(await queryOne('select id from projects where id=$1 and deleted_at is null', [fields.projectId]), 'Project')
+
   const key = await saveUpload(file)
   try {
     // Prefer markitdown's Markdown (compact, keeps tables/headings); the browser's text is the fallback.
@@ -149,10 +147,10 @@ api.patch('/sources/:id', async (c) => {
 
 api.delete('/sources/:id', async (c) => {
   const row = await queryOne<{ storage_path: string | null }>(
-    'delete from sources where id = $1 returning storage_path',
+    'update sources set deleted_at=now() where id = $1 and deleted_at is null returning storage_path',
     [idParam(c)],
   )
-  if (row?.storage_path) await deleteUpload(row.storage_path)
+  notFound(row, 'Source')
   return c.body(null, 204)
 })
 
@@ -272,7 +270,7 @@ api.get('/documents/knowledge', async (c) =>
   c.json(
     await query(
       `select d.*, p.name as project_name from documents d join projects p on p.id = d.project_id
-       where d.is_knowledge order by d.updated_at desc`,
+       where d.is_knowledge and p.deleted_at is null and p.archived_at is null order by d.updated_at desc`,
     ),
   ),
 )
@@ -364,14 +362,14 @@ api.get('/dashboard', async (c) =>
          (select count(*) from documents d where d.project_id = p.id and d.type = 'custom')::int as custom_docs,
          (select count(*) from documents d where d.project_id = p.id and d.type = 'diagram')::int as diagrams,
          (select count(*) from open_questions q where q.project_id = p.id and q.status = 'open')::int as open_questions,
-         (select count(*) from sources s where s.project_id = p.id)::int as sources,
+         (select count(*) from sources s where s.project_id = p.id and s.deleted_at is null)::int as sources,
          (select count(*) from review_alerts r where r.project_id=p.id and r.reviewed_at is null)::int as review_alerts,
          (select count(*) from enhancement_batches b where b.project_id=p.id and b.state='draft'
             and exists (select 1 from jsonb_array_elements(b.items) i where i->>'state'='ready'))::int as revision_drafts,
          (select jsonb_array_length(cc.result->'issues') from consistency_checks cc
             where cc.project_id = p.id order by cc.created_at desc limit 1) as last_check_issues,
          greatest(p.updated_at, coalesce((select max(a.at) from audit_log a where a.project_id = p.id), p.updated_at)) as last_activity
-       from projects p order by last_activity desc`,
+       from projects p where p.deleted_at is null and p.archived_at is null order by last_activity desc`,
     ),
   ),
 )

@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { desktop, type ConfigPatch, type DesktopStatus, type FolderKey, type SecretKey, type ValueKey } from '../lib/desktop'
 import { Button, ErrorNote, Field, Input, Select } from './ui'
 import { useResetState } from '../lib/useResetState'
+import { ConnectionEnvImport } from './ConnectionEnvImport'
+import { connectionsApi } from '../lib/api'
 
 type FieldDef =
   | { kind: 'value'; key: ValueKey; label: string; placeholder?: string; hint?: string; effort?: boolean }
@@ -78,18 +80,20 @@ const SECTIONS: Section[] = [
 /** Every former .env setting. Secrets are write-only: the field shows whether one is saved, never its value. */
 export function ConnectionsForm({ requiredOnly = false, onSaved }: { requiredOnly?: boolean; onSaved?: (s: DesktopStatus) => void }) {
   const qc = useQueryClient()
-  const status = useQuery({ queryKey: ['desktop-config'], queryFn: () => desktop!.getConfig(), enabled: !!desktop })
+  const configKey = desktop ? ['desktop-config'] : ['source-connections']
+  const client = desktop ?? connectionsApi
+  const status = useQuery({ queryKey: configKey, queryFn: () => client.getConfig() })
   const [values, setValues] = useResetState<Partial<Record<ValueKey, string>>>(status.data, () => status.data?.values ?? {}, {})
   const [secrets, setSecrets] = useState<Partial<Record<SecretKey, string>>>({})
 
   const save = useMutation({
     mutationFn: () => {
       const patch: ConfigPatch = { values, secrets: Object.fromEntries(Object.entries(secrets).filter(([, v]) => v !== undefined)) }
-      return desktop!.saveConfig(patch)
+      return client.saveConfig(patch)
     },
     onSuccess: (s) => {
       setSecrets({})
-      qc.setQueryData(['desktop-config'], s)
+      qc.setQueryData(configKey, s)
       void qc.invalidateQueries()
       onSaved?.(s)
     },
@@ -107,7 +111,6 @@ export function ConnectionsForm({ requiredOnly = false, onSaved }: { requiredOnl
     onSuccess: (s) => qc.setQueryData(['desktop-config'], s),
   })
 
-  if (!desktop) return null
   if (!status.data) return <ErrorNote error={status.error} />
   const s = status.data
   const sections = requiredOnly ? SECTIONS.slice(0, 1) : SECTIONS
@@ -152,7 +155,12 @@ export function ConnectionsForm({ requiredOnly = false, onSaved }: { requiredOnl
 
   return (
     <div className="space-y-6">
-      {!requiredOnly && (
+      {!requiredOnly && <ConnectionEnvImport disabled={save.isPending} onApply={patch => {
+        setValues(current => ({...current, ...patch.values}))
+        setSecrets(current => ({...current, ...patch.secrets}))
+        save.reset()
+      }} />}
+      {!requiredOnly && desktop && (
         <fieldset className="space-y-2 rounded-lg border border-line bg-panel p-4">
           <legend className="px-1 font-display text-base font-semibold">Where your data is stored</legend>
           <ul className="divide-y divide-line">
@@ -187,7 +195,7 @@ export function ConnectionsForm({ requiredOnly = false, onSaved }: { requiredOnl
               <Button variant="outline" icon={<PlugZap className="size-4" />} loading={test.isPending} onClick={() => test.mutate()}>
                 Test connection
               </Button>
-              {!requiredOnly && (
+              {!requiredOnly && desktop && (
                 <Button variant="ghost" icon={<RotateCw className="size-4" />} loading={restartRouter.isPending} onClick={() => restartRouter.mutate()}>
                   Restart AI router
                 </Button>
@@ -208,8 +216,9 @@ export function ConnectionsForm({ requiredOnly = false, onSaved }: { requiredOnl
         >
           {requiredOnly ? 'Save and continue' : 'Save'}
         </Button>
-        <span className="text-xs text-muted">Saving restarts the SA Copilot server (a few seconds).</span>
-        {!requiredOnly && (
+        <span className="text-xs text-muted">{desktop ? 'Saving restarts the SA Copilot server (a few seconds).' : 'Saving updates the server .env file. Restart the SA Copilot server to apply changes.'}</span>
+        {save.isSuccess && !desktop && <p role="status" className="w-full text-sm text-ok">Connections saved to .env. Restart the server before testing the new connections.</p>}
+        {!requiredOnly && desktop && (
           <Button variant="ghost" icon={<FileText className="size-4" />} onClick={() => void desktop!.openLogs()}>
             Open logs
           </Button>

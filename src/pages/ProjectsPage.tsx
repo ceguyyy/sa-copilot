@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea } from '../components/ui'
 import { projectsApi } from '../lib/api'
 import { LanguageSelect } from '../components/LanguageSelect'
@@ -16,6 +16,9 @@ export function ProjectsPage() {
   const [params] = useSearchParams()
   const [creating, setCreating] = useState(() => params.get('create') === '1')
   const [form, setForm] = useState<ProjectInput>(EMPTY)
+  const [archived, setArchived] = useState(false)
+  const archivedProjects = useQuery({queryKey:['projects','archived'],queryFn:projectsApi.archived,enabled:archived})
+  const unarchive = useMutation({mutationFn:projectsApi.unarchive,onSuccess:()=>qc.invalidateQueries()})
   const projects = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list })
 
   const create = useMutation({
@@ -83,14 +86,16 @@ export function ProjectsPage() {
 
       {projects.isLoading && <Spinner />}
       <ErrorNote error={projects.error} />
-      {projects.data?.length === 0 && !creating && (
+      {projects.data?.length === 0 && !creating && !archived && (
         <Card className="p-10 text-center">
           <p className="font-display text-2xl">No projects yet.</p>
           <p className="mt-2 text-sm text-muted">Create one, drop in the client's RFP, and let the copilot draft the assessment.</p>
         </Card>
       )}
 
-      <PipelineDashboard />
+      <div className="flex gap-2"><Button variant={archived ? 'outline' : 'primary'} onClick={() => setArchived(false)}>Active projects</Button><Button variant={archived ? 'primary' : 'outline'} onClick={() => setArchived(true)}>Archived projects</Button></div>
+      {!archived && <PipelineDashboard />}
+      {archived && <div className="space-y-3"><ErrorNote error={archivedProjects.error ?? unarchive.error} />{archivedProjects.isPending && <Spinner />}{archivedProjects.data?.length === 0 && <Card className="p-8 text-center text-muted">No archived projects.</Card>}{archivedProjects.data?.map(p => <Card key={p.id} className="flex items-center justify-between gap-3 p-5"><div><Link to={`/projects/${p.id}`} className="font-semibold text-forest underline">{p.name}</Link><p className="text-xs text-muted">{p.client_name}</p></div><Button variant="outline" disabled={unarchive.isPending} onClick={() => unarchive.mutate(p.id)}>Unarchive</Button></Card>)}</div>}
     </div>
   )
 }

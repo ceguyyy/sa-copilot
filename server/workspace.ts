@@ -37,10 +37,10 @@ workspace.get('/workspace/search',async c=>{
  if(term.length<2)return c.json([])
  const pattern=`%${term.replace(/[\\%_]/g,'\\$&')}%`
  return c.json(await query(`select * from (
- select 'project' as kind,id, id as project_id,name as title,client_name as excerpt,updated_at as at from projects where name ilike $1 or client_name ilike $1
- union all select 'source',id,project_id,name,left(extracted_text,180),created_at from sources where name ilike $1 or extracted_text ilike $1
- union all select 'question',id,project_id,question,left(context,180),updated_at from open_questions where question ilike $1 or answer ilike $1
- union all select 'document',d.id,d.project_id,d.title,left(v.content::text,180),d.updated_at from documents d left join lateral(select content from document_versions where document_id=d.id order by version_no desc limit 1)v on true where d.title ilike $1 or v.content::text ilike $1
+ select 'project' as kind,id, id as project_id,name as title,client_name as excerpt,updated_at as at from projects where deleted_at is null and archived_at is null and (name ilike $1 or client_name ilike $1)
+ union all select 'source',id,project_id,name,left(extracted_text,180),created_at from sources where deleted_at is null and (project_id is null or exists(select 1 from projects p where p.id=project_id and p.deleted_at is null and p.archived_at is null)) and (name ilike $1 or extracted_text ilike $1)
+ union all select 'question',id,project_id,question,left(context,180),updated_at from open_questions q where exists(select 1 from projects p where p.id=q.project_id and p.deleted_at is null and p.archived_at is null) and (question ilike $1 or answer ilike $1)
+ union all select 'document',d.id,d.project_id,d.title,left(v.content::text,180),d.updated_at from documents d left join lateral(select content from document_versions where document_id=d.id order by version_no desc limit 1)v on true where exists(select 1 from projects p where p.id=d.project_id and p.deleted_at is null and p.archived_at is null) and (d.title ilike $1 or v.content::text ilike $1)
  ) hits order by at desc limit 50`,[pattern]))
 })
 workspace.get('/projects/:id/review-alerts',async c=>c.json(await query(`select r.*,coalesce(d.title,s.payload->>'title','Demo scenario') as title from review_alerts r left join documents d on r.target_kind='document' and d.id=r.target_id left join demo_scenarios s on r.target_kind='demo' and s.id=r.target_id where r.project_id=$1 and r.reviewed_at is null and (d.id is not null or s.id is not null) order by r.changed_at desc`,[idParam(c)])))

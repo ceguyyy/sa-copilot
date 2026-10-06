@@ -275,3 +275,25 @@ Jalankan dari repo dengan `.env` dan `BACKUP_DIR` yang menunjuk profil pemilik (
 - Cloud backup uses a separate local change counter. Local changes since last backup remains visible even when cloud revisions match. Older device states report an unknown baseline until the next successful upload/download. Local restores mark the workspace as changed.
 
 These additions are applied by the normal idempotent local database migration on server startup; `db/supabase-sync.sql` remains the private cloud snapshot schema.
+
+### Archive and Trash
+
+Use **Archive** on a project to hide it from the active pipeline indefinitely. Find it under **Projects ? Archived projects**, where **Unarchive** returns it to the active list.
+
+Deleting a project or source now moves it to **Trash** in the sidebar. Restore is available for 30 days. Project deletion retains its documents, POCs, version history, sources and uploaded files. Sources deleted individually remain in Trash when their project is restored; restore the project first to recover those sources. Previously archived projects remain archived after recovery.
+
+Expired items are purged at startup and hourly while the server runs, or use **Delete permanently** after confirmation. Purging a project cascades its database records, then removes referenced source uploads and tracked app-generated export files. Only unreferenced files are removed; cleanup failures are queued for retry. Custom files in export folders, Notion pages, evidence snapshots, and existing local/cloud backups are retained. Backups include archived/trashed rows and their uploads; original recovery deadlines remain in effect after restore. The cleanup queue is device-local and cleared during backup restore.
+
+### Import connections from ENV
+
+In **Settings → Connections → Import from ENV**, choose a `.env` file or paste its contents, preview the recognized setting names, then **Apply to form** and **Save**. Imported credentials remain masked and are encrypted with the OS keychain on save. The import never edits the original file.
+
+Supports AI endpoint/model/effort and API key, Outline, demo app/Supabase, Notion, cloud database URL, export folder, and deck template. `9ROUTER_API_KEY` takes priority over `ANTHROPIC_API_KEY` when non-empty. Missing settings and blank secrets preserve current values; blank non-secret settings reset to defaults. Other variables, including `DATABASE_URL`, `PORT`, internal data folders, and legacy `CLOUD_WORKSPACE`, are skipped. Comments, quoted values, `export` assignments, CRLF, and literal Windows paths are supported; shell commands and variable references are never evaluated.
+
+Connections is available in both the desktop app and source/browser installs. Desktop saves use the OS keychain and restart the bundled server. In source/browser installs, Save writes a managed block to the server's `.env` file, preserving unrelated settings; credentials use the existing plaintext ENV format and are never returned to the browser. Restart the source server to apply changes. Variables supplied externally when launching Node can override values in `.env`.
+
+### Inbox
+
+Open **Home → Inbox** for AI working/completed/error notifications, latest consistency matches and mismatches, dependency reviews, open questions, revision drafts, QA reports, and project activity. Cloud backup and app update status are checked in the background every 30 seconds. Inbox refreshes every two seconds, with filters, unread counts, details, and links to related work. Home's Inbox button replaces its former Projects shortcut; Projects remains in the sidebar.
+
+Read/unread state is saved in the database and included in backups. A working AI task becomes unread again when it completes or fails. Marking a notification read does not resolve its underlying question or review. Current attention findings are shown alongside the latest 200 AI jobs and 200 project updates; active jobs remain visible. Trashed projects are omitted and archived projects do not contribute attention findings. System notifications reflect current cloud/update status.

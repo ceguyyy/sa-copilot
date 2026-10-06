@@ -45,10 +45,8 @@ ai.post('/', async (c) => {
   const body = await c.req.json().catch(() => null)
   if (!body || typeof body !== 'object') throw new HttpError(400, 'Invalid JSON body')
   if (typeof body.projectId !== 'string' || !UUID_RE.test(body.projectId)) throw new HttpError(400, 'Invalid projectId')
-  requireApiKey()
-
-  if (body.action === 'chat') return streamResponse((s) => trackActivity('chat', body, s, (out) => withOutputLimit(body, () => handleChat(body, out))))
-  if (body.action === 'generate') return streamResponse((s) => trackActivity(`generate ${body.docType ?? 'document'}`, body, s, (out) => withOutputLimit(body, () => handleGenerate(body, out))))
+  if (body.action === 'chat') return streamResponse((s) => trackActivity('chat', body, s, (out) => withOutputLimit(body, () => { requireApiKey(); return handleChat(body, out) })))
+  if (body.action === 'generate') return streamResponse((s) => trackActivity(`generate ${body.docType ?? 'document'}`, body, s, (out) => withOutputLimit(body, () => { requireApiKey(); return handleGenerate(body, out) })))
   throw new HttpError(400, 'Unknown action')
 })
 
@@ -57,8 +55,7 @@ const streamed = (run: (body: unknown, out: Stream) => Promise<void>) => async (
   const body = await c.req.json().catch(() => {
     throw new HttpError(400, 'Invalid JSON body')
   })
-  requireApiKey()
-  return streamResponse((s) => trackActivity(c.req.path.split('/').pop() ?? 'AI task', body, s, (out) => withOutputLimit(body, () => run(body, out))))
+  return streamResponse((s) => trackActivity(c.req.path.split('/').pop() ?? 'AI task', body, s, (out) => withOutputLimit(body, () => { requireApiKey(); return run(body, out) })))
 }
 
 ai.post('/assist', streamed(assist))

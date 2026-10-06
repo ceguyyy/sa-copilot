@@ -28,6 +28,19 @@ create table if not exists sources (
 );
 create index if not exists sources_project_idx on sources (project_id, kind);
 
+-- Archive is indefinite; trash retains complete rows and files for 30 days.
+alter table projects add column if not exists archived_at timestamptz;
+alter table projects add column if not exists deleted_at timestamptz;
+alter table sources add column if not exists deleted_at timestamptz;
+create index if not exists projects_trash_idx on projects(deleted_at) where deleted_at is not null;
+create index if not exists sources_trash_idx on sources(deleted_at) where deleted_at is not null;
+-- Device-local cleanup outbox: survives failures, never transferred to another device.
+create table if not exists trash_file_cleanup (
+  kind text not null check(kind in ('upload','export')),
+  path text not null,
+  primary key(kind,path)
+);
+
 create table if not exists skills (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 1 and 120),
@@ -585,7 +598,7 @@ create or replace function flag_downstream_review() returns trigger language plp
 declare pid uuid; dtype text; changed_doc uuid; why text;
 begin
  if tg_table_name='sources' then
-  if tg_op='UPDATE' and new.extracted_text is not distinct from old.extracted_text and new.enabled is not distinct from old.enabled then return new; end if;
+  if tg_op='UPDATE' and new.extracted_text is not distinct from old.extracted_text and new.enabled is not distinct from old.enabled and new.deleted_at is not distinct from old.deleted_at then return new; end if;
   if tg_op='DELETE' then pid:=old.project_id; why:='Source removed: '||old.name; else pid:=new.project_id; why:='Source changed: '||new.name; end if;
  else
   select project_id,type into pid,dtype from documents where id=new.document_id;
@@ -629,3 +642,9 @@ create or replace trigger documents_review_cleanup after delete on documents for
 create or replace trigger demos_review_cleanup after delete on demo_scenarios for each row execute function remove_review_alerts();
 
 alter table skill_releases add column if not exists builtin_name text not null default '';
+
+-- Read state is separate from resolving a review, question, or consistency issue.
+create table if not exists inbox_reads (
+  id text primary key,
+  token text not null
+);

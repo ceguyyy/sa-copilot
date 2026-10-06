@@ -6,7 +6,9 @@ export const BACKUP_FORMAT_VERSION = 1
 export const MAX_BACKUP_BYTES = 2 * 1024 ** 3
 export const MAX_FILE_BYTES = 50 * 1024 * 1024
 
-/** Every table in db/schema.sql, parents before children (the restore order). */
+/** Device-local bookkeeping must never be restored from another computer. */
+export const DEVICE_LOCAL_TABLES = ['local_change_clock', 'trash_file_cleanup'] as const
+/** Portable tables, parents before children (the restore order). */
 export const BACKUP_TABLES = [
   'projects',
   'skills',
@@ -35,6 +37,7 @@ export const BACKUP_TABLES = [
   'skill_releases',
   'skill_history',
   'review_alerts',
+  'inbox_reads',
 ] as const
 export type BackupTable = (typeof BACKUP_TABLES)[number]
 

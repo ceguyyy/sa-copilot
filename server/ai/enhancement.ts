@@ -23,7 +23,7 @@ const reportValidation = z.object({ summary: z.string(), conflicts: z.array(z.ob
 async function contextAttachments(batch: EnhancementBatch, caps: { vision: boolean; pdf: boolean }): Promise<Attachment[]> {
   const refs = batch.context.filter(i => i.kind === 'source')
   if (!refs.length) return []
-  const sources = await query<{ id: string; name: string; mime_type: string | null; storage_path: string | null }>('select id,name,mime_type,storage_path from sources where id=any($1::uuid[]) and project_id=$2', [refs.map(i => i.id), batch.project_id])
+  const sources = await query<{ id: string; name: string; mime_type: string | null; storage_path: string | null }>('select id,name,mime_type,storage_path from sources where id=any($1::uuid[]) and project_id=$2 and deleted_at is null', [refs.map(i => i.id), batch.project_id])
   const attachments: Attachment[] = []
   for (const source of sources) {
     if (!source.storage_path || !source.mime_type) continue

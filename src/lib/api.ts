@@ -5,6 +5,19 @@ import type { QaKnowledge, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
 import type { AiActivity } from '../../shared/activity.ts'
 import type { CloudStatus, UpdateStatus } from '../../shared/maintenance.ts'
 import type { EnhancementBatch, EnhancementItem } from '../../shared/enhancement.ts'
+import type { ConfigPatch } from '../../electron/settings.ts'
+import type { DesktopStatus } from '../../electron/bridge.ts'
+import type { InboxItem } from '../../shared/inbox.ts'
+
+export const inboxApi = {
+  list: () => request<InboxItem[]>('Load inbox','/inbox'),
+  mark: (items:Pick<InboxItem,'id'|'token'>[],read:boolean) => send<void>('Update inbox','POST','/inbox/read',{items:items.map(({id,token})=>({id,token})),read}),
+}
+
+export const connectionsApi = {
+  getConfig: () => request<DesktopStatus>('Load connections', '/connections'),
+  saveConfig: (patch:ConfigPatch) => send<DesktopStatus>('Save connections', 'PUT', '/connections',patch),
+}
 
 export const enhancementApi = {
   items: (projectId: string) => request<EnhancementItem[]>('Load revision items', `/projects/${projectId}/enhancement/items`),
@@ -74,6 +87,9 @@ async function request<T>(what: string, path: string, init: RequestInit = {}): P
     throw new Error(`${what}: cannot reach the SA Copilot server — is it running?`)
   }
   if (!res.ok) {
+    if (res.status === 404 && path === '/connections') {
+      throw new Error('Connections API is unavailable in the running server. Restart the SA Copilot backend with the latest code (npm run serve), then reload this page. For a desktop build, rebuild the server bundle and restart the app.')
+    }
     const body = await res.json().catch(() => null)
     throw new Error(`${what}: ${body?.error ?? res.statusText}`)
   }
@@ -91,6 +107,9 @@ const send = <T>(what: string, method: string, path: string, body?: unknown) =>
 
 export const projectsApi = {
   list: () => request<Project[]>('Load projects', '/projects'),
+  archived: () => request<Project[]>('Load archived projects', '/projects?archived=true'),
+  archive: (id: string) => send<Project>('Archive project', 'POST', `/projects/${id}/archive`),
+  unarchive: (id: string) => send<Project>('Unarchive project', 'POST', `/projects/${id}/unarchive`),
   get: (id: string) => request<Project>('Load project', `/projects/${id}`),
   create: (input: ProjectInput) => send<Project>('Create project', 'POST', '/projects', input),
   update: (id: string, input: Partial<ProjectInput>) => send<Project>('Update project', 'PATCH', `/projects/${id}`, input),
@@ -98,6 +117,16 @@ export const projectsApi = {
   sendToNotion: (id: string) => send<{ url: string; blocks: number }>('Send to Notion', 'POST', `/projects/${id}/notion`),
   /** Download link for the whole project as one Markdown file. */
   markdownUrl: (id: string) => `/api/projects/${id}/export.md`,
+}
+
+export interface TrashItem {
+  kind: 'project' | 'source'; id: string; name: string; project_name: string | null;
+  project_id: string | null; deleted_at: string; expires_at: string; expired: boolean
+}
+export const trashApi = {
+  list: () => request<{retentionDays:number; items:TrashItem[]}>('Load trash', '/trash'),
+  restore: (item: TrashItem) => send('Restore item', 'POST', `/trash/${item.kind}/${item.id}/restore`),
+  purge: (item: TrashItem) => send<void>('Delete permanently', 'DELETE', `/trash/${item.kind}/${item.id}`),
 }
 
 // ---------- sources ----------

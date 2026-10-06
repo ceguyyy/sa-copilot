@@ -217,7 +217,7 @@ demo.get('/demo', async (c) => {
     `select p.id, p.name, p.client_name, p.description,
        count(s.id)::int as scenarios, count(s.pushed_at)::int as pushed
      from projects p left join demo_scenarios s on s.project_id = p.id
-     group by p.id order by max(s.updated_at) desc nulls last, p.updated_at desc`,
+     where p.deleted_at is null and p.archived_at is null group by p.id order by max(s.updated_at) desc nulls last, p.updated_at desc`,
   )
   return c.json({
     configured: demoConfigured(),

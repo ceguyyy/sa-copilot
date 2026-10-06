@@ -2,14 +2,14 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { BACKUP_TABLES, BackupError, isSafeFileName, packBackup, unpackBackup } from './format.ts'
+import { BACKUP_TABLES, DEVICE_LOCAL_TABLES, BackupError, isSafeFileName, packBackup, unpackBackup } from './format.ts'
 
 const schema = readFileSync(path.resolve(import.meta.dirname, '../../db/schema.sql'), 'utf8')
 
 describe('BACKUP_TABLES', () => {
   it('covers exactly the tables in db/schema.sql', () => {
     const inSchema = [...schema.matchAll(/create table if not exists (\w+)/g)].map((m) => m[1])
-    expect([...BACKUP_TABLES].sort()).toEqual([...new Set(inSchema)].sort())
+    expect([...BACKUP_TABLES, ...DEVICE_LOCAL_TABLES].sort()).toEqual([...new Set(inSchema)].sort())
   })
 
   it('lists every referenced table before the table that references it', () => {

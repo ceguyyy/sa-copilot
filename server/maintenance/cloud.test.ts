@@ -4,6 +4,7 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ query: vi.fn(), connect: vi.fn(), end: vi.fn(), backup: vi.fn(), restore: vi.fn(), validate: vi.fn(), clientOptions: vi.fn() }))
+vi.mock('../db.ts', () => ({ queryOne: async () => ({ revision: 0 }) }))
 vi.mock('pg', () => ({ default: { Client: class {
   constructor(options: unknown) { mocks.clientOptions(options) }
   connect = mocks.connect

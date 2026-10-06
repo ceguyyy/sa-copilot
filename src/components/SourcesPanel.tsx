@@ -80,7 +80,7 @@ export function SourcesPanel({ projectId, kinds, title, hideTitle = false, initi
 
   const remove = useMutation({
     mutationFn: sourcesApi.remove,
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: () => qc.invalidateQueries(),
   })
 
   return (
@@ -194,9 +194,10 @@ export function SourcesPanel({ projectId, kinds, title, hideTitle = false, initi
                 <span className="hidden sm:inline">{s.enabled ? 'AI' : 'off'}</span>
               </button>
               <button
-                aria-label={`Delete ${s.name}`}
+                aria-label={`Move ${s.name} to Trash`}
+                title="Move to Trash · recoverable for 30 days"
                 className="rounded p-1 text-muted hover:bg-ember-soft hover:text-bad"
-                onClick={() => confirm(`Delete "${s.name}"?`) && remove.mutate(s)}
+                onClick={() => confirm(`Move "${s.name}" to Trash? You can restore it within 30 days.`) && remove.mutate(s)}
               >
                 <Trash2 className="size-4" />
               </button>

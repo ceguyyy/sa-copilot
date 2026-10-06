@@ -1,6 +1,6 @@
 import { WorkspaceSearch } from './WorkspaceSearch'
 import clsx from 'clsx'
-import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, Settings } from 'lucide-react'
+import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, Settings, Trash2 } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/knowledge', label: 'Knowledge', icon: BookOpen, end: false },
   { to: '/demo', label: 'Demo', icon: MonitorPlay, end: false },
   { to: '/qa', label: 'QA Testing', icon: FlaskConical, end: false },
+  { to: '/trash', label: 'Trash', icon: Trash2, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]
 
@@ -32,7 +33,7 @@ export function Layout() {
           </div>
         </div>
         
-        <nav aria-label="Main navigation" className="flex gap-1 md:mt-10 md:flex-col">
+        <nav aria-label="Main navigation" className="flex flex-wrap gap-1 md:mt-10 md:flex-nowrap md:flex-col">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}

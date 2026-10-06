@@ -1,3 +1,5 @@
+import { InboxPage } from './pages/InboxPage'
+import { TrashPage } from './pages/TrashPage'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
@@ -62,8 +64,10 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<ProjectsPage />} />
           <Route path="home" element={<HomePage />} />
+          <Route path="inbox" element={<InboxPage />} />
           <Route path="projects/:projectId" element={<ProjectPage />} />
           <Route path="projects/:projectId/docs/:documentId" element={<DocumentPage />} />
+          <Route path="trash" element={<TrashPage />} />
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="demo" element={<DemoPage />} />
           <Route path="qa" element={<QaTestingPage />} />
