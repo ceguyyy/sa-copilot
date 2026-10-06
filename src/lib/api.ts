@@ -452,6 +452,8 @@ export interface Account { id: string; email: string }
 export const authApi = {
   session: () => request<{ account: Account | null; configured: boolean }>('Load account', '/auth/session'),
   login: (email: string, password: string) => send<{ account: Account }>('Login', 'POST', '/auth/login', { email, password }),
-  register: (email: string, password: string) => send<{ account: Account }>('Register', 'POST', '/auth/register', { email, password }),
+  register: (email: string, password: string) => send<{ account: Account; recoveryCode: string }>('Register', 'POST', '/auth/register', { email, password }),
+  recoveryCode: (password: string) => send<{ recoveryCode: string }>('Create recovery code', 'POST', '/auth/recovery-code', { password }),
+  resetPassword: (email: string, recoveryCode: string, password: string) => send<{ message: string }>('Reset password', 'POST', '/auth/reset-password', { email, recoveryCode, password }),
   logout: () => send('Logout', 'POST', '/auth/logout'),
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Button, Card, ErrorNote, Input } from '../../components/ui'
 import { maintenanceApi, backupApi, authApi } from '../../lib/api'
+import { AccountRecovery } from '../../components/AccountRecovery'
 import { desktop } from '../../lib/desktop'
 
 export function CloudSettings() {
@@ -18,6 +19,7 @@ export function CloudSettings() {
   return <Card className="space-y-4 p-5">
     <p className="text-sm">Akun: <strong>{account.data?.account?.email}</strong></p>
     <Button variant="outline" loading={logout.isPending} disabled={busy} onClick={() => logout.mutate()}>Logout</Button>
+    <AccountRecovery />
     <h3 className="font-display text-lg font-semibold">Supabase cloud backup and sync</h3>
     <p className="text-sm text-muted">Upload a complete snapshot from this computer, then download it on another computer. Includes uploaded files. Download replaces local data and saves a local safety backup first. Use one computer at a time; changes are not merged automatically.</p>
     <p className="text-sm text-muted">{desktop ? 'Configure the PostgreSQL URL under Settings → Connections.' : 'Set CLOUD_DATABASE_URL in .env, then restart the server.'} Run db/supabase-sync.sql in your existing Supabase project first. Backup cloud dipisahkan otomatis berdasarkan ID akun.</p>

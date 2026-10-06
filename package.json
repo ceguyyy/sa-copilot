@@ -1,8 +1,8 @@
 {
   "name": "sa-copilot",
   "private": true,
-  "version": "2.0.0",
-  "description": "SA Copilot \u00e2\u20ac\u201d presales Solution Architect copilot",
+  "version": "2.0.1",
+  "description": "SA Copilot - presales Solution Architect copilot",
   "author": "Christian Gunawan",
   "main": "electron-dist/main.mjs",
   "type": "module",
@@ -21,7 +21,8 @@
     "bundle": "node scripts/bundle.mjs",
     "desktop": "npm run build && node scripts/bundle.mjs && node scripts/run-electron.mjs",
     "dist:win": "npm run build && npm test && node scripts/bundle.mjs && node --env-file-if-exists=.env scripts/fetch-python.mjs win x64 && electron-builder --win --x64 --publish never",
-    "dist:mac": "npm run build && npm test && node scripts/bundle.mjs && node scripts/mac-cross-deps.mjs && node --env-file-if-exists=.env scripts/fetch-python.mjs mac arm64 && node --env-file-if-exists=.env scripts/fetch-python.mjs mac x64 && electron-builder --mac --arm64 --x64 --publish never"
+    "dist:mac": "npm run build && npm test && node scripts/bundle.mjs && node scripts/mac-cross-deps.mjs && node --env-file-if-exists=.env scripts/fetch-python.mjs mac arm64 && node --env-file-if-exists=.env scripts/fetch-python.mjs mac x64 && electron-builder --mac --arm64 --x64 --publish never",
+    "account:recovery": "node --env-file-if-exists=.env scripts/account-recovery.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

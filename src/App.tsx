@@ -32,8 +32,9 @@ function seedSkillsIfEmpty(): Promise<void> {
 
 export default function App() {
   const qc = useQueryClient()
+  const [registrationPending, setRegistrationPending] = useState(false)
   const [accountReady, setAccountReady] = useState(false)
-  const account = useQuery({ queryKey: ['account'], queryFn: authApi.session, retry: false })
+  const account = useQuery({ queryKey: ['account'], queryFn: authApi.session, retry: false, refetchInterval: 60_000, enabled: !registrationPending })
   // Desktop app only: until the 9router key is set, show the Setup screen instead of the app.
   const setup = useQuery({ queryKey: ['desktop-config'], queryFn: () => desktop!.getConfig(), enabled: !!desktop })
   useEffect(() => {
@@ -48,7 +49,7 @@ export default function App() {
 
   if (account.isPending) return <Spinner label="Memuat akun..." />
   if (account.error) return <div className="p-8"><ErrorNote error={account.error} /><Button onClick={() => void account.refetch()}>Coba lagi</Button></div>
-  if (!account.data?.account) return <AccountPage configured={!!account.data?.configured} onDone={() => { setAccountReady(false); void account.refetch() }} />
+  if (!account.data?.account) return <AccountPage configured={!!account.data?.configured} onRecoveryPending={() => setRegistrationPending(true)} onDone={() => { setRegistrationPending(false); setAccountReady(false); void account.refetch() }} />
   if (!accountReady) return <div className="mx-auto max-w-3xl space-y-4 p-8"><h1 className="text-2xl font-semibold">Selamat datang, {account.data.account.email}</h1><p>Pilih restore backup cloud Anda atau lanjutkan dengan data lokal perangkat ini.</p><CloudSettings /><Button onClick={() => setAccountReady(true)}>Lanjutkan dengan data lokal</Button></div>
 
   if (desktop && setup.data && !setup.data.configured) return <SetupPage onDone={() => void setup.refetch()} />

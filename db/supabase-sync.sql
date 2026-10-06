@@ -9,6 +9,12 @@ create table if not exists sa_copilot_sync.accounts (
   password_hash text not null,
   created_at timestamptz not null default now()
 );
+-- Single-use recovery codes: only SHA-256 digests are stored.
+create table if not exists sa_copilot_sync.account_recovery (
+  account_id uuid primary key references sa_copilot_sync.accounts(id) on delete cascade,
+  code_hash text unique not null,
+  created_at timestamptz not null default now()
+);
 -- v2.0 workspace IDs are account:<account UUID>; old shared workspaces remain untouched.
 create table if not exists sa_copilot_sync.workspaces (
   id text primary key,

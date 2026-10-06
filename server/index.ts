@@ -8,7 +8,7 @@ import { Hono } from 'hono'
 import { ai } from './ai/handler.ts'
 import { config } from './config.ts'
 import { setupDatabase } from './db.ts'
-import { toHttpError } from './http.ts'
+import { HttpError, toHttpError } from './http.ts'
 import { api } from './routes.ts'
 import { extras } from './routes/extras.ts'
 import { n8nNodes } from './routes/n8nNodes.ts'
@@ -25,13 +25,13 @@ import { beginWrite } from './maintenance/lock.ts'
 
 import { office } from './routes/office.ts'
 
-import { auth, requireAccount } from './auth.ts'
+import { auth, validateAccount } from './auth.ts'
 
 const app = new Hono()
 app.get('/api/health', (c) => c.json({ ready: true }))
 app.route('/api', auth)
 app.use('/api/*', async (c, next) => {
-  requireAccount(c)
+  if (!await validateAccount(c)) throw new HttpError(401, 'Login required')
   await next()
 })
 

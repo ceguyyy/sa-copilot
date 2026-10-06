@@ -1,5 +1,4 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
-import { promisify } from 'node:util'
+import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Hono, type Context } from 'hono'
@@ -10,9 +9,11 @@ import { HttpError, parseJson } from './http.ts'
 import { connectCloud } from './maintenance/cloud.ts'
 import { exclusive } from './maintenance/lock.ts'
 
-const scrypt = promisify(scryptCallback)
+import { hashPassword, verifyPassword } from './password.ts'
+import { ensureRecoveryTable, issueRecoveryCode, resetWithRecoveryCode } from './accountRecovery.ts'
+export { hashPassword, verifyPassword } from './password.ts'
 export interface Account { id: string; email: string }
-const sessions = new Map<string, { account: Account; expires: number }>()
+const sessions = new Map<string, { account: Account; expires: number; passwordHash: string }>()
 const COOKIE = 'sa_copilot_session'
 const ownerFile = () => path.join(config.backupDir, 'account-owner.json')
 export const accountWorkspace = (account: Account) => `account:${account.id}`
@@ -30,16 +31,6 @@ export function requireAccount(c: Context): Account {
   if (!account) throw new HttpError(401, 'Login required')
   return account
 }
-export async function hashPassword(password: string, salt = randomBytes(16).toString('hex')) {
-  const hash = await scrypt(password, salt, 64) as Buffer
-  return `${salt}:${hash.toString('hex')}`
-}
-export async function verifyPassword(password: string, stored: string) {
-  const [salt, hex] = stored.split(':')
-  if (!salt || !hex || !/^[a-f0-9]{128}$/.test(hex)) return false
-  const hash = await scrypt(password, salt, 64) as Buffer
-  return timingSafeEqual(hash, Buffer.from(hex, 'hex'))
-}
 async function bindOwner(account: Account) {
   let owner: Account | null = null
   try { owner = JSON.parse(await readFile(ownerFile(), 'utf8')) } catch (e) {
@@ -55,6 +46,28 @@ async function bindOwner(account: Account) {
 const credentials = z.object({ email: z.string().trim().toLowerCase().email().max(254), password: z.string().min(12).max(128) })
 // Limit costly password verification attempts on this loopback server.
 let attempts: number[] = []
+function limitAttempts() {
+  attempts = attempts.filter(t => t > Date.now() - 60_000)
+  if (attempts.length >= 10) throw new HttpError(429, 'Terlalu banyak percobaan. Tunggu satu menit.')
+  attempts.push(Date.now())
+}
+// Check against the cloud credential so a reset revokes sessions on other computers too.
+export async function validateAccount(c: Context): Promise<Account | null> {
+  const account = currentAccount(c)
+  if (!account) return null
+  const token = getCookie(c, COOKIE)!
+  const session = sessions.get(token)!
+  const client = await connectCloud()
+  try {
+    const { rows } = await client.query('select password_hash from sa_copilot_sync.accounts where id = $1', [account.id])
+    if (rows[0]?.password_hash !== session.passwordHash) {
+      sessions.delete(token)
+      deleteCookie(c, COOKIE, { path: '/api' })
+      return null
+    }
+    return account
+  } finally { await client.end() }
+}
 export const auth = new Hono()
 auth.use('*', async (c, next) => {
   const origin = c.req.header('origin')
@@ -64,14 +77,12 @@ auth.use('*', async (c, next) => {
   c.header('Cache-Control', 'no-store')
   await next()
 })
-auth.get('/auth/session', (c) => c.json({ account: currentAccount(c), configured: !!config.cloud.databaseUrl }))
+auth.get('/auth/session', async (c) => c.json({ account: await validateAccount(c), configured: !!config.cloud.databaseUrl }))
 for (const action of ['login', 'register'] as const) {
   auth.post(`/auth/${action}`, async (c) => {
-    attempts = attempts.filter(t => t > Date.now() - 60_000)
-    if (attempts.length >= 10) throw new HttpError(429, 'Terlalu banyak percobaan. Tunggu satu menit.')
-    attempts.push(Date.now())
+    limitAttempts()
     const { email, password } = await parseJson(c, credentials)
-    const account = await exclusive(async () => {
+    const result = await exclusive(async () => {
       const client = await connectCloud()
       try {
         await client.query(`create schema if not exists sa_copilot_sync`)
@@ -81,11 +92,14 @@ for (const action of ['login', 'register'] as const) {
           password_hash text not null, created_at timestamptz not null default now())`)
         await client.query(`revoke all on sa_copilot_sync.accounts from public, anon, authenticated`)
         let account: Account
+        let passwordHash: string
+        let recoveryCode: string | undefined
         if (action === 'register') {
           // Never create another account on a device already bound to local data.
           try { await readFile(ownerFile()); throw new HttpError(409, 'Perangkat sudah terhubung ke akun. Login dengan akun pemilik data lokal.') }
           catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e }
           const hash = await hashPassword(password)
+          passwordHash = hash
           const result = await client.query('insert into sa_copilot_sync.accounts(email, password_hash) values ($1, $2) returning id, email', [email, hash])
           account = result.rows[0]
         } else {
@@ -95,18 +109,21 @@ for (const action of ['login', 'register'] as const) {
           const valid = await verifyPassword(password, row?.password_hash ?? `${'0'.repeat(32)}:${'0'.repeat(128)}`)
           if (!row || !valid) throw new HttpError(401, 'Email atau password salah')
           account = { id: row.id, email: row.email }
+          passwordHash = row.password_hash
         }
         await bindOwner(account)
-        return account
+        if (action === 'register') recoveryCode = await issueRecoveryCode(client, account.id)
+        return { account, passwordHash, recoveryCode }
       } catch (e) {
         if ((e as { code?: string }).code === '23505') throw new HttpError(409, 'Email sudah terdaftar. Silakan login.')
         throw e
       } finally { await client.end() }
     })
+    const { account, passwordHash, recoveryCode } = result
     const token = randomBytes(32).toString('hex')
-    sessions.set(token, { account, expires: Date.now() + 30 * 24 * 60 * 60_000 })
+    sessions.set(token, { account, passwordHash, expires: Date.now() + 30 * 24 * 60 * 60_000 })
     setCookie(c, COOKIE, token, { httpOnly: true, sameSite: 'Strict', path: '/api', maxAge: 30 * 24 * 60 * 60 })
-    return c.json({ account })
+    return c.json({ account, ...(recoveryCode ? { recoveryCode } : {}) })
   })
 }
 auth.post('/auth/logout', (c) => {
@@ -114,4 +131,35 @@ auth.post('/auth/logout', (c) => {
   if (token) sessions.delete(token)
   deleteCookie(c, COOKIE, { path: '/api' })
   return c.json({ account: null })
+})
+
+auth.post('/auth/recovery-code', async (c) => {
+  limitAttempts()
+  const account = await validateAccount(c)
+  if (!account) throw new HttpError(401, 'Login required')
+  const { password } = await parseJson(c, z.object({ password: z.string().min(12).max(128) }))
+  const recoveryCode = await exclusive(async () => {
+    const client = await connectCloud()
+    try {
+      await ensureRecoveryTable(client)
+      await client.query('begin')
+      const { rows } = await client.query('select password_hash from sa_copilot_sync.accounts where id = $1 for update', [account.id])
+      if (!rows[0] || !await verifyPassword(password, rows[0].password_hash)) throw new HttpError(401, 'Password salah')
+      const code = await issueRecoveryCode(client, account.id)
+      await client.query('commit')
+      return code
+    } catch (e) { await client.query('rollback').catch(() => {}); throw e }
+    finally { await client.end() }
+  })
+  return c.json({ recoveryCode })
+})
+auth.post('/auth/reset-password', async (c) => {
+  limitAttempts()
+  const { email, password, recoveryCode } = await parseJson(c, credentials.extend({ recoveryCode: z.string().trim().regex(/^[A-Za-z0-9_-]{43}$/) }))
+  await exclusive(async () => {
+    const id = await resetWithRecoveryCode(email, recoveryCode, password)
+    for (const [token, session] of sessions) if (session.account.id === id) sessions.delete(token)
+  })
+  deleteCookie(c, COOKIE, { path: '/api' })
+  return c.json({ message: 'Password berhasil direset. Login dengan password baru. Kode pemulihan sudah terpakai; buat kode baru setelah login.' })
 })

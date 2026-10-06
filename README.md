@@ -247,4 +247,19 @@ Data lokal yang sudah ada menjadi milik akun pertama yang login. Profil tersebut
 
 Backup v1 di workspace bersama tetap disimpan dan tidak diklaim otomatis. Untuk memindahkannya, gunakan file `.sacopilot` dari v1, login ke akun yang benar, restore lewat Settings > Backup, lalu upload lewat Settings > Cloud. Tidak ada perubahan otomatis pada data lama di Supabase.
 
-Login dilakukan saat aplikasi dibuka setelah installer selesai. Login/register dan cloud backup memerlukan koneksi internet. Versi ini belum menyediakan reset password atau verifikasi email. Gunakan profil data terpisah bila perangkat dipakai oleh akun berbeda.
+Login dilakukan saat aplikasi dibuka setelah installer selesai. Login/register dan cloud backup memerlukan koneksi internet. Reset password tersedia memakai kode pemulihan sekali pakai; verifikasi email belum tersedia. Gunakan profil data terpisah bila perangkat dipakai oleh akun berbeda.
+
+
+### v2.0.1: reset password dengan kode pemulihan
+
+Saat register, simpan kode pemulihan yang ditampilkan sekali. Akun lama yang masih bisa login dapat membuat kode di Settings > Cloud > Pemulihan akun setelah memasukkan password saat ini. Kode baru membatalkan kode lama. Di layar login pilih **Lupa password?**, isi email, kode, dan password baru (minimal 12 karakter). Kode dihapus dalam transaksi yang sama dengan penggantian password. Hanya SHA-256 digest kode acak 256-bit yang disimpan; password tetap memakai scrypt. ID akun dan seluruh backup tidak berubah. Sesi lama diperiksa terhadap hash password cloud dan ditolak setelah reset, termasuk di komputer lain. Akses data dengan sesi login memerlukan koneksi cloud untuk pemeriksaan ini.
+
+Tabel `account_recovery` dibuat otomatis saat kode pertama dibuat/reset. Script `db/supabase-sync.sql` juga telah diperbarui untuk provisioning manual.
+
+Jika akun lama sudah lupa password dan belum memiliki kode, administrator yang memegang profil data lokal pemilik akun dapat menjalankan:
+
+```powershell
+npm run account:recovery -- email-pemilik@example.com
+```
+
+Jalankan dari repo dengan `.env` dan `BACKUP_DIR` yang menunjuk profil pemilik (`account-owner.json`). Perintah hanya mengizinkan email dan ID akun yang cocok dengan profil lokal. Ini adalah alat administrator lokal, bukan endpoint publik; tidak bisa memulihkan akun dari perangkat baru yang belum memiliki profil pemilik. Kode dicetak ke terminal sekali; simpan secara pribadi lalu gunakan **Lupa password?**. Setelah reset, login dan buat kode pemulihan baru. Jangan commit atau membagikan kode pemulihan.
