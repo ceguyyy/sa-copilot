@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
 import { Layout } from './components/Layout'
 import { ThemeSync } from './components/ThemeSync'
-import { skillsApi } from './lib/api'
+import { authApi, skillsApi } from './lib/api'
 import { desktop } from './lib/desktop'
 import { DEFAULT_SKILLS } from './lib/defaultSkills'
 import { DocumentPage } from './pages/DocumentPage'
@@ -15,6 +15,10 @@ import { DemoPage } from './pages/DemoPage'
 import { QaTestingPage } from './pages/QaTestingPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SetupPage } from './pages/SetupPage'
+
+import { AccountPage } from './pages/AccountPage'
+import { CloudSettings } from './pages/settings/CloudSettings'
+import { Button, ErrorNote, Spinner } from './components/ui'
 
 let seeding: Promise<void> | null = null
 
@@ -28,16 +32,24 @@ function seedSkillsIfEmpty(): Promise<void> {
 
 export default function App() {
   const qc = useQueryClient()
+  const [accountReady, setAccountReady] = useState(false)
+  const account = useQuery({ queryKey: ['account'], queryFn: authApi.session, retry: false })
   // Desktop app only: until the 9router key is set, show the Setup screen instead of the app.
   const setup = useQuery({ queryKey: ['desktop-config'], queryFn: () => desktop!.getConfig(), enabled: !!desktop })
   useEffect(() => {
+    if (!account.data?.account || !accountReady) return
     seedSkillsIfEmpty()
       .then(() => qc.invalidateQueries({ queryKey: ['skills'] }))
       .catch((e) => {
         seeding = null // allow a retry on next load
         console.error('Skill seeding failed:', e)
       })
-  }, [qc])
+  }, [qc, account.data?.account, accountReady])
+
+  if (account.isPending) return <Spinner label="Memuat akun..." />
+  if (account.error) return <div className="p-8"><ErrorNote error={account.error} /><Button onClick={() => void account.refetch()}>Coba lagi</Button></div>
+  if (!account.data?.account) return <AccountPage configured={!!account.data?.configured} onDone={() => { setAccountReady(false); void account.refetch() }} />
+  if (!accountReady) return <div className="mx-auto max-w-3xl space-y-4 p-8"><h1 className="text-2xl font-semibold">Selamat datang, {account.data.account.email}</h1><p>Pilih restore backup cloud Anda atau lanjutkan dengan data lokal perangkat ini.</p><CloudSettings /><Button onClick={() => setAccountReady(true)}>Lanjutkan dengan data lokal</Button></div>
 
   if (desktop && setup.data && !setup.data.configured) return <SetupPage onDone={() => void setup.refetch()} />
 

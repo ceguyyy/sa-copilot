@@ -2,6 +2,14 @@
 -- Separate private schema: no changes to healthcare/demo tables, no public REST access.
 create schema if not exists sa_copilot_sync;
 revoke all on schema sa_copilot_sync from public, anon, authenticated;
+-- v2.0 accounts: application password hashes only; never plaintext passwords.
+create table if not exists sa_copilot_sync.accounts (
+  id uuid primary key default gen_random_uuid(),
+  email text unique not null,
+  password_hash text not null,
+  created_at timestamptz not null default now()
+);
+-- v2.0 workspace IDs are account:<account UUID>; old shared workspaces remain untouched.
 create table if not exists sa_copilot_sync.workspaces (
   id text primary key,
   revision integer not null default 0

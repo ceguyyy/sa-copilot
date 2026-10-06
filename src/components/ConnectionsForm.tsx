@@ -63,7 +63,7 @@ const SECTIONS: Section[] = [
     title: 'Supabase cloud backup and sync',
     fields: [
       { kind: 'secret', key: 'cloudDatabaseUrl', label: 'PostgreSQL Session pooler URL', hint: 'Copy from Supabase Connect. Includes the database password; encrypted on this device. Run db/supabase-sync.sql first.' },
-      { kind: 'value', key: 'cloudWorkspace', label: 'Shared workspace', placeholder: 'default', hint: 'Use the same workspace on every computer you want to sync.' },
+
     ],
   },
   {

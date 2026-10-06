@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Button, Card, ErrorNote, Input } from '../../components/ui'
-import { maintenanceApi, backupApi } from '../../lib/api'
+import { maintenanceApi, backupApi, authApi } from '../../lib/api'
 import { desktop } from '../../lib/desktop'
 
 export function CloudSettings() {
   const qc = useQueryClient()
+  const account = useQuery({ queryKey: ['account'], queryFn: authApi.session })
+  const logout = useMutation({ mutationFn: authApi.logout, onSuccess: () => { qc.clear(); window.location.reload() } })
   const [confirm, setConfirm] = useState('')
   const status = useQuery({ queryKey: ['cloud'], queryFn: maintenanceApi.cloud, retry: false })
   const push = useMutation({ mutationFn: maintenanceApi.push, onSuccess: () => { void qc.invalidateQueries({ queryKey: ['cloud'] }) } })
@@ -14,10 +16,12 @@ export function CloudSettings() {
   const s = status.data
   const busy = push.isPending || pull.isPending
   return <Card className="space-y-4 p-5">
+    <p className="text-sm">Akun: <strong>{account.data?.account?.email}</strong></p>
+    <Button variant="outline" loading={logout.isPending} disabled={busy} onClick={() => logout.mutate()}>Logout</Button>
     <h3 className="font-display text-lg font-semibold">Supabase cloud backup and sync</h3>
     <p className="text-sm text-muted">Upload a complete snapshot from this computer, then download it on another computer. Includes uploaded files. Download replaces local data and saves a local safety backup first. Use one computer at a time; changes are not merged automatically.</p>
-    <p className="text-sm text-muted">{desktop ? 'Configure the PostgreSQL URL and workspace under Settings → Connections.' : 'Set CLOUD_DATABASE_URL and CLOUD_WORKSPACE in .env, then restart the server.'} Run db/supabase-sync.sql in your existing Supabase project first.</p>
-    <ErrorNote error={status.error ?? push.error ?? pull.error} />
+    <p className="text-sm text-muted">{desktop ? 'Configure the PostgreSQL URL under Settings → Connections.' : 'Set CLOUD_DATABASE_URL in .env, then restart the server.'} Run db/supabase-sync.sql in your existing Supabase project first. Backup cloud dipisahkan otomatis berdasarkan ID akun.</p>
+    <ErrorNote error={status.error ?? push.error ?? pull.error ?? logout.error} />
     <Button variant="outline" loading={status.isFetching} disabled={busy} onClick={() => { void status.refetch() }}>Refresh cloud status</Button>
     {s?.configured && <>
       <dl className="grid gap-1 text-sm">

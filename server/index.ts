@@ -25,7 +25,15 @@ import { beginWrite } from './maintenance/lock.ts'
 
 import { office } from './routes/office.ts'
 
+import { auth, requireAccount } from './auth.ts'
+
 const app = new Hono()
+app.get('/api/health', (c) => c.json({ ready: true }))
+app.route('/api', auth)
+app.use('/api/*', async (c, next) => {
+  requireAccount(c)
+  await next()
+})
 
 app.use('/api/*', async (c, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) || /^\/api\/(cloud|updates)(\/|$)/.test(c.req.path)) return next()

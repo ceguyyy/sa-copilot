@@ -49,7 +49,7 @@ const supervisor = new ServerSupervisor({
 })
 
 const serverUrl = () => `http://127.0.0.1:${ports.server}`
-const healthUrl = () => `${serverUrl()}/api/projects`
+const healthUrl = () => `${serverUrl()}/api/health`
 const splashFile = path.join(import.meta.dirname, 'splash.html')
 
 function secureWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {

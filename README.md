@@ -81,14 +81,13 @@ Use your **existing Supabase project**, with a dedicated private `sa_copilot_syn
 3. Source installs: add the following to `.env` on every computer, then restart the server:
    ```dotenv
    CLOUD_DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@SESSION_POOLER_HOST:5432/postgres
-   CLOUD_WORKSPACE=sa-team
    ```
-   Desktop installs: use **Settings → Connections → Supabase cloud backup and sync**. The connection string is encrypted with the OS keychain. Use the same database and workspace on all computers. Keep each computer's normal `DATABASE_URL` pointed at its local database.
-4. On the first computer, open **Settings → Backup → Upload this computer to cloud**.
-5. On the next computer, refresh cloud status, type `RESTORE`, and **Download cloud and replace local data**. A local safety backup is saved first.
+   Desktop installs: use **Settings → Connections → Supabase cloud backup and sync**. The connection string is encrypted with the OS keychain. Use the same cloud database and login account on all computers. Workspace IDs are assigned from the account ID. Keep each computer's normal `DATABASE_URL` pointed at its local database.
+4. Login or register first. On the first computer, open **Settings → Backup → Upload this computer to cloud**.
+5. On the next computer, login with the same account and refresh cloud status, type `RESTORE`, and **Download cloud and replace local data**. A local safety backup is saved first.
 6. Before switching computers, upload. On the next computer, download before editing, then upload your changes when done.
 
-Sync is **manual snapshot transfer**, not live collaboration or automatic merging. If another computer has uploaded a newer revision, your upload is rejected. Download a local backup to preserve unsynced work before replacing local data. Application `.env`/desktop credentials remain on each device; exported deliverable folders and custom deck template files are not included. Changing the cloud connection/workspace starts a new device sync state. The cloud database must be provisioned and reachable before cloud operations can be used.
+Sync is **manual snapshot transfer**, not live collaboration or automatic merging. If another computer has uploaded a newer revision, your upload is rejected. Download a local backup to preserve unsynced work before replacing local data. Application `.env`/desktop credentials remain on each device; exported deliverable folders and custom deck template files are not included. Changing the cloud connection starts a new device sync state. The cloud database must be provisioned and reachable before cloud operations can be used.
 
 - **Projects:** one workspace per client deal, with a deliverables progress timeline.
 - **Sources:** PDF, DOCX, PPTX, XLSX, CSV/TXT/MD, images, or pasted notes. markitdown converts files to compact Markdown, which saves AI tokens.
@@ -236,3 +235,16 @@ Each character shows its task, project, model, and current stage. Hover or focus
 The server tracks SA Copilot jobs, including concurrent work, and keeps the latest 60 completed jobs in memory. History resets when the server restarts. Requests made directly to 9router by other applications are not included. Restart the backend after updating to enable the activity endpoint and metadata.
 
 The optional legacy Claude Office launcher remains available through `npm run office:start`, but Home uses the built-in workspace.
+
+
+### v2.0: akun, backup, dan restore
+
+Saat pertama membuka aplikasi setelah instalasi, konfigurasi koneksi cloud lalu login atau register (email dan password minimal 12 karakter). Akun disimpan di schema privat `sa_copilot_sync`, dengan password yang di-hash menggunakan scrypt. Jalankan `db/supabase-sync.sql` di Supabase sebelum menggunakan backup cloud. Koneksi tetap memakai PostgreSQL Session pooler dan TLS terverifikasi.
+
+Workspace backup adalah `account:<UUID akun>`, ditentukan server dari sesi login. `CLOUD_WORKSPACE` tidak lagi menentukan backup v2. Komputer kedua harus login dengan akun yang sama. Layar awal menampilkan status backup dan menyediakan restore dengan konfirmasi RESTORE. Restore menyimpan safety backup lokal sebelum mengganti data; tombol lanjut menggunakan data lokal tanpa restore otomatis.
+
+Data lokal yang sudah ada menjadi milik akun pertama yang login. Profil tersebut menolak akun lain agar data lokal tidak terunggah ke akun berbeda. Logout tersedia di Settings > Cloud; login kembali diperlukan setelah aplikasi/server direstart. Seluruh API data, termasuk backup lokal, memerlukan sesi login.
+
+Backup v1 di workspace bersama tetap disimpan dan tidak diklaim otomatis. Untuk memindahkannya, gunakan file `.sacopilot` dari v1, login ke akun yang benar, restore lewat Settings > Backup, lalu upload lewat Settings > Cloud. Tidak ada perubahan otomatis pada data lama di Supabase.
+
+Login dilakukan saat aplikasi dibuka setelah installer selesai. Login/register dan cloud backup memerlukan koneksi internet. Versi ini belum menyediakan reset password atau verifikasi email. Gunakan profil data terpisah bila perangkat dipakai oleh akun berbeda.

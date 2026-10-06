@@ -23,7 +23,7 @@ const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL?.trim() || undefined
 export const config = {
   root: ROOT,
   port: Number(process.env.PORT ?? 3000),
-  // Loopback only: the app has no login, so it must never be reachable from the network.
+  // Loopback only: desktop credentials and integrations stay on this device.
   host: '127.0.0.1',
   databaseUrl: required('DATABASE_URL'),
   uploadDir: fromEnv('UPLOAD_DIR', 'data/uploads'),
