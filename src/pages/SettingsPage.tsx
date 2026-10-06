@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Archive, Cpu, FileStack, KeyRound, Languages, LayoutTemplate, Palette, Plug, Sparkles } from 'lucide-react'
+import { Archive, Cpu, FileStack, KeyRound, Languages, LayoutTemplate, Palette, Plug, Sparkles, Download } from 'lucide-react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { McpServersPanel } from '../components/McpServersPanel'
 import { ModelPicker } from '../components/ModelPicker'
@@ -12,8 +12,10 @@ import { FormatsSettings } from './settings/FormatsSettings'
 import { LanguagesSettings } from './settings/LanguagesSettings'
 import { SkillsSettings } from './settings/SkillsSettings'
 import { ThemeSettings } from './settings/ThemeSettings'
+import { UpdatesSettings } from './settings/UpdatesSettings'
 
 const TABS = [
+  { id: 'updates', label: 'Updates', icon: Download, intro: 'Check this branch for new Git commits and upgrade your source installation.' },
   {
     id: 'deliverables',
     label: 'Deliverables',
@@ -128,6 +130,8 @@ function TabContent({ tab }: { tab: TabId }) {
       return <ConnectionsSettings />
     case 'backup':
       return <BackupSettings />
+    case 'updates':
+      return <UpdatesSettings />
     case 'theme':
       return <ThemeSettings />
   }

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Button, Card, ErrorNote, Input } from '../../components/ui'
 import { backupApi } from '../../lib/api'
 import type { BackupInspect } from '../../lib/types'
+import { CloudSettings } from './CloudSettings'
 
 /** Move all data between devices: one .sacopilot file with every project, document, POC and upload (no keys). */
 export function BackupSettings() {
@@ -32,6 +33,7 @@ export function BackupSettings() {
 
   return (
     <div className="space-y-6">
+    <CloudSettings />
     {storage.data && (
       <Card className="space-y-2 p-5">
         <h3 className="font-display text-lg font-semibold">Where files are stored</h3>

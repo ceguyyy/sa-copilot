@@ -1,13 +1,14 @@
 {
   "name": "sa-copilot",
   "private": true,
-  "version": "1.0.0",
-  "description": "SA Copilot — presales Solution Architect copilot",
+  "version": "2.0.1",
+  "description": "SA Copilot - presales Solution Architect copilot",
   "author": "Christian Gunawan",
   "main": "electron-dist/main.mjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "office:start": "node scripts/office-start.mjs",
     "dev:server": "node --env-file-if-exists=.env --watch server/index.ts",
     "build": "tsc -b && vite build",
     "start": "npm run build && node --env-file-if-exists=.env server/index.ts",
@@ -20,7 +21,8 @@
     "bundle": "node scripts/bundle.mjs",
     "desktop": "npm run build && node scripts/bundle.mjs && node scripts/run-electron.mjs",
     "dist:win": "npm run build && npm test && node scripts/bundle.mjs && node --env-file-if-exists=.env scripts/fetch-python.mjs win x64 && electron-builder --win --x64 --publish never",
-    "dist:mac": "npm run build && npm test && node scripts/bundle.mjs && node scripts/mac-cross-deps.mjs && node --env-file-if-exists=.env scripts/fetch-python.mjs mac arm64 && node --env-file-if-exists=.env scripts/fetch-python.mjs mac x64 && electron-builder --mac --arm64 --x64 --publish never"
+    "dist:mac": "npm run build && npm test && node scripts/bundle.mjs && node scripts/mac-cross-deps.mjs && node --env-file-if-exists=.env scripts/fetch-python.mjs mac arm64 && node --env-file-if-exists=.env scripts/fetch-python.mjs mac x64 && electron-builder --mac --arm64 --x64 --publish never",
+    "account:recovery": "node --env-file-if-exists=.env scripts/account-recovery.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
@@ -29,6 +31,7 @@
     "@notionhq/client": "^5.26.0",
     "@resvg/resvg-js": "^2.6.2",
     "@tanstack/react-query": "^5.104.0",
+    "@xyflow/react": "^12.12.0",
     "9router": "^0.5.91",
     "clsx": "^2.1.1",
     "docx": "^9.7.2",
@@ -37,6 +40,7 @@
     "fflate": "^0.8.3",
     "file-saver": "^2.0.5",
     "hono": "^4.13.9",
+    "html-to-image": "1.11.11",
     "lucide-react": "^1.48.0",
     "mammoth": "^1.13.0",
     "mdast-util-from-markdown": "^2.0.3",
@@ -45,8 +49,10 @@
     "micromark-extension-gfm": "^3.0.0",
     "openai": "^7.23.0",
     "outline-mcp-server": "^5.8.5",
+    "parse5": "^8.0.1",
     "pdfjs-dist": "^6.3.289",
     "pg": "^8.23.0",
+    "playwright-core": "^1.63.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",

@@ -39,7 +39,7 @@ describe('toMarkdown', () => {
       ],
       notes: ['*note'],
     })
-    expect(md).toContain('Total: **5 mandays** (1 weeks)')
+    expect(md).toContain('Total: **5 mandays** · IT delivery: **0 mandays** · duration 5 working days (1 weeks)')
     expect(md).toContain('*note')
   })
 

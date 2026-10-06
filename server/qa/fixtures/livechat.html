@@ -1,0 +1,36 @@
+<!doctype html>
+<!-- Minimal copy of the Cekat Web Livechat structure (ids/classes the QA driver relies on). -->
+<html><body>
+<div id="user-info-form">
+  <form id="contact-form">
+    <div><label>Phone Number *</label><input type="text" placeholder="Masukkan phone number" required></div>
+    <div><label>DOB</label><input type="text" placeholder="ddmmyyyyy"></div>
+    <div><label>Name *</label><input type="text" placeholder="Masukkan name" required></div>
+    <button type="submit" class="start-chat-btn">Mulai Chat</button>
+  </form>
+</div>
+<div id="chat-messages"><div id="chat-messages-inner"></div><div class="typing-container"><div id="typing-indicator" style="display:none">…</div></div></div>
+<div id="chat-input-container" style="display:none"><textarea id="chat-input" placeholder="Tulis pesan..."></textarea><button id="chat-submit">Kirim</button></div>
+<script>
+  const inner = document.getElementById('chat-messages-inner')
+  const typing = document.getElementById('typing-indicator')
+  const bubble = (cls, text) => { const d = document.createElement('div'); d.innerHTML = '<div class="message-bubble ' + cls + '"><p class="message-text"></p></div>'; d.querySelector('p').textContent = text; inner.append(d) }
+  const filled = []
+  document.getElementById('contact-form').addEventListener('submit', (e) => {
+    e.preventDefault()
+    document.querySelectorAll('#contact-form input').forEach((i) => filled.push(i.value))
+    document.getElementById('user-info-form').style.display = 'none'
+    document.getElementById('chat-input-container').style.display = ''
+    setTimeout(() => bubble('incoming-bubble', 'Halo ' + filled[2] + '! Ada yang bisa dibantu?'), 100)
+  })
+  document.getElementById('chat-submit').addEventListener('click', () => {
+    const input = document.getElementById('chat-input'); const text = input.value; input.value = ''
+    bubble('outgoing-bubble', text)
+    if (text === 'diam') return
+    if (text === 'ngetik') { typing.style.display = ''; bubble('incoming-bubble', 'Sebentar ya'); return }
+    typing.style.display = ''
+    setTimeout(() => { typing.style.display = 'none'; bubble('incoming-bubble', 'Pesanan ' + text + ' sedang dicek') }, 300)
+    setTimeout(() => bubble('incoming-bubble', 'Status: dikirim'), 600)
+  })
+</script>
+</body></html>

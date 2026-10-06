@@ -1,8 +1,8 @@
 // The desktop settings (everything that used to live in .env). Types only + key lists: no Node imports,
 // because the React app imports these types for Settings → Connections.
 
-export const SECRET_KEYS = ['routerApiKey', 'outlineApiKey', 'demoSupabaseKey', 'notionToken'] as const
-export const VALUE_KEYS = ['aiBaseUrl', 'aiModel', 'chatEffort', 'generateEffort', 'outlineApiUrl', 'demoSupabaseUrl', 'demoAppUrl', 'notionParentPage', 'docsDir', 'deckTemplate'] as const
+export const SECRET_KEYS = ['routerApiKey', 'outlineApiKey', 'demoSupabaseKey', 'notionToken', 'cloudDatabaseUrl'] as const
+export const VALUE_KEYS = ['aiBaseUrl', 'aiModel', 'chatEffort', 'generateEffort', 'outlineApiUrl', 'demoSupabaseUrl', 'demoAppUrl', 'notionParentPage', 'docsDir', 'deckTemplate', 'cloudWorkspace'] as const
 export type SecretKey = (typeof SECRET_KEYS)[number]
 export type ValueKey = (typeof VALUE_KEYS)[number]
 

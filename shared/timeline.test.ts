@@ -20,7 +20,7 @@ describe('computeSchedule', () => {
       [7, 8],
       [8, 13],
     ])
-    expect(s.totalDays).toBe(13)
+    expect(s.durationDays).toBe(13)
     expect(s.totalWeeks).toBe(3)
   })
 
@@ -32,17 +32,17 @@ describe('computeSchedule', () => {
       [1, 4],
       [6, 8],
     ])
-    expect(s.totalDays).toBe(8)
+    expect(s.durationDays).toBe(8)
   })
 
   test('treats negative or invalid days as zero', () => {
     const s = computeSchedule([row(-3), row(Number.NaN), row(2)])
-    expect(s.totalDays).toBe(2)
+    expect(s.durationDays).toBe(2)
     expect(s.rows[2].startDay).toBe(0)
   })
 
   test('returns zero weeks for an empty timeline', () => {
-    expect(computeSchedule([])).toMatchObject({ totalDays: 0, totalWeeks: 0, rows: [] })
+    expect(computeSchedule([])).toMatchObject({ durationDays: 0, totalWeeks: 0, totalMandays: 0, itDeliveryMandays: 0, rows: [] })
   })
 
   test('maps working days to calendar dates when a start date is given', () => {
@@ -72,5 +72,35 @@ describe('weeksCovered', () => {
 
   test('returns nothing for zero-length rows', () => {
     expect(weeksCovered(4, 4)).toEqual([])
+  })
+})
+
+describe('mandays', () => {
+  const r = (activity: string, days: number, parallel = false): TimelineRow => ({ no: '', activity, module: '', function: '', pic: '', days, parallel })
+
+  test('total mandays add up every row, parallel ones included, while the duration does not', () => {
+    const s = computeSchedule([r('Document Requirement', 7), r('', 7, true), r('Kickoff', 1)])
+    expect(s.durationDays).toBe(8)
+    expect(s.totalMandays).toBe(15)
+  })
+
+  test('IT delivery mandays cover the AI Setting and Integration & APIs activities, including their follow-up rows', () => {
+    const s = computeSchedule([
+      r('Kickoff Implementation', 1),
+      r('AI Setting (Cekat)', 3),
+      r('', 3),
+      r('', 2, true),
+      r('Integration & APIs*', 3),
+      r('', 7),
+      r('Pre UAT', 1),
+      r('', 4),
+    ])
+    expect(s.itDeliveryMandays).toBe(18)
+    expect(s.totalMandays).toBe(24)
+  })
+
+  test('marks which rows count as IT delivery', () => {
+    const s = computeSchedule([r('AI Setting', 2), r('', 1), r('Go-Live', 1)])
+    expect(s.rows.map((x) => x.isItDelivery)).toEqual([true, true, false])
   })
 })

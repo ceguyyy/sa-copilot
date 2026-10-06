@@ -27,9 +27,14 @@ async function isFile(file: string): Promise<boolean> {
 
 export async function createBackup(): Promise<{ data: Uint8Array; manifest: BackupManifest }> {
   const tables: Record<string, Record<string, unknown>[]> = {}
-  for (const table of BACKUP_TABLES) tables[table] = await query(`select * from ${table}`)
+  await withTransaction(async (tx) => {
+    await tx.query('set transaction isolation level repeatable read read only')
+    for (const table of BACKUP_TABLES) tables[table] = (await tx.query(`select * from ${table}`)).rows
+  })
   const files: Record<string, Uint8Array> = {}
-  for (const key of await uploadKeys()) {
+  const keys = [...new Set([...(tables.sources ?? []), ...(tables.attachments ?? [])]
+    .map((row) => row.storage_path).filter((key): key is string => typeof key === 'string' && isSafeFileName(key)))]
+  for (const key of keys) {
     const file = path.join(config.uploadDir, key)
     if (await isFile(file)) files[key] = await readFile(file)
   }

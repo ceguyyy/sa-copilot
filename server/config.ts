@@ -23,12 +23,16 @@ const anthropicBaseUrl = process.env.ANTHROPIC_BASE_URL?.trim() || undefined
 export const config = {
   root: ROOT,
   port: Number(process.env.PORT ?? 3000),
-  // Loopback only: the app has no login, so it must never be reachable from the network.
+  // Loopback only: desktop credentials and integrations stay on this device.
   host: '127.0.0.1',
   databaseUrl: required('DATABASE_URL'),
   uploadDir: fromEnv('UPLOAD_DIR', 'data/uploads'),
   // Where Backup & Restore writes the automatic backup taken before a restore.
   backupDir: fromEnv('BACKUP_DIR', 'data/backups'),
+  cloud: {
+    databaseUrl: process.env.CLOUD_DATABASE_URL?.trim() || '',
+    workspace: process.env.CLOUD_WORKSPACE?.trim() || 'default',
+  },
   // Healthcare demo app (github.com/ceguyyy/Healthcare-demo-cekat): where scenarios are shown and the
   // Supabase REST endpoint + key they are stored with. The key stays on this server.
   demo: {
@@ -59,10 +63,12 @@ export const config = {
   maxUploadBytes: 50 * 1024 * 1024,
   markitdown: {
     // Python interpreter that has markitdown installed (pip install "markitdown[all]").
-    python: process.env.MARKITDOWN_PYTHON?.trim() || 'python',
+    // macOS/Linux only ship `python3`.
+    python: process.env.MARKITDOWN_PYTHON?.trim() || (process.platform === 'win32' ? 'python' : 'python3'),
   },
   anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
+    // 9router API key; ANTHROPIC_API_KEY still works for older .env files.
+    apiKey: process.env['9ROUTER_API_KEY']?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || undefined,
     baseURL: anthropicBaseUrl,
     model: process.env.ANTHROPIC_MODEL?.trim() || 'claude-opus-5-5',
     chatEffort: effort('CHAT_EFFORT', 'medium'),

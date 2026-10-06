@@ -4,7 +4,7 @@ cd /d "%~dp0"
 title SACopilot
 
 if not exist .env (
-  echo .env not found. Copy .env.example to .env and fill in DATABASE_URL and ANTHROPIC_API_KEY.
+  echo .env not found. Copy .env.example to .env and fill in DATABASE_URL and 9ROUTER_API_KEY.
   pause
   exit /b 1
 )

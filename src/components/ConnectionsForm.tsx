@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, FileText, FolderOpen, PlugZap, RotateCw, Save } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { desktop, type ConfigPatch, type DesktopStatus, type FolderKey, type SecretKey, type ValueKey } from '../lib/desktop'
 import { Button, ErrorNote, Field, Input, Select } from './ui'
+import { useResetState } from '../lib/useResetState'
 
 type FieldDef =
   | { kind: 'value'; key: ValueKey; label: string; placeholder?: string; hint?: string; effort?: boolean }
@@ -59,6 +60,13 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Supabase cloud backup and sync',
+    fields: [
+      { kind: 'secret', key: 'cloudDatabaseUrl', label: 'PostgreSQL Session pooler URL', hint: 'Copy from Supabase Connect. Includes the database password; encrypted on this device. Run db/supabase-sync.sql first.' },
+
+    ],
+  },
+  {
     title: 'Folders',
     fields: [
       { kind: 'value', key: 'docsDir', label: 'Export folder', placeholder: 'Empty = Documents/SA Copilot' },
@@ -71,12 +79,8 @@ const SECTIONS: Section[] = [
 export function ConnectionsForm({ requiredOnly = false, onSaved }: { requiredOnly?: boolean; onSaved?: (s: DesktopStatus) => void }) {
   const qc = useQueryClient()
   const status = useQuery({ queryKey: ['desktop-config'], queryFn: () => desktop!.getConfig(), enabled: !!desktop })
-  const [values, setValues] = useState<Partial<Record<ValueKey, string>>>({})
+  const [values, setValues] = useResetState<Partial<Record<ValueKey, string>>>(status.data, () => status.data?.values ?? {}, {})
   const [secrets, setSecrets] = useState<Partial<Record<SecretKey, string>>>({})
-
-  useEffect(() => {
-    if (status.data) setValues(status.data.values)
-  }, [status.data])
 
   const save = useMutation({
     mutationFn: () => {

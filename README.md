@@ -19,7 +19,7 @@ Download the installer for your OS (build it yourself with [docs/BUILD.md](docs/
 The installers are unsigned for now:
 
 - **Windows:** SmartScreen shows "Windows protected your PC". Click **More info → Run anyway**.
-- **macOS:** drag the app to Applications, then right-click it → **Open** → **Open** on first launch. If macOS says the app "is damaged", run `xattr -dr com.apple.quarantine "/Applications/SA Copilot.app"`.
+- **macOS:** macOS blocks it on first launch. See [Install on macOS, step by step](#install-on-macos-step-by-step).
 
 Nothing else needs installing. The app bundles and starts on its own:
 
@@ -34,7 +34,60 @@ Nothing else needs installing. The app bundles and starts on its own:
 
 **Moving to another laptop:** Settings → Backup → **Download backup** creates one `.sacopilot` file with every project, document, POC, skill, format and uploaded file (keys are not included). On the new laptop, open Settings → Backup → **Restore**. The current data is backed up automatically before a restore.
 
+### Install on macOS, step by step
+
+1. **Find out which Mac you have.** Click  → **About This Mac**.
+   - It shows **Chip: Apple M1/M2/M3/M4…** → you need `SA Copilot-<version>-arm64.dmg`.
+   - It shows **Processor: … Intel …** → you need `SA Copilot-<version>-x64.dmg`.
+
+   The wrong one either does not open or runs slowly.
+2. **Get the `.dmg`.** Use the one you were given, or build it on a Mac with [docs/BUILD.md](docs/BUILD.md) (`npm run dist:mac` writes both into `release/`).
+3. **Install.** Double-click the `.dmg`, drag **SA Copilot** onto the **Applications** folder in the window that opens, then eject the disk image (the ⏏ next to it in Finder's sidebar).
+4. **Open it the first time.** The app is not signed by Apple yet, so macOS blocks the first launch:
+   - Open **Applications** and double-click **SA Copilot**. macOS says it *"cannot be opened because Apple cannot check it for malicious software"* (or *"…could not verify…"*). Click **Done** / **OK**.
+   - Open **System Settings → Privacy & Security**, scroll down to *"SA Copilot was blocked…"* and click **Open Anyway**. Enter your Mac password, then click **Open** once more.
+   - On macOS 14 (Sonoma) or older you can instead right-click the app → **Open** → **Open**.
+
+   This is only needed once; afterwards it opens normally from Launchpad, Spotlight or the Dock.
+5. **If macOS says the app "is damaged and can't be opened"**, the download was quarantined. Open **Terminal** and run:
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/SA Copilot.app"
+   ```
+   Then open the app again.
+6. **First start.** A splash screen shows while the bundled PostgreSQL, 9router and Python start (the very first start takes up to a minute). Then the **Setup** screen asks for a 9router API key: click **Open 9router dashboard**, connect a provider (e.g. your Claude account), create an API key, paste it and save. If macOS asks to allow incoming network connections, click **Allow**. Everything stays on `127.0.0.1`.
+
+**Updating:** quit SA Copilot (⌘Q), install the new `.dmg` the same way and choose **Replace**. Your projects are kept.
+
+**Uninstalling:** quit the app and drag **SA Copilot** from Applications to the Trash. Your data stays in `~/Library/Application Support/SA Copilot`. Delete that folder too (Finder → **Go → Go to Folder…**, paste the path) only if you want to remove every project. Download a backup first if you might need it.
+
+Prefer to run it from source instead (e.g. to develop)? See [Run from the repo](#run-from-the-repo-windows-and-macos) below. It has its own macOS setup with Homebrew.
+
 ## Features
+
+### Git updates
+
+For a source installation, open **Settings → Updates → Check Git updates**. It checks the upstream of the currently checked-out branch (for example `feat/local-windows-app`), shows the commit IDs and offers **Upgrade to latest commit**.
+
+Upgrade saves a `.sacopilot` backup, performs a fast-forward Git update, runs `npm ci`, and builds the UI. Save your work and let active jobs finish first. Data changes are temporarily blocked during maintenance. When complete, stop the server and run `npm start` again so the new backend and database schema are loaded. Git credentials must already work on that computer. Local changes, untracked files, and local commits block upgrades; the app never discards them. If installation/build fails, fix the checkout and run `npm ci` and `npm start`; the Settings screen reports the failed stage and any saved backup.
+
+Installed `.exe`/`.dmg` apps have a GitHub Releases link instead. Install the new installer to upgrade them; their data is preserved. Source upgrades do not update installed desktop binaries.
+
+### Supabase cloud backup and sync between computers
+
+Use your **existing Supabase project**, with a dedicated private `sa_copilot_sync` schema. This feature does not alter the healthcare demo tables. It stores complete `.sacopilot` snapshots, including referenced upload files, and retains the latest ten revisions. Each compressed snapshot is limited to 100 MB.
+
+1. Run [db/supabase-sync.sql](db/supabase-sync.sql) in the Supabase SQL editor as the database owner.
+2. In Supabase **Connect**, copy the **Session pooler** PostgreSQL URL, with the database password. This is separate from `DEMO_SUPABASE_URL` and its REST key. The connection uses TLS with certificate verification and the official Supabase root CA bundled with the app.
+3. Source installs: add the following to `.env` on every computer, then restart the server:
+   ```dotenv
+   CLOUD_DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@SESSION_POOLER_HOST:5432/postgres
+   ```
+   Desktop installs: use **Settings → Connections → Supabase cloud backup and sync**. The connection string is encrypted with the OS keychain. Use the same cloud database and login account on all computers. Workspace IDs are assigned from the account ID. Keep each computer's normal `DATABASE_URL` pointed at its local database.
+4. Login or register first. On the first computer, open **Settings → Backup → Upload this computer to cloud**.
+5. On the next computer, login with the same account and refresh cloud status, type `RESTORE`, and **Download cloud and replace local data**. A local safety backup is saved first.
+6. Before switching computers, upload. On the next computer, download before editing, then upload your changes when done.
+
+Sync is **manual snapshot transfer**, not live collaboration or automatic merging. If another computer has uploaded a newer revision, your upload is rejected. Download a local backup to preserve unsynced work before replacing local data. Application `.env`/desktop credentials remain on each device; exported deliverable folders and custom deck template files are not included. Changing the cloud connection starts a new device sync state. The cloud database must be provisioned and reachable before cloud operations can be used.
 
 - **Projects:** one workspace per client deal, with a deliverables progress timeline.
 - **Sources:** PDF, DOCX, PPTX, XLSX, CSV/TXT/MD, images, or pasted notes. markitdown converts files to compact Markdown, which saves AI tokens.
@@ -43,7 +96,9 @@ Nothing else needs installing. The app bundles and starts on its own:
 - **Deliverables:** structured documents with dedicated editors (tables, sections, Gantt, User Journey). **Draft with AI** accepts an additional prompt every time. Built-in and custom formats can be edited in Settings, with AI help.
 - **POC:**
   - **POC Agent:** the AI agent setup and tools. API integrations go through Cekat n8n webhooks (`https://workflows.cekat.ai/webhook/…`); n8n then authenticates and calls the client's system. Each tool has an AI Input Schema.
-  - **POC CRM:** CRM boards as an Excel-like table plus a kanban, generated with AI. Boards can be viewed as SVG, full screen, or opened in draw.io.
+  - **POC CRM:** CRM boards as an Excel-like table plus a kanban, generated with AI. Boards can be viewed as SVG, full screen, or opened in draw.io. Select/Dropdown values are sent to n8n as **zero-based** option numbers (first option = 0).
+  - **n8n Workflow:** ONE gateway workflow per POC: one webhook, input validation, then **Switch Action** routes each API integration by its `"action"`. **1 use case = 1 cURL**, each with its own Copy button. Create it with **Generate with AI**, **Build from POC** (no AI, built from the API integrations), or **Import workflow** (an n8n export; its use cases are read from the Switch). **Export n8n** downloads the workflows exactly as they are in the tab.
+  - Label names and label descriptions are limited to 3000 characters.
   - **POC Marketing:** coming soon.
 - **Version history:** versions are immutable. Every save, AI revision or restore creates a new version, and any version can be diffed against the current one.
 - **Skills library:** the instructions Claude follows per output type. They import and export as `SKILL.md`.
@@ -51,23 +106,100 @@ Nothing else needs installing. The app bundles and starts on its own:
   - per document: `.md`, `.docx`, `.xlsx` (timeline with Gantt bars), `.svg` for diagrams, and `.pptx` for the pitch deck;
   - per project: the whole project as one Markdown file, or **Send to Notion** (one page per project).
 
-## Run from the repo (development)
+## Run from the repo (Windows and macOS)
 
-Needs Node 24 and a PostgreSQL server (pgAdmin is fine; the `sa_copilot` database is created on first start).
+Running from the repo needs **three things running at the same time**:
 
-1. Copy `.env.example` to `.env` and set at least:
-   - `DATABASE_URL`
-   - `ANTHROPIC_API_KEY`: a Claude key, **or** a 9router key together with `ANTHROPIC_BASE_URL=http://localhost:20128` (run `npx 9router` first).
+| What | Where | Check it with |
+|---|---|---|
+| **PostgreSQL** | port 5432 | pgAdmin (Windows) / `brew services list` (macOS) |
+| **9router** (the AI router: every AI call goes through it) | http://localhost:20128 | open http://localhost:20128 in the browser; it shows the dashboard |
+| **SA Copilot server** | http://localhost:3000 | the terminal says `SA Copilot running at http://localhost:3000` |
 
-   The other variables (Outline, demo app, Notion, deck template, folders) are optional and documented in `.env.example`.
-2. Optional: `pip install "markitdown[all]" python-pptx` for file conversion and the pitch deck.
-3. Start it with `npm start` (or double-click `SACopilot.bat` on Windows), then open http://localhost:3000.
+If 9router is not running, every **Generate / Draft with AI / Chat** fails with *Cannot reach the AI endpoint … is 9router running?*. If the SA Copilot server is not running, the page shows **Failed to fetch**.
+
+### One-time setup
+
+**Windows**
+
+1. Install [Node.js 24](https://nodejs.org), [PostgreSQL](https://www.postgresql.org/download/windows/) (with pgAdmin; remember the `postgres` password) and, optionally, [Python 3](https://www.python.org/downloads/) (tick *Add python.exe to PATH*).
+2. In this folder:
+   ```powershell
+   npm install
+   pip install "markitdown[all]" python-pptx   # optional: file conversion + pitch deck
+   copy .env.example .env
+   ```
+3. Start 9router and create a key (next section), then fill in `.env`:
+   ```
+   DATABASE_URL=postgres://postgres:YOUR_PASSWORD@localhost:5432/sa_copilot
+   9ROUTER_API_KEY=<key from the 9router dashboard>
+   ANTHROPIC_BASE_URL=http://localhost:20128
+   ```
+
+**macOS** (Apple Silicon or Intel, with [Homebrew](https://brew.sh))
+
+1. Install the tools and start PostgreSQL in the background (it then also starts on every login):
+   ```bash
+   brew install node@24 postgresql@16 python
+   brew link --overwrite node@24
+   brew services start postgresql@16
+   ```
+2. In this folder:
+   ```bash
+   npm install
+   pip3 install "markitdown[all]" python-pptx   # optional: file conversion + pitch deck
+   cp .env.example .env
+   ```
+3. Start 9router and create a key (next section), then fill in `.env`. Homebrew's PostgreSQL uses your Mac username and no password (`whoami` prints it):
+   ```
+   DATABASE_URL=postgres://YOUR_MAC_USERNAME@localhost:5432/sa_copilot
+   9ROUTER_API_KEY=<key from the 9router dashboard>
+   ANTHROPIC_BASE_URL=http://localhost:20128
+   ```
+   On macOS the app calls `python3` by default; set `MARKITDOWN_PYTHON` only if markitdown is installed in another Python (e.g. a venv).
+
+The `sa_copilot` database and its tables are created automatically on the first start.
+
+### 9router (the AI router)
+
+1. In a separate terminal: `npx 9router`. Keep this terminal open: closing it stops the AI.
+2. Open http://localhost:20128 → connect a provider (e.g. your Claude account) → create an **API key**.
+3. Paste the key into `.env` as `9ROUTER_API_KEY=…` and restart the SA Copilot server. `.env` is read only when the server starts.
+
+### Every day
+
+Open **two terminals** in this folder (Windows: PowerShell; macOS: Terminal):
+
+```bash
+# terminal 1 — the AI router (leave it open)
+npx 9router
+
+# terminal 2 — SA Copilot
+npm start          # builds the UI, then runs the server
+```
+
+Then open **http://localhost:3000**. PostgreSQL already runs as a service on both Windows and macOS. On Windows you can also double-click `SACopilot.bat` instead of `npm start`.
+
+After `git pull`, run `npm install` once, then `npm start` (it rebuilds the UI). `npm run serve` skips the build and is faster when nothing changed.
+
+### Troubleshooting
+
+| You see | Means | Fix |
+|---|---|---|
+| **Failed to fetch** in the page | The SA Copilot server is not running | `npm start` in a terminal and keep it open |
+| *Cannot reach … is 9router running?* | 9router is not running | `npx 9router` in another terminal |
+| *9ROUTER_API_KEY is not set in .env* / *API key is invalid* | Key missing or wrong | Create a key in the 9router dashboard, put it in `.env`, restart the server |
+| *Missing DATABASE_URL* / connection refused on 5432 | PostgreSQL is not running or the URL is wrong | Windows: start the *postgresql* service; macOS: `brew services start postgresql@16`. Check user/password in `DATABASE_URL` |
+| Uploads are not converted / the pitch deck fails | Python packages missing | `pip install "markitdown[all]" python-pptx` (macOS: `pip3`), or set `MARKITDOWN_PYTHON` |
+| Port 3000 already in use | Another app uses it | Set `PORT=3001` in `.env` and open http://localhost:3001 |
+
+### Commands
 
 | Command | What it does |
 |---|---|
 | `npm start` | Build the UI and run the server on http://localhost:3000 |
 | `npm run serve` | Run the server with the last build |
-| `npm run dev` + `npm run dev:server` | Vite on :5173 (proxies `/api`) + server with `--watch` |
+| `npm run dev` + `npm run dev:server` | Vite on :5173 (proxies `/api`) + server with `--watch`, for development |
 | `npm run desktop` | Build and run the Electron desktop app from the repo (`SA_COPILOT_DATA_DIR` = throwaway data folder) |
 | `npm run dist:win` / `npm run dist:mac` | Build the installers into `release/`; see [docs/BUILD.md](docs/BUILD.md) |
 | `npm test` | Vitest unit and integration tests |
@@ -93,3 +225,41 @@ db/schema.sql schema, applied automatically on every start (idempotent)
 - **Proxies and models:** drafting uses structured outputs and adaptive thinking. Models marked *(chat only)* can chat but cannot write documents.
 - **Mandays:** these come from the Timeline's `SLA/Days` column. A SOW shows a "timeline outdated" banner when the timeline changes after its last version.
 - **DOCX export:** the file follows each template's section structure, but not its exact Word styling or logo.
+
+## Home / Pixel workspace
+
+The Home sidebar entry (`/home`) displays a built-in pixel art workspace for SA Copilot AI jobs. Projects remains at `/`. No external office service is required.
+
+Each character shows its task, project, model, and current stage. Hover or focus a character for live metadata; click to pin full details, including output characters, model calls, tools, effort, output limit, and attachments. Escape dismisses the tooltip. Activity refreshes every two seconds and can be filtered by status.
+
+The server tracks SA Copilot jobs, including concurrent work, and keeps the latest 60 completed jobs in memory. History resets when the server restarts. Requests made directly to 9router by other applications are not included. Restart the backend after updating to enable the activity endpoint and metadata.
+
+The optional legacy Claude Office launcher remains available through `npm run office:start`, but Home uses the built-in workspace.
+
+
+### v2.0: akun, backup, dan restore
+
+Saat pertama membuka aplikasi setelah instalasi, konfigurasi koneksi cloud lalu login atau register (email dan password minimal 12 karakter). Akun disimpan di schema privat `sa_copilot_sync`, dengan password yang di-hash menggunakan scrypt. Jalankan `db/supabase-sync.sql` di Supabase sebelum menggunakan backup cloud. Koneksi tetap memakai PostgreSQL Session pooler dan TLS terverifikasi.
+
+Workspace backup adalah `account:<UUID akun>`, ditentukan server dari sesi login. `CLOUD_WORKSPACE` tidak lagi menentukan backup v2. Komputer kedua harus login dengan akun yang sama. Layar awal menampilkan status backup dan menyediakan restore dengan konfirmasi RESTORE. Restore menyimpan safety backup lokal sebelum mengganti data; tombol lanjut menggunakan data lokal tanpa restore otomatis.
+
+Data lokal yang sudah ada menjadi milik akun pertama yang login. Profil tersebut menolak akun lain agar data lokal tidak terunggah ke akun berbeda. Logout tersedia di Settings > Cloud; login kembali diperlukan setelah aplikasi/server direstart. Seluruh API data, termasuk backup lokal, memerlukan sesi login.
+
+Backup v1 di workspace bersama tetap disimpan dan tidak diklaim otomatis. Untuk memindahkannya, gunakan file `.sacopilot` dari v1, login ke akun yang benar, restore lewat Settings > Backup, lalu upload lewat Settings > Cloud. Tidak ada perubahan otomatis pada data lama di Supabase.
+
+Login dilakukan saat aplikasi dibuka setelah installer selesai. Login/register dan cloud backup memerlukan koneksi internet. Reset password tersedia memakai kode pemulihan sekali pakai; verifikasi email belum tersedia. Gunakan profil data terpisah bila perangkat dipakai oleh akun berbeda.
+
+
+### v2.0.1: reset password dengan kode pemulihan
+
+Saat register, simpan kode pemulihan yang ditampilkan sekali. Akun lama yang masih bisa login dapat membuat kode di Settings > Cloud > Pemulihan akun setelah memasukkan password saat ini. Kode baru membatalkan kode lama. Di layar login pilih **Lupa password?**, isi email, kode, dan password baru (minimal 12 karakter). Kode dihapus dalam transaksi yang sama dengan penggantian password. Hanya SHA-256 digest kode acak 256-bit yang disimpan; password tetap memakai scrypt. ID akun dan seluruh backup tidak berubah. Sesi lama diperiksa terhadap hash password cloud dan ditolak setelah reset, termasuk di komputer lain. Akses data dengan sesi login memerlukan koneksi cloud untuk pemeriksaan ini.
+
+Tabel `account_recovery` dibuat otomatis saat kode pertama dibuat/reset. Script `db/supabase-sync.sql` juga telah diperbarui untuk provisioning manual.
+
+Jika akun lama sudah lupa password dan belum memiliki kode, administrator yang memegang profil data lokal pemilik akun dapat menjalankan:
+
+```powershell
+npm run account:recovery -- email-pemilik@example.com
+```
+
+Jalankan dari repo dengan `.env` dan `BACKUP_DIR` yang menunjuk profil pemilik (`account-owner.json`). Perintah hanya mengizinkan email dan ID akun yang cocok dengan profil lokal. Ini adalah alat administrator lokal, bukan endpoint publik; tidak bisa memulihkan akun dari perangkat baru yang belum memiliki profil pemilik. Kode dicetak ke terminal sekali; simpan secara pribadi lalu gunakan **Lupa password?**. Setelah reset, login dan buat kode pemulihan baru. Jangan commit atau membagikan kode pemulihan.

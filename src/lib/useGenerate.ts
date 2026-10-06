@@ -11,6 +11,7 @@ export interface GenerateParams {
   diagramKind?: string
   templateId?: string
   attachmentIds?: string[]
+  maxTokens?: number
 }
 
 /** Runs AI generation with progress + refreshes every cache the new version touches. */

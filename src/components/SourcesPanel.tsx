@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Brain, BrainCircuit, FileText, Image as ImageIcon, NotebookPen, Trash2, Upload } from 'lucide-react'
+import { Brain, BrainCircuit, FileText, Globe, Image as ImageIcon, NotebookPen, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { sourcesApi } from '../lib/api'
 import { ACCEPTED_FILES, extractText } from '../lib/extract'
@@ -21,6 +21,8 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
   const [kind, setKind] = useState<Source['kind']>(kinds[0])
   const [noteOpen, setNoteOpen] = useState(false)
   const [note, setNote] = useState({ name: '', text: '' })
+  const [websiteOpen, setWebsiteOpen] = useState(false)
+  const [websiteUrl, setWebsiteUrl] = useState('')
   const [progress, setProgress] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
 
@@ -46,6 +48,15 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
     onSuccess: () => {
       setNote({ name: '', text: '' })
       setNoteOpen(false)
+      qc.invalidateQueries({ queryKey: key })
+    },
+  })
+
+  const scrape = useMutation({
+    mutationFn: () => sourcesApi.scrape({ projectId, url: websiteUrl.trim() }),
+    onSuccess: () => {
+      setWebsiteUrl('')
+      setWebsiteOpen(false)
       qc.invalidateQueries({ queryKey: key })
     },
   })
@@ -83,6 +94,11 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
           <Button variant="outline" icon={<NotebookPen className="size-4" />} onClick={() => setNoteOpen((v) => !v)}>
             Paste text
           </Button>
+          {kind === 'knowledge' && (
+            <Button variant="outline" icon={<Globe className="size-4" />} onClick={() => setWebsiteOpen((value) => !value)}>
+              Add website
+            </Button>
+          )}
           <Button variant="outline" icon={<Upload className="size-4" />} loading={upload.isPending} onClick={() => fileInput.current?.click()}>
             Upload
           </Button>
@@ -102,7 +118,31 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
       </div>
 
       {progress && <p className="font-mono text-xs text-muted">{progress}</p>}
-      <ErrorNote error={upload.error ?? addNote.error ?? toggle.error ?? remove.error ?? sources.error} />
+      <ErrorNote error={upload.error ?? addNote.error ?? scrape.error ?? toggle.error ?? remove.error ?? sources.error} />
+
+      {kind === 'knowledge' && websiteOpen && (
+        <form
+          className="flex flex-wrap gap-2 rounded-lg border border-line bg-panel p-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            scrape.mutate()
+          }}
+        >
+          <Input
+            type="url"
+            required
+            maxLength={2_000}
+            aria-label="Website URL"
+            placeholder="https://example.com"
+            value={websiteUrl}
+            onChange={(event) => setWebsiteUrl(event.target.value)}
+            className="min-w-64 flex-1"
+          />
+          <Button type="submit" icon={<Globe className="size-4" />} loading={scrape.isPending} disabled={!websiteUrl.trim()}>
+            Import page
+          </Button>
+        </form>
+      )}
 
       {noteOpen && (
         <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
@@ -115,7 +155,7 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
       )}
 
       <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
-        {sources.data?.length === 0 && <li className="p-4 text-sm text-muted">Nothing yet — upload PDF, DOCX, XLSX, images, or paste notes.</li>}
+        {sources.data?.length === 0 && <li className="p-4 text-sm text-muted">Nothing yet — upload a file, paste text, or add a website as knowledge.</li>}
         {sources.data?.map((s) => (
           <li key={s.id} className={clsx('p-3 transition', !s.enabled && 'opacity-55')}>
             <div className="flex items-center gap-3">

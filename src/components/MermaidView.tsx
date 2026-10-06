@@ -3,6 +3,8 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { drawioUrl } from '../../shared/drawio.ts'
 import { downloadBlob } from '../lib/download'
+import { appBackground, svgToPng } from '../lib/copyImage'
+import { CopyImageButton } from './CopyImageButton'
 
 type MermaidApi = (typeof import('mermaid'))['default']
 let initializedFor: 'light' | 'dark' | null = null
@@ -61,6 +63,7 @@ function Fullscreen({ svg, title, onClose, onDrawio }: { svg: string; title: str
         <button className={toolCls} aria-label="Fit" title="Reset zoom (0)" onClick={() => setZoom(1)}>
           <Scan className="size-3.5" /> Fit
         </button>
+        <CopyImageButton getImage={() => svgToPng(svg, appBackground())} />
         <button className={toolCls} onClick={onDrawio}>
           <ExternalLink className="size-3.5" /> Edit in draw.io
         </button>
@@ -132,6 +135,7 @@ export function MermaidView({ source, filename, title, className }: { source: st
             <button className={toolCls} onClick={() => setFull(true)} title="Full screen preview">
               <Maximize2 className="size-3" /> Full screen
             </button>
+            <CopyImageButton getImage={() => svgToPng(svg, appBackground())} />
             <button className={toolCls} onClick={openDrawio} title="Open as an editable diagram in draw.io">
               <ExternalLink className="size-3" /> draw.io
             </button>

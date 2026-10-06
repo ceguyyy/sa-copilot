@@ -1,0 +1,72 @@
+# Builds the desktop installers: the macOS .dmg files (Apple Silicon + Intel) on a Mac runner and the Windows .exe.
+# Run it from the Actions tab (Run workflow), then download the files from that run's Artifacts section.
+# Pushing a tag like v1.0.1 also attaches the installers to a GitHub Release for that tag.
+name: Installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feat/local-windows-app]
+    paths: ['package.json', '.github/workflows/installers.yml']
+    tags: ['v*']
+
+permissions:
+  contents: write # only used to create the GitHub Release on a tag push
+
+jobs:
+  mac:
+    runs-on: macos-latest # Apple Silicon; the Intel build's Python runs under Rosetta
+    timeout-minutes: 60
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false' # ad-hoc signature only (identity "-" in electron-builder.yml)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Rosetta (for the Intel build's Python)
+        run: softwareupdate --install-rosetta --agree-to-license || true
+      - run: npm ci
+      - run: npm run dist:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sa-copilot-macos
+          path: release/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sa-copilot-windows
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: installers/*
+          generate_release_notes: true

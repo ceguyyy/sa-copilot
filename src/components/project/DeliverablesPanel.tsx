@@ -1,3 +1,4 @@
+import type { AiRunOptions } from '../../lib/useOutputLimit'
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../../shared/schemas.ts'
@@ -11,7 +12,7 @@ interface Props {
   projectId: string
   docs: DocumentRow[]
   running: DocType | null
-  onGenerate: (type: DocType, instruction: string) => void
+  onGenerate: (type: DocType, instruction: string, options: AiRunOptions) => void
 }
 
 /** The built-in pipeline: one card per deliverable, drafted by the AI or opened for editing. */
@@ -41,7 +42,7 @@ export function DeliverablesPanel({ projectId, docs, running, onGenerate }: Prop
                 Open · updated {new Date(doc.updated_at).toLocaleDateString()} <ArrowRight className="size-3.5" />
               </Link>
             ) : (
-              <AiDraftButton label="Draft with AI" align="left" isLoading={running === type} isDisabled={!!running} onRun={(instruction) => onGenerate(type, instruction)} />
+              <AiDraftButton label="Draft with AI" align="left" isLoading={running === type} isDisabled={!!running} onRun={(instruction, options) => onGenerate(type, instruction, options)} />
             )}
           </li>
         )

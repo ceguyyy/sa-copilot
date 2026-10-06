@@ -14,7 +14,7 @@ export function timelineSvg(timeline: TimelineContent, notes: DeckContent['timel
   const pad = 16
   const schedule = computeSchedule(timeline.rows, timeline.start_date || undefined)
   const rows = schedule.rows.filter((r) => r.endDay > r.startDay)
-  const totalDays = Math.max(schedule.totalDays, 1)
+  const totalDays = Math.max(schedule.durationDays, 1)
   const weeks = Math.max(Math.ceil(totalDays / WORKING_DAYS_PER_WEEK), 1)
 
   // Phases = distinct modules in order of appearance.

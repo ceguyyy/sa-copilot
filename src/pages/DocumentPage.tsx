@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, BookmarkCheck, BookmarkPlus, Download, Eye, FolderOpen, GitCompare, PenLine, RotateCcw, Save, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DOC_LABELS, type AnyDocContent } from '../../shared/schemas.ts'
 import { AiPanel } from '../components/AiPanel'
@@ -18,6 +18,7 @@ import { DOCX_TYPES, exportDocx } from '../../shared/export/docx.ts'
 import { XLSX_TYPES, exportXlsx } from '../../shared/export/xlsx.ts'
 import type { DocumentVersion } from '../lib/types'
 import { useGenerate } from '../lib/useGenerate'
+import { useResetState } from '../lib/useResetState'
 
 type Mode = 'edit' | 'preview' | 'diff'
 
@@ -41,18 +42,11 @@ function DocumentView() {
 
   const latest = versions.data?.[0]
   const [selected, setSelected] = useState<DocumentVersion | null>(null)
-  const [draft, setDraft] = useState<AnyDocContent | null>(null)
+  // A new latest version (save / AI / restore) replaces the working draft.
+  const [draft, setDraft] = useResetState<AnyDocContent | null>(latest?.id, () => structuredClone(latest!.content), null)
   const [mode, setMode] = useState<Mode>('edit')
   const [note, setNote] = useState('')
-  const [title, setTitle] = useState('')
-
-  // A new latest version (save / AI / restore) replaces the working draft.
-  useEffect(() => {
-    if (latest) setDraft(structuredClone(latest.content))
-  }, [latest?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (doc.data) setTitle(doc.data.title)
-  }, [doc.data])
+  const [title, setTitle] = useResetState(doc.data, () => doc.data!.title, '')
 
   const dirty = useMemo(() => !!latest && !!draft && JSON.stringify(draft) !== JSON.stringify(latest.content), [draft, latest])
 

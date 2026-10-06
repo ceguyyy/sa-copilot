@@ -1,6 +1,20 @@
 // Data access layer (repository pattern) — every call to the local server's REST API lives here.
 import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
 import type { Theme, ThemeMode } from '../../shared/theme.ts'
+import type { QaKnowledge, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
+import type { AiActivity } from '../../shared/activity.ts'
+import type { CloudStatus, UpdateStatus } from '../../shared/maintenance.ts'
+
+export const maintenanceApi = {
+  updates: () => request<UpdateStatus>('Load version', '/updates'),
+  check: () => send<UpdateStatus>('Check updates', 'POST', '/updates/check'),
+  upgrade: (commit: string) => send<UpdateStatus>('Upgrade', 'POST', '/updates/upgrade', { commit }),
+  cloud: () => request<CloudStatus>('Load cloud status', '/cloud'),
+  push: () => send<{ revision: number }>('Upload cloud backup', 'POST', '/cloud/push'),
+  pull: (revision: number) => send<{ revision: number; safetyBackup: string }>('Download cloud backup', 'POST', '/cloud/pull', { revision, confirm: 'RESTORE' }),
+}
+
+export const activityApi = { list: () => request<AiActivity[]>('Load AI activity', '/ai/activity') }
 import type {
   AiModel,
   BackupInspect,
@@ -79,6 +93,9 @@ export const sourcesApi = {
   addText(params: { projectId: string | null; kind: Source['kind']; name: string; text: string }): Promise<Source> {
     return send('Save note', 'POST', '/sources/text', params)
   },
+  scrape(params: { projectId: string | null; url: string }): Promise<Source> {
+    return send('Import website', 'POST', '/sources/scrape', params)
+  },
   setEnabled: (id: string, enabled: boolean) => send<Source>('Update source', 'PATCH', `/sources/${id}`, { enabled }),
   remove: (source: Source) => send<void>('Delete source', 'DELETE', `/sources/${source.id}`),
 }
@@ -144,6 +161,34 @@ export const pocVersionsApi = {
   create(pocId: string, config: PocConfig, origin: 'manual' | 'ai' | 'restore', note: string): Promise<PocVersion> {
     return send('Save POC version', 'POST', `/pocs/${pocId}/versions`, { config, origin, note })
   },
+  restore: (pocId: string, versionId: string) => send<{ poc: PocRow; version: PocVersion }>('Restore POC version', 'POST', `/pocs/${pocId}/versions/${versionId}/restore`, {}),
+}
+
+export const qaRunsApi = {
+  list: (pocId: string) => request<QaRunRow[]>('Load QA runs', `/pocs/${pocId}/qa-runs`),
+  setActionCheck: (runId: string, caseIndex: number, stepIndex: number, actionCheck: 'pending' | 'pass' | 'fail') =>
+    send<QaRunRow>('Save action check', 'PATCH', `/qa-runs/${runId}/action-check`, { caseIndex, stepIndex, actionCheck }),
+  remove: (runId: string) => send<void>('Delete QA run', 'DELETE', `/qa-runs/${runId}`),
+}
+
+export const qaSuitesApi = {
+  list: () => request<QaSuite[]>('Load QA suites', '/qa-suites'),
+  create: (name: string) => send<QaSuite>('Create QA suite', 'POST', '/qa-suites', { name }),
+  update: (id: string, patch: Partial<Pick<QaSuite, 'name' | 'livechat_url' | 'context' | 'cases'>>) => send<QaSuite>('Save QA suite', 'PATCH', `/qa-suites/${id}`, patch),
+  remove: (id: string) => send<void>('Delete QA suite', 'DELETE', `/qa-suites/${id}`),
+  knowledge: (id: string) => request<QaKnowledge[]>('Load knowledge', `/qa-suites/${id}/knowledge`),
+  addText: (id: string, name: string, text: string) => send<QaKnowledge>('Save knowledge', 'POST', `/qa-suites/${id}/knowledge/text`, { name, text }),
+  upload(id: string, file: File, extractedText: string): Promise<QaKnowledge> {
+    const form = new FormData()
+    form.set('file', file)
+    form.set('extractedText', extractedText)
+    return request(`Upload ${file.name}`, `/qa-suites/${id}/knowledge/upload`, { method: 'POST', body: form })
+  },
+  removeKnowledge: (knowledgeId: string) => send<void>('Delete knowledge', 'DELETE', `/qa-knowledge/${knowledgeId}`),
+  runs: (id: string) => request<QaRunRow[]>('Load QA runs', `/qa-suites/${id}/runs`),
+  setActionCheck: (runId: string, caseIndex: number, stepIndex: number, actionCheck: 'pending' | 'pass' | 'fail') =>
+    send<QaRunRow>('Save action check', 'PATCH', `/qa-suite-runs/${runId}/action-check`, { caseIndex, stepIndex, actionCheck }),
+  removeRun: (runId: string) => send<void>('Delete QA run', 'DELETE', `/qa-suite-runs/${runId}`),
 }
 
 // ---------- chat ----------
@@ -397,4 +442,18 @@ export const backupApi = {
   storage: () => request<{ uploads: string; exports: string; backups: string }>('Load storage folders', '/storage'),
   inspect: (file: File) => request<BackupInspect>('Read backup', '/backup/inspect', { method: 'POST', body: backupForm(file) }),
   restore: (file: File) => request<BackupRestoreResult>('Restore backup', '/backup/restore', { method: 'POST', body: backupForm(file, 'RESTORE') }),
+}
+
+export const officeApi = {
+  status: () => request<{ appUrl: string; connected: boolean; message: string | null }>('Load Claude Office', '/office'),
+}
+
+export interface Account { id: string; email: string }
+export const authApi = {
+  session: () => request<{ account: Account | null; configured: boolean }>('Load account', '/auth/session'),
+  login: (email: string, password: string) => send<{ account: Account }>('Login', 'POST', '/auth/login', { email, password }),
+  register: (email: string, password: string) => send<{ account: Account; recoveryCode: string }>('Register', 'POST', '/auth/register', { email, password }),
+  recoveryCode: (password: string) => send<{ recoveryCode: string }>('Create recovery code', 'POST', '/auth/recovery-code', { password }),
+  resetPassword: (email: string, recoveryCode: string, password: string) => send<{ message: string }>('Reset password', 'POST', '/auth/reset-password', { email, recoveryCode, password }),
+  logout: () => send('Logout', 'POST', '/auth/logout'),
 }

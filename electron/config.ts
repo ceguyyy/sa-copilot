@@ -156,12 +156,14 @@ export function buildServerEnv(cfg: DesktopConfig, paths: AppPaths, ports: Ports
     DEMO_APP_URL: v.demoAppUrl,
     NOTION_TOKEN: s.notionToken,
     NOTION_PARENT_PAGE: v.notionParentPage,
+    CLOUD_DATABASE_URL: s.cloudDatabaseUrl,
+    CLOUD_WORKSPACE: v.cloudWorkspace,
   }
   return {
     DATABASE_URL: `postgres://postgres:${encodeURIComponent(cfg.pgPassword)}@127.0.0.1:${ports.postgres}/sa_copilot`,
     PORT: String(ports.server),
     ANTHROPIC_BASE_URL: v.aiBaseUrl || `http://127.0.0.1:${ports.router}`,
-    ANTHROPIC_API_KEY: s.routerApiKey,
+    '9ROUTER_API_KEY': s.routerApiKey,
     UPLOAD_DIR: paths.uploadDir,
     BACKUP_DIR: paths.backupDir,
     DOCS_DIR: v.docsDir || paths.defaultDocsDir,

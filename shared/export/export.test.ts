@@ -39,6 +39,12 @@ describe('exportXlsx', () => {
     expect(fill(8)).toBe('FFE0673A')
   })
 
+  test('adds Total Mandays and IT Delivery Mandays rows under the timeline', async () => {
+    const ws = (await readBack(await exportXlsx('timeline', 'Timeline', timeline))).getWorksheet('TIMELINE')!
+    expect([ws.getRow(7).getCell(2).value, ws.getRow(7).getCell(6).value]).toEqual(['Total Mandays', 7])
+    expect([ws.getRow(8).getCell(2).value, ws.getRow(8).getCell(6).value]).toEqual(['IT Delivery Mandays (AI Setting + Integration & APIs)', 6])
+  })
+
   test('writes the user journey as READ_ME + one sheet per topic with blue section rows', async () => {
     const journey: UserJourneyContent = {
       title: 'User Journey',

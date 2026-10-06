@@ -6,9 +6,13 @@ export const DOCX_TYPES: DocType[] = ['sow_cekat', 'sow_cif', 'custom', 'onboard
 type Docx = typeof import('docx')
 
 /** Builds a .docx from the document's markdown rendering (headings, lists, tables, bold/italic). */
-export async function exportDocx(type: DocType, title: string, content: unknown): Promise<Blob> {
+export function exportDocx(type: DocType, title: string, content: unknown): Promise<Blob> {
+  return markdownToDocx(title, toMarkdown(type, title, content as never))
+}
+
+/** Builds a .docx from markdown (headings, lists, tables with <br>, bold/italic). */
+export async function markdownToDocx(title: string, md: string): Promise<Blob> {
   const d = await import('docx')
-  const md = toMarkdown(type, title, content as never)
   const doc = new d.Document({
     creator: 'SA Copilot',
     title,

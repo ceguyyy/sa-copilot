@@ -1,6 +1,11 @@
 // Request body schemas. Zod strips unknown keys, so parsed objects only ever contain writable columns.
 import { z } from 'zod'
+import { CHAT_FLOW_LIMITS, type FlowStep, WEEK_DAYS, chatFlowsSizeProblem } from '../shared/pocChatFlow.ts'
 import { CRM_COLUMN_TYPES, normalizeCrm } from '../shared/pocCrm.ts'
+import { isValidWelcomeImage } from '../shared/pocImage.ts'
+import { isLivechatUrl } from '../shared/pocQa.ts'
+import { POC_LABEL_MAX_CHARS } from '../shared/pocLimits.ts'
+import { type LegacyWorkflow, workflowCases } from '../shared/pocN8n.ts'
 import { DOC_TYPES, SKILL_OUTPUT_TYPES } from '../shared/schemas.ts'
 import { HttpError, UUID_RE } from './http.ts'
 
@@ -39,6 +44,12 @@ export const sourceText = z.object({
   kind: z.enum(['requirement', 'knowledge']),
   name: z.string().trim().min(1).max(300),
   text: z.string().max(5_000_000),
+})
+
+export const sourceScrape = z.object({
+  projectId: uuid.nullable(),
+  url: z.string().trim().min(1).max(2_000)
+    .refine((value) => /^https?:\/\//i.test(value) && URL.canParse(value), 'Must be an http(s) URL'),
 })
 
 export const sourceUploadFields = z.object({
@@ -131,6 +142,113 @@ const pocCrm = z.preprocess(
   }),
 )
 
+// Complete n8n workflows (JSON kept as text so it can be edited) with one cURL per use case (action) to test it.
+const pocN8nCase = z.object({
+  action: z.string().trim().max(120).default(''),
+  title: z.string().max(500).default(''),
+  curl: z.string().max(20_000),
+})
+const isRecord = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+/** Workflows saved before use cases existed keep their single cURL as one use case. */
+const upgradeLegacyN8n = (v: unknown) =>
+  isRecord(v) && Array.isArray(v.workflows)
+    ? { ...v, workflows: v.workflows.map((w) => (isRecord(w) && !('cases' in w) ? { ...w, cases: workflowCases(w as LegacyWorkflow) } : w)) }
+    : v
+const pocN8n = z.preprocess(upgradeLegacyN8n, z.object({
+  workflows: z
+    .array(
+      z.object({
+        name: z.string().trim().max(200),
+        description: z.string().max(5_000).default(''),
+        json: z.string().max(500_000),
+        cases: z.array(pocN8nCase).max(50).default([]),
+        testNotes: z.string().max(5_000).default(''),
+      }),
+    )
+    .max(30)
+    .default([]),
+}))
+
+// Conversation flowchart (Mermaid) and happy cases to try the agent in Cekat.
+const pocFlow = z.object({
+  mermaid: z.string().max(50_000).default(''),
+  happyCases: z
+    .array(
+      z.object({
+        title: z.string().trim().max(200),
+        goal: z.string().max(2_000).default(''),
+        steps: z.array(z.object({ user: z.string().max(5_000), ai: z.string().max(5_000), action: z.string().max(2_000) })).max(40),
+      }),
+    )
+    .max(20)
+    .default([]),
+})
+
+// POC Flow (Cekat Flow builder, no AI): a tree of conditions, actions, messages with buttons and End nodes.
+const flowId = z.string().min(1).max(64)
+const flowText = (max: number) => z.string().max(max)
+const flowTime = z.string().regex(/^(?:([01]\d|2[0-3]):[0-5]\d)?$/, 'Use HH:MM')
+const flowCondition = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('firstMessageText'), text: flowText(CHAT_FLOW_LIMITS.text) }),
+  z.object({ type: z.literal('firstMessageTime'), from: flowTime, to: flowTime, days: z.array(z.enum(WEEK_DAYS)).max(7) }),
+])
+const flowAction = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('addLabel'), label: flowText(POC_LABEL_MAX_CHARS) }),
+  z.object({ type: z.literal('addCollaborator'), collaborator: flowText(200) }),
+  z.object({ type: z.literal('sendMessage'), message: flowText(CHAT_FLOW_LIMITS.message) }),
+  z.object({ type: z.literal('webhook'), url: flowText(2_000) }),
+  z.object({ type: z.literal('jump'), targetId: z.string().max(64) }),
+])
+const flowEnd = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('human'), agents: z.array(flowText(200)).max(50) }),
+  z.object({ type: z.literal('ai'), agent: flowText(200) }),
+])
+const flowImage = z.string().max(3_000_000).refine(isValidWelcomeImage, 'Image must be a link or a PNG, JPEG, GIF or WebP image up to 2 MB')
+const flowStep: z.ZodType<FlowStep> = z.lazy(() =>
+  z.discriminatedUnion('kind', [
+    z.object({
+      id: flowId,
+      kind: z.literal('conditions'),
+      branches: z.array(z.object({ id: flowId, condition: flowCondition, next: flowStep.nullable() })).max(50),
+      elseId: flowId,
+      elseNext: flowStep.nullable(),
+    }),
+    z.object({ id: flowId, kind: z.literal('action'), action: flowAction, next: flowStep.nullable() }),
+    z.object({
+      id: flowId,
+      kind: z.literal('buttons'),
+      message: flowText(CHAT_FLOW_LIMITS.message),
+      image: flowImage.nullable(),
+      buttons: z.array(z.object({ id: flowId, label: flowText(CHAT_FLOW_LIMITS.buttonChars), next: flowStep.nullable() })).max(CHAT_FLOW_LIMITS.buttons),
+      elseId: flowId,
+      elseNext: flowStep.nullable(),
+    }),
+    z.object({ id: flowId, kind: z.literal('end'), end: flowEnd }),
+  ]),
+)
+// Size, depth and id checks run first (iteratively) so a deeply nested body is rejected before the recursive parse.
+const pocChatFlows = z
+  .unknown()
+  .superRefine((value, ctx) => {
+    const problem = chatFlowsSizeProblem(value)
+    if (problem) ctx.addIssue({ code: 'custom', message: problem, fatal: true })
+  })
+  .pipe(
+    z.object({
+      flows: z.array(z.object({ id: flowId, name: z.string().trim().max(200), start: flowStep.nullable() })).max(CHAT_FLOW_LIMITS.flows),
+    }),
+  )
+
+// A link, or an image picked from disk embedded as a data URL (max 2 MB). Short legacy values stay accepted.
+const MAX_LEGACY_IMAGE_CHARS = 500
+const welcomeImage = z
+  .string()
+  .max(3_000_000)
+  .refine(
+    (v) => isValidWelcomeImage(v) || (v.length <= MAX_LEGACY_IMAGE_CHARS && !v.startsWith('data:')),
+    'Welcome image must be a link or a PNG, JPEG, GIF or WebP image up to 2 MB',
+  )
+
 const pocApiIntegration = z.object({
   name: z.string().trim().max(64).refine((v) => v === '' || /^[a-z][a-z0-9_]{0,63}$/.test(v), 'Must be a valid API name or blank'),
   httpMethod: pocApiMethod,
@@ -147,11 +265,11 @@ const pocApiIntegration = z.object({
 export const pocConfig = z.object({
   agentBehavior: z.string().max(200_000).default(''),
   welcomeMessage: z.string().max(5_000).default(''),
-  welcomeImage: z.string().max(500).nullable().optional(),
+  welcomeImage: welcomeImage.nullable().optional(),
   agentTransferConditions: z.string().max(5_000).default(''),
   stopAiAfterHandoff: z.boolean().default(false),
   silentAgentHandoff: z.boolean().default(false),
-  labels: z.array(z.object({ name: z.string().trim().max(80).default(''), condition: z.string().max(2_000).default('') })).default([]),
+  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).default(''), condition: z.string().max(POC_LABEL_MAX_CHARS).default('') })).default([]),
   pipeline: pocPipeline,
   knowledgeBase: pocKnowledgeBase.default({
     textSections: [],
@@ -161,6 +279,11 @@ export const pocConfig = z.object({
   } as const),
   apiIntegrations: z.array(pocApiIntegration).default([]),
   crm: pocCrm.default({ boards: [] }),
+  flow: pocFlow.default({ mermaid: '', happyCases: [] }),
+  n8n: pocN8n.default({ workflows: [] }),
+  chatFlows: pocChatFlows.default({ flows: [] }),
+  // Cekat Web Livechat link the QA runner opens to play the happy cases.
+  livechatUrl: z.string().trim().max(500).refine((v) => v === '' || isLivechatUrl(v), 'Livechat link must be an https://live.cekat.ai/… link').default(''),
   additionalSettings: z
     .object({
       aiHistoryLimit: z.number().int().min(0).default(20),
@@ -190,7 +313,7 @@ export const pocConfig = z.object({
 
 const pocConfigPatch = pocConfig.partial().extend({
   knowledgeBase: pocKnowledgeBasePatch.optional(),
-  labels: z.array(z.object({ name: z.string().trim().max(80).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
+  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).optional(), condition: z.string().max(POC_LABEL_MAX_CHARS).default('').optional() }).partial()).optional(),
   pipeline: z.array(z.object({ order: z.number().int().min(1).optional(), status: z.string().trim().max(120).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
   apiIntegrations: z.array(pocApiIntegration.partial()).optional(),
   additionalSettings: z.object({
@@ -227,6 +350,10 @@ export const pocInput = z.object({
     },
     apiIntegrations: [],
     crm: { boards: [] },
+    flow: { mermaid: '', happyCases: [] },
+    n8n: { workflows: [] },
+    chatFlows: { flows: [] },
+    livechatUrl: '',
     additionalSettings: {
       aiHistoryLimit: 20,
       aiReadFileLimit: 3,
@@ -281,3 +408,10 @@ export const n8nNodeInput = z.object({
 })
 export const n8nNodePatch = n8nNodeInput.partial()
 export const n8nWorkflowImport = z.object({ workflow: z.unknown() })
+
+// Manual pass/fail of an expected action in a QA report (the livechat only shows replies).
+export const qaActionCheck = z.object({
+  caseIndex: z.number().int().min(0).max(100),
+  stepIndex: z.number().int().min(0).max(100),
+  actionCheck: z.enum(['pending', 'pass', 'fail']),
+})

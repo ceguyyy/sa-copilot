@@ -25,6 +25,57 @@
 - Out of scope: code signing, auto-update, Linux, multi-user, cloud migration.
 - Commits: this repo's owner commits only on request — each task ends with a commit step; run it only if the user has approved committing during execution, otherwise leave changes staged-ready and continue.
 
+## Deferred POC and n8n Requirements
+
+> Planning only. Do not implement these changes until the user explicitly gives the go-ahead. The POC Flow rules are intentionally TBD and must come from the user before its behavior is designed.
+
+- **One n8n workflow for curl cases:** represent all supported curl cases in one n8n workflow. A workflow can contain multiple curl commands, with each case represented and routed distinctly.
+- **n8n workflow skills format:** revise the n8n workflow skill format to follow the exported workflow structure in the supplied `Siloam Procurement Gateway - POC 01.json`, including its nodes, parameters, connections, and workflow metadata.
+- **Zero-based select values:** for select fields in n8n skills, the first option/value is `0`; do not start select values at `1`.
+- **POC Flow tab:** add a tab named `POC Flow` for non-AI workflows. It must support multiple workflows and must not invoke AI. Detailed workflow rules and behavior remain blocked on the user's forthcoming specification.
+- **POC agent text limits:** enforce a maximum of 3000 characters for Labels/labels and for description.
+- **Implementation gate:** keep this work documented in Markdown for now. Before implementation starts, push the approved plan changes to Git; do not include unrelated worktree changes in that push.
+
+### Deferred acceptance criteria
+
+- All curl cases are represented in one n8n workflow, and multiple curl commands can be included in it.
+- n8n workflow skills can represent/import the supplied exported workflow format, and select option values are zero-based.
+- The `POC Flow` tab supports multiple workflows without AI and follows the "POC Flow rules" section below (node types, limits, Else paths, end-node validation).
+- POC agent Labels/labels and description reject values longer than 3000 characters.
+
+### Status (2026-10-01)
+
+Go-ahead given; implemented except the POC Flow tab. Decisions taken with the user:
+
+- **n8n:** ONE gateway workflow per POC — one webhook, `Validate & Extract Payload` → `Is Payload Valid?` → `Switch Action` on `$json.action` → one branch per use case → shared `Respond to Webhook`. **1 use case = 1 cURL**: each workflow stores `cases: { action, title, curl }[]` (replaces `tool` + single `curl`; legacy POCs are upgraded on read by `normalizeN8n` / the `pocN8n` schema). AI writes it in one call (`draftN8nWorkflow`); every POC Agent "Copy cURL" adds `"action": "<integration name>"`.
+- **Skill format:** `N8N_WORKFLOW_RULES` follows the Siloam export (node names, types/typeVersions, parameter shapes incl. `cekatCrm` `columns.column[{ columnName, valueType: "select", selectValue }]`, connections, `settings`). `completeWorkflowExport` adds `pinData`, `settings`, `active`, `tags` and webhook `webhookId`s. Importing an export reads its use cases from its Switch (v1 `value2` or v3 conditions on `$json.action`).
+- **Zero-based selects:** `CEKAT_CRM_SELECT_RULE`, `selectOptionValue`, `crmN8nValueGuide` and the happy-case prompt.
+- **3000 limit:** label name and label description (condition) — `POC_LABEL_MAX_CHARS` in `shared/pocLimits.ts`, used by the schema, AI mapping and the editor inputs.
+- **POC Flow tab:** implemented 2026-10-02 per the rules below — `shared/pocChatFlow.ts` (model, Cekat-style validation, outline, Mermaid tree), `config.chatFlows` (recursive zod schema with depth/node/image/id guards), `src/components/project/chatflow/` (tab UI with copy per field), "POC Flow" section in version diffs. "Generate with AI" (scope `chatFlow`, requested 2026-10-02): the model writes flat nodes linked by ref (`server/ai/pocChatFlowDraft.ts`), `shared/pocChatFlowAi.ts` builds the tree (repeat references become Jumps, Cekat limits clipped); the flows themselves stay rule-based. Interactive canvas (React Flow, `@xyflow/react`, lazy-loaded) next to the Mermaid tree: layout in `shared/pocChatFlowGraph.ts`, click a node to highlight its path and jump to its fields, red placeholders for open paths, dotted jump edges.
+
+### POC Flow rules (from the user, 2026-10-02)
+
+Models the Cekat **Flow** builder: a non-AI, rule-based chat flow that runs before an agent takes over.
+
+- **Direction:** Flow → AI Agent is allowed (a flow can hand the chat to an AI agent). AI → Flow is **not** possible.
+- **Entry:** an incoming channel chat enters at the **Start point**. From Start point you can add a **Condition** or an **End Flow**.
+- **Condition node** types:
+  - **First Message Text**: if the customer's first message matches the trigger text, take this path.
+  - **First Message Time**: a time range plus days of the week (shown as "First Message Time / Day" in the builder).
+  - Each set of sibling conditions automatically gets an **Else** path ("This path will be taken if other conditions are not met").
+- **After a condition**, a new node can be:
+  - **Action** with one of: **Add Label** (put the chat in a label), **Add Collaborator**, **Send Message** (send a chat to the customer when the node is reached), **Webhook** (no variables can be added), **Jump** (continue at another chosen node).
+  - **Message with Buttons**: message text up to **10,000** chars, an optional uploaded **image**, up to **10 buttons** of up to **20** chars each. It branches into one **Button Response** condition per button, plus an **Else** path.
+  - **End Flow**.
+- **End Flow** types: **Human Agent** (must select one or more human agents) or **AI Agent** (hand over to an AI agent). The usual reason to end at an AI agent: it calls an API with a customer variable (e.g. track an order by order number), which the flow itself can't do.
+- **Validation** (mirrors Cekat's "Flow must end with a configured Human or AI Agent"): every leaf path, including each Else, must end in an End node (error: `<Node> (<label>) - Add An End Node`). An End Human Agent with no agents selected gives `End N (Human Agent) - Select Human Agents`.
+
+### Answers (2026-10-02)
+
+- **First Message Text** is **case-sensitive**. Match mode was not stated; assume **exact match** until told otherwise.
+- **Chaining:** Action / Webhook nodes can be chained (Action → Action → End). **Jump** can target **any node** in the same flow.
+- **Output:** no Cekat import format. The tab gives (1) a **tree visual** of each flow and (2) **copy-paste fields**: every node's field values (condition text, time/day, label, message text, button labels, webhook URL, chosen agents) with a copy button each, so the SA can rebuild the flow by hand in Cekat. Validation errors are shown as in Cekat.
+
 ## Review Focus
 
 1. **Ports already taken** (device runs PostgreSQL on 5432, 9router tray on 20128, something on 3000) → app starts anyway: free ports for Postgres/server, reuses the running 9router. Pinned in Task 5 (`freePort`) and Task 7 (`findRunningRouter`).
@@ -2912,3 +2963,26 @@ Expected: all pass. Report the installer size and installed size (`(Get-ChildIte
 git add scripts/smoke-win.ps1
 git commit -m "test: Windows installer smoke test"
 ```
+
+## POC Agent QA: run happy cases on the Cekat livechat (requested 2026-10-02)
+
+Only for the AI Agent (Flow & Happy Case tab), not for POC Flow.
+
+- **Entry point:** the POC stores a Cekat Web Livechat link; "Run happy cases" opens it with Playwright and plays each happy case as the customer.
+- **Browser:** visible (headed) by default so the SA can watch; a headless toggle.
+- **Data:** before the run, AI lists the data each happy case needs (order number, name, date…); the SA fills each in a free-text field or clicks "Generate dummy". The run then goes without pauses.
+- **Judging:** AI judges each AI reply against the expected reply → pass / fail with a reason. Expected actions (label, pipeline, handoff, API tool) are not visible in the livechat → marked "Needs manual check" and the SA ticks pass/fail in the report.
+- **Report:** per happy case and per step: sent message, actual reply, expected, verdict, reason; totals; AI summary; a revision prompt.
+- **Revision:** the prompt can be copied, and a button runs the existing POC Agent "Revise with AI" with it (diff preview, accept/reject).
+- **Implemented 2026-10-02** (example link `https://live.cekat.ai/?chat=BPKH-W9CZ8P9r`, inspected read-only; no message was sent). The widget has a pre-chat form `#contact-form` (fields vary per inbox, e.g. Phone *, DOB, Name *), `#chat-input` + `#chat-submit`, agent bubbles `.incoming-bubble` in `#chat-messages-inner`, `#typing-indicator`.
+  - Driver `server/qa/livechat.ts` (playwright-core with the installed Edge/Chrome; navigation locked to live.cekat.ai; per-turn cap). Fixture test: `QA_BROWSER_TESTS=1 npm test`.
+  - `POST /api/ai/poc-qa-prepare` (reads the form, AI finds case data + dummies), `/poc-qa-run` (one fresh browser session per case, AI adapts messages optionally, judges, summarises, saves to `poc_qa_runs`), `/poc-qa-stop`; one run at a time.
+  - UI: Flow & Happy Case tab → "QA AI Agent on the livechat"; livechat link saved in `config.livechatUrl`.
+
+## QA Testing page (sidebar, requested 2026-10-02)
+
+Stand-alone test suites, not tied to a project: knowledge (uploaded files → text only, or pasted text) → optional "about the agent" → test cases (by hand or AI from the knowledge, append/replace) → run on a livechat with the shared runner. The knowledge is the reference the replies are judged against; the revision prompt is copy-only (no POC to revise).
+
+- Tables `qa_suites`, `qa_suite_knowledge`, `qa_suite_runs` (in backups). Routes `server/routes/qaSuites.ts`; AI `server/ai/qaSuite.ts` (`/qa-suite-cases`, `/qa-suite-prepare`, `/qa-suite-run`).
+- Shared runner `server/qa/runner.ts` and planner `buildQaPlan` serve both the POC and the suites; the UI runner `QaRunner` takes an adapter.
+- Both POC QA and QA Testing: after Prepare every case has a checkbox; only checked cases run ("Run 3 of 4").

@@ -6,6 +6,8 @@ import { skillsApi } from '../lib/api'
 import type { GenerateParams } from '../lib/useGenerate'
 import { useRequestFiles } from '../lib/useRequestFiles'
 import { AttachFiles } from './AttachFiles'
+import { MaxTokensSelect } from './MaxTokensSelect'
+import { useOutputLimit } from '../lib/useOutputLimit'
 import { Button, ErrorNote, Field, Select, Textarea } from './ui'
 
 interface Props {
@@ -41,6 +43,7 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, acti
   const [instruction, setInstruction] = useState('')
   const [kind, setKind] = useState<string>(currentKind ?? 'activity')
   const files = useRequestFiles()
+  const [maxTokens, setMaxTokens] = useOutputLimit()
 
   function run() {
     onRun({
@@ -50,6 +53,7 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, acti
       instruction,
       diagramKind: docType === 'diagram' ? kind : undefined,
       attachmentIds: files.ids,
+      maxTokens,
     })
     setInstruction('')
     files.clear()
@@ -84,6 +88,7 @@ export function AiPanel({ docType, documentId, currentKind, running, chars, acti
         <Textarea rows={4} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Apa yang mau diubah?" />
       </Field>
       <AttachFiles state={files} disabled={running} />
+      <MaxTokensSelect value={maxTokens} onChange={setMaxTokens} />
       <div className="flex flex-wrap gap-1.5">
         {SUGGESTIONS[docType]?.map((s) => (
           <button key={s} onClick={() => setInstruction(s)} className="rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] text-muted hover:border-ember hover:text-ember">

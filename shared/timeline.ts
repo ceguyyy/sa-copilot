@@ -9,14 +9,26 @@ export interface ScheduledRow extends TimelineRow {
   endDay: number
   startDate?: string
   endDate?: string
+  /** Row belongs to an IT delivery activity (AI Setting, Integration & APIs). */
+  isItDelivery: boolean
 }
 
 export interface Schedule {
   rows: ScheduledRow[]
-  totalDays: number
+  /** Calendar length in working days: parallel rows overlap, so this is shorter than the mandays. */
+  durationDays: number
   totalWeeks: number
+  /** Effort: every row's SLA/Days, parallel rows included. */
+  totalMandays: number
+  /** Effort of the IT delivery activities only (AI Setting + Integration & APIs in the template). */
+  itDeliveryMandays: number
   endDate?: string
 }
+
+/** Activities whose rows count as IT delivery, matched on the Activity name (e.g. "AI Setting (Cekat)", "Integration & APIs*"). */
+const IT_DELIVERY_ACTIVITIES = [/\bai\s*setting/i, /\bintegrat/i]
+
+export const isItDeliveryActivity = (activity: string): boolean => IT_DELIVERY_ACTIVITIES.some((re) => re.test(activity))
 
 const safeDays = (d: number) => (Number.isFinite(d) && d > 0 ? d : 0)
 
@@ -26,9 +38,12 @@ const safeDays = (d: number) => (Number.isFinite(d) && d > 0 ? d : 0)
  */
 export function computeSchedule(rows: TimelineRow[], startDate?: string): Schedule {
   let cursor = 0
+  // Only the first row of an activity carries its name; the rows below it belong to the same activity.
+  let activity = ''
   const scheduled: ScheduledRow[] = []
 
   rows.forEach((r, i) => {
+    if (r.activity.trim()) activity = r.activity
     const days = safeDays(r.days)
     const startDay = r.parallel && i > 0 ? scheduled[i - 1].startDay : cursor
     const endDay = startDay + days
@@ -38,13 +53,17 @@ export function computeSchedule(rows: TimelineRow[], startDate?: string): Schedu
       startDay,
       endDay,
       ...(startDate ? datesFor(startDate, startDay, endDay) : {}),
+      isItDelivery: isItDeliveryActivity(activity),
     })
   })
 
+  const sumDays = (list: ScheduledRow[]) => list.reduce((sum, r) => sum + safeDays(r.days), 0)
   return {
     rows: scheduled,
-    totalDays: cursor,
+    durationDays: cursor,
     totalWeeks: Math.ceil(cursor / WORKING_DAYS_PER_WEEK),
+    totalMandays: sumDays(scheduled),
+    itDeliveryMandays: sumDays(scheduled.filter((r) => r.isItDelivery)),
     ...(startDate && cursor > 0 ? { endDate: addWorkingDays(startDate, cursor - 1) } : {}),
   }
 }

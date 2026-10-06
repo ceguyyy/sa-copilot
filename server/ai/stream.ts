@@ -7,17 +7,25 @@ export type Stream = { send: (obj: unknown) => void }
 
 export function streamResponse(run: (s: Stream) => Promise<void>): Response {
   const encoder = new TextEncoder()
+  // When the browser disconnects (tab closed, navigation) the job keeps running so its result is still saved.
+  let isOpen = true
   const body = new ReadableStream({
     async start(controller) {
-      const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+      const send = (obj: unknown) => {
+        if (isOpen) controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
+      }
       try {
         await run({ send })
       } catch (e) {
         console.error(e)
         send({ type: 'error', error: describeError(e) })
       } finally {
-        controller.close()
+        if (isOpen) controller.close()
+        isOpen = false
       }
+    },
+    cancel() {
+      isOpen = false
     },
   })
   return new Response(body, { headers: { 'Content-Type': 'application/x-ndjson' } })
@@ -27,7 +35,7 @@ const routerHint = () => (config.anthropic.baseURL ? ` at ${config.anthropic.bas
 
 export function describeError(e: unknown): string {
   if (e instanceof Anthropic.RateLimitError || e instanceof OpenAI.RateLimitError) return 'Rate limit reached — try again in a minute, or pick another model.'
-  if (e instanceof Anthropic.AuthenticationError || e instanceof OpenAI.AuthenticationError) return 'API key is invalid or missing (check ANTHROPIC_API_KEY in .env).'
+  if (e instanceof Anthropic.AuthenticationError || e instanceof OpenAI.AuthenticationError) return 'API key is invalid or missing (check 9ROUTER_API_KEY in .env).'
   if (e instanceof Anthropic.APIConnectionError || e instanceof OpenAI.APIConnectionError) return `Cannot reach the AI endpoint${routerHint()}`
   if (e instanceof Anthropic.APIError || e instanceof OpenAI.APIError) return `AI API error ${e.status ?? ''}: ${e.message}`
   if (e instanceof Error) return e.message

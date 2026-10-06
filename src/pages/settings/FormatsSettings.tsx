@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Save, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AssistantChat } from '../../components/AssistantChat'
 import { ReferenceFiles } from '../../components/ReferenceFiles'
 import { Button, Card, ErrorNote, Field, Input, Spinner, Textarea } from '../../components/ui'
 import { templatesApi } from '../../lib/api'
 import type { DocTemplate, DocTemplateInput } from '../../lib/types'
+import { useResetState } from '../../lib/useResetState'
 
 const BLANK: DocTemplateInput = { name: 'New deliverable', description: '', instructions: '' }
 
@@ -23,12 +24,8 @@ export function FormatsSettings() {
   const qc = useQueryClient()
   const templates = useQuery({ queryKey: ['templates'], queryFn: templatesApi.list })
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
-  const [form, setForm] = useState<DocTemplateInput>(BLANK)
-
   const selected = templates.data?.find((t) => t.id === selectedId)
-  useEffect(() => {
-    if (selected) setForm(pick(selected))
-  }, [selected?.id, selected?.updated_at]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [form, setForm] = useResetState<DocTemplateInput>(selected && `${selected.id}:${selected.updated_at}`, () => pick(selected!), BLANK)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['templates'] })
 

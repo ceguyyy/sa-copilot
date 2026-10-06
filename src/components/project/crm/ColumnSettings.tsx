@@ -54,7 +54,10 @@ export function ColumnSettings({ column, isKanban, isFirst, isLast, onChange, on
           </label>
           <ol className="space-y-2">
             {column.options.map((option, i) => (
-              <li key={`opt-${i}`} className="grid items-center gap-2 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto]">
+              <li key={`opt-${i}`} className="grid items-center gap-2 md:grid-cols-[auto_minmax(0,2fr)_minmax(0,3fr)_auto]">
+                <span className="w-7 rounded-md bg-paper py-1 text-center font-mono text-xs text-muted" title={`n8n sends ${i} for this option when it creates or updates a CRM item (zero-based)`}>
+                  {i}
+                </span>
                 <Input aria-label={`Option ${i + 1}`} value={option.label} onChange={(e) => setOption(i, { label: e.target.value })} placeholder="Option" style={optionStyle(i)} />
                 <Input
                   aria-label={`Option ${i + 1} condition`}
@@ -67,6 +70,7 @@ export function ColumnSettings({ column, isKanban, isFirst, isLast, onChange, on
               </li>
             ))}
           </ol>
+          <p className="text-xs text-muted">n8n fills this column with the option number (left), not the label — e.g. Invoice, PO, Delivery → 0, 1, 2 (the first option is 0). Reordering options changes the numbers.</p>
           <Button variant="outline" icon={<Plus className="size-4" />} onClick={() => setOptions([...column.options, { label: '', condition: '' }])}>
             Add option
           </Button>

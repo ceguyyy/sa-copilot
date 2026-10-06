@@ -1,11 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { deckVisuals, type DeckContent } from '../../../shared/deck/index.ts'
 import type { TimelineContent } from '../../../shared/schemas.ts'
 import { documentsApi, versionsApi } from '../../lib/api'
 import { Textarea } from '../ui'
+import { svgToPng } from '../../lib/copyImage'
+import { CopyImageButton } from '../CopyImageButton'
+import { useResetState } from '../../lib/useResetState'
 
 interface Props {
   value: DeckContent
@@ -66,20 +69,22 @@ export function DeckEditor({ value, onChange, readOnly }: Props) {
   }, [value, timeline])
   const visual = visuals.find((v) => v.key === active.visual)
 
-  const [json, setJson] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    setJson(JSON.stringify(readSection(value, active.section), null, 2))
-    setError(null)
-  }, [active, value])
+  // The JSON box follows the active slide's section, but keeps what is being typed while it does not parse.
+  const sectionJson = JSON.stringify(readSection(value, active.section), null, 2)
+  const [box, setBox] = useResetState<{ json: string; error: string | null }>(
+    `${active.slide}
+${sectionJson}`,
+    () => ({ json: sectionJson, error: null }),
+    { json: '', error: null },
+  )
+  const { json, error } = box
 
   function edit(text: string) {
-    setJson(text)
     try {
       onChange(writeSection(value, active.section, JSON.parse(text)))
-      setError(null)
+      setBox({ json: text, error: null })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Invalid JSON')
+      setBox({ json: text, error: e instanceof Error ? e.message : 'Invalid JSON' })
     }
   }
 
@@ -106,7 +111,12 @@ export function DeckEditor({ value, onChange, readOnly }: Props) {
         <div className="rounded-xl border border-line bg-white p-3">
           {visual ? (
             // Our own SVG builder: every text value is escaped, no scripts or external references.
-            <div className="flex justify-center [&>svg]:h-auto [&>svg]:max-h-[460px] [&>svg]:w-auto [&>svg]:max-w-full" dangerouslySetInnerHTML={{ __html: visual.svg }} />
+            <div className="space-y-2">
+              <div className="flex justify-end">
+                <CopyImageButton getImage={() => svgToPng(visual.svg)} />
+              </div>
+              <div className="flex justify-center [&>svg]:h-auto [&>svg]:max-h-[460px] [&>svg]:w-auto [&>svg]:max-w-full" dangerouslySetInnerHTML={{ __html: visual.svg }} />
+            </div>
           ) : (
             <p className="p-6 text-center text-sm text-muted">
               {active.slide === 1

@@ -3,6 +3,7 @@ import { ExternalLink, FileClock, FileDown, FolderOpen, GitBranch, LayoutTemplat
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
 import { ChatPanel } from '../components/ChatPanel'
+import { CHAT_GRID, useChatSize } from '../lib/chatSize'
 import { LanguageSelect } from '../components/LanguageSelect'
 import { CustomDeliverables } from '../components/CustomDeliverables'
 import { AuditPanel } from '../components/project/AuditPanel'
@@ -86,6 +87,7 @@ type TabId = (typeof TABS)[number]['id']
 export function ProjectPage() {
   const { projectId = '' } = useParams()
   const [params, setParams] = useSearchParams()
+  const [chatSize, setChatSize] = useChatSize()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => projectsApi.get(projectId) })
@@ -121,7 +123,7 @@ export function ProjectPage() {
     },
   })
 
-  async function generateAndOpen(docType: DocType, extra: { diagramKind?: string; templateId?: string; instruction?: string } = {}) {
+  async function generateAndOpen(docType: DocType, extra: { diagramKind?: string; templateId?: string; instruction?: string; maxTokens?: number } = {}) {
     const done = await gen.run({ docType, ...extra })
     if (done?.documentId) navigate(`/projects/${projectId}/docs/${done.documentId}`)
   }
@@ -149,7 +151,7 @@ export function ProjectPage() {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div className={`grid gap-8 ${CHAT_GRID[chatSize]}`}>
       <div className="min-w-0 space-y-6">
         <PageHeader
           kicker={p.client_name}
@@ -223,14 +225,14 @@ export function ProjectPage() {
           <div className="space-y-6">
             <DeliverablesProgress projectId={projectId} docs={all} />
             <ConsistencyPanel projectId={projectId} hasDocs={all.length > 0} />
-            <DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type, instruction) => generateAndOpen(type, { instruction })} />
+            <DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type, instruction, { maxTokens }) => generateAndOpen(type, { instruction, maxTokens })} />
           </div>
         )}
         {tab.id === 'custom' && (
-          <CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId, instruction) => generateAndOpen('custom', { templateId, instruction })} />
+          <CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId, instruction, { maxTokens }) => generateAndOpen('custom', { templateId, instruction, maxTokens })} />
         )}
         {tab.id === 'diagrams' && (
-          <DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind, instruction) => generateAndOpen('diagram', { diagramKind, instruction })} />
+          <DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind, instruction, { maxTokens }) => generateAndOpen('diagram', { diagramKind, instruction, maxTokens })} />
         )}
         {tab.id === 'poc' && <PocPanel projectId={projectId} clientName={p.client_name || p.name} />}
         {tab.id === 'files' && <ProjectFilesPanel projectId={projectId} />}
@@ -238,7 +240,7 @@ export function ProjectPage() {
         {tab.id === 'audit' && <AuditPanel projectId={projectId} />}
       </div>
 
-      <ChatPanel projectId={projectId} focus={tab.focus} starters={[...tab.starters]} />
+      <ChatPanel projectId={projectId} focus={tab.focus} starters={[...tab.starters]} size={chatSize} onSizeChange={setChatSize} />
     </div>
   )
 }

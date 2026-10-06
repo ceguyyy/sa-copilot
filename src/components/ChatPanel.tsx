@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eraser, Send, Square } from 'lucide-react'
+import { Eraser, Maximize2, MessageSquare, Minimize2, PanelRightClose, Send, Square } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { chat } from '../lib/ai'
+import type { ChatSize } from '../lib/chatSize'
 import { messagesApi, skillsApi } from '../lib/api'
 import { useRequestFiles } from '../lib/useRequestFiles'
 import { AttachFiles } from './AttachFiles'
@@ -19,10 +20,12 @@ interface Props {
   /** The project tab the SA is on; the AI prioritises that area. */
   focus?: string
   starters?: string[]
+  size?: ChatSize
+  onSizeChange?: (size: ChatSize) => void
 }
 
 /** The project's AI chat. One shared history; each tab sets its own focus and starter prompts. */
-export function ChatPanel({ projectId, focus, starters = STARTERS }: Props) {
+export function ChatPanel({ projectId, focus, starters = STARTERS, size = 'normal', onSizeChange }: Props) {
   const qc = useQueryClient()
   const key = ['messages', projectId]
   const messages = useQuery({ queryKey: key, queryFn: () => messagesApi.list(projectId) })
@@ -86,6 +89,25 @@ export function ChatPanel({ projectId, focus, starters = STARTERS }: Props) {
 
   const history = messages.data ?? []
 
+  // Collapsed: a thin rail. The component stays mounted, so a reply that is still streaming keeps going.
+  if (size === 'collapsed') {
+    return (
+      <aside className="flex rounded-xl border border-line bg-panel lg:sticky lg:top-6 lg:h-[calc(100vh-4rem)] lg:flex-col">
+        <button
+          type="button"
+          onClick={() => onSizeChange?.('normal')}
+          aria-label="Open Ask your SA"
+          title="Open Ask your SA"
+          className="flex w-full items-center gap-2 px-4 py-3 text-sm font-semibold text-ember hover:bg-ember-soft lg:flex-col lg:px-0 lg:py-4"
+        >
+          <MessageSquare className="size-5" />
+          <span className="lg:[writing-mode:vertical-rl]">Ask your SA</span>
+          {pending && <span className="size-2 animate-pulse rounded-full bg-ember" aria-label="Replying…" />}
+        </button>
+      </aside>
+    )
+  }
+
   return (
     <aside className="flex h-[calc(100vh-4rem)] flex-col rounded-xl border border-line bg-panel lg:sticky lg:top-6">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
@@ -104,9 +126,25 @@ export function ChatPanel({ projectId, focus, starters = STARTERS }: Props) {
               ))}
             </Select>
           )}
-          <button aria-label="Clear chat" onClick={clear} className="rounded p-1.5 text-muted hover:bg-ember-soft hover:text-bad">
+          <button aria-label="Clear chat" title="Clear chat" onClick={clear} className="rounded p-1.5 text-muted hover:bg-ember-soft hover:text-bad">
             <Eraser className="size-4" />
           </button>
+          {onSizeChange && (
+            <>
+              <button
+                type="button"
+                aria-label={size === 'wide' ? 'Shrink chat' : 'Expand chat'}
+                title={size === 'wide' ? 'Shrink chat' : 'Expand chat'}
+                onClick={() => onSizeChange(size === 'wide' ? 'normal' : 'wide')}
+                className="hidden rounded p-1.5 text-muted hover:bg-paper hover:text-ink lg:block"
+              >
+                {size === 'wide' ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+              </button>
+              <button type="button" aria-label="Collapse chat" title="Collapse chat" onClick={() => onSizeChange('collapsed')} className="rounded p-1.5 text-muted hover:bg-paper hover:text-ink">
+                <PanelRightClose className="size-4" />
+              </button>
+            </>
+          )}
         </div>
       </header>
 
