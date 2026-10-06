@@ -1,5 +1,6 @@
 // Client for the local server's /api/ai endpoints. Responses are NDJSON streams.
 import type { DocType } from '../../shared/schemas.ts'
+import type { EnhancementBatch } from '../../shared/enhancement.ts'
 import type { ConsistencyCheck } from './api'
 import type { PocConfig, PocRow } from './types'
 import type { PocReviseTarget } from '../../shared/pocRevise.ts'
@@ -163,6 +164,9 @@ async function job<T>(path: string, params: Record<string, unknown>, handlers: J
 
 export const checkConsistency = (projectId: string, handlers?: JobHandlers) =>
   job<ConsistencyCheck>('/consistency', { projectId }, handlers)
+
+export const enhanceProject = (params: { batchId: string; action: 'analyze' | 'preview' | 'review'; key?: string; accepted?: string[] }, handlers?: JobHandlers) =>
+  job<EnhancementBatch>('/enhancement', params, handlers)
 
 export interface MeetingResult {
   sourceId: string

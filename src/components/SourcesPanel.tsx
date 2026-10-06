@@ -1,7 +1,8 @@
+import { useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Brain, BrainCircuit, FileText, Globe, Image as ImageIcon, NotebookPen, Trash2, Upload } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sourcesApi } from '../lib/api'
 import { ACCEPTED_FILES, extractText } from '../lib/extract'
 import type { Source } from '../lib/types'
@@ -11,13 +12,17 @@ interface Props {
   projectId: string | null
   kinds: Source['kind'][]
   title: string
+  hideTitle?: boolean
+  initialUpload?: boolean
 }
 
 /** Upload files / paste notes as requirement or knowledge sources. Text is extracted in the browser. */
-export function SourcesPanel({ projectId, kinds, title }: Props) {
+export function SourcesPanel({ projectId, kinds, title, hideTitle = false, initialUpload = false }: Props) {
+  const location = useLocation()
   const qc = useQueryClient()
   const key = ['sources', projectId ?? 'global']
   const fileInput = useRef<HTMLInputElement>(null)
+  const [uploadPrompt, setUploadPrompt] = useState(initialUpload)
   const [kind, setKind] = useState<Source['kind']>(kinds[0])
   const [noteOpen, setNoteOpen] = useState(false)
   const [note, setNote] = useState({ name: '', text: '' })
@@ -28,6 +33,13 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
 
   const sources = useQuery({ queryKey: key, queryFn: () => sourcesApi.list(projectId) })
 
+  useEffect(() => {
+    const id = location.hash.startsWith('#source-') ? location.hash.slice(8) : null
+    if (!id || !sources.data?.some(source => source.id === id)) return
+    setExpanded(id)
+    const frame = requestAnimationFrame(() => document.getElementById(`source-${id}`)?.scrollIntoView({ block: 'center' }))
+    return () => cancelAnimationFrame(frame)
+  }, [location.hash, sources.data])
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
       for (const [i, file] of files.entries()) {
@@ -73,8 +85,9 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
 
   return (
     <section className="space-y-3">
+      {uploadPrompt && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-forest/30 bg-forest-soft p-4"><div><p className="text-sm font-semibold">Upload project requirements</p><p className="mt-1 text-xs text-muted">Choose source files to add as requirements for this project.</p></div><div className="flex gap-2"><Button loading={upload.isPending} onClick={() => fileInput.current?.click()}>Choose files</Button><Button variant="ghost" onClick={() => setUploadPrompt(false)}>Dismiss</Button></div></div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-xl font-semibold">{title}</h2>
+        {!hideTitle && <h2 className="font-display text-xl font-semibold">{title}</h2>}
         <div className="flex flex-wrap items-center gap-2">
           {kinds.length > 1 && (
             <div className="flex rounded-md border border-line bg-panel p-0.5 text-xs" role="radiogroup" aria-label="Source type">
@@ -157,7 +170,7 @@ export function SourcesPanel({ projectId, kinds, title }: Props) {
       <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
         {sources.data?.length === 0 && <li className="p-4 text-sm text-muted">Nothing yet — upload a file, paste text, or add a website as knowledge.</li>}
         {sources.data?.map((s) => (
-          <li key={s.id} className={clsx('p-3 transition', !s.enabled && 'opacity-55')}>
+          <li key={s.id} id={`source-${s.id}`} className={clsx('p-3 transition', !s.enabled && 'opacity-55')}>
             <div className="flex items-center gap-3">
               {s.mime_type?.startsWith('image/') ? <ImageIcon className="size-4 shrink-0 text-muted" /> : <FileText className="size-4 shrink-0 text-muted" />}
               <button className="min-w-0 flex-1 truncate text-left text-sm hover:underline" onClick={() => setExpanded(expanded === s.id ? null : s.id)}>

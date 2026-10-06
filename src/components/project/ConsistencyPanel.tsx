@@ -13,13 +13,15 @@ const SEVERITY: Record<ConsistencyIssue['severity'], { tone: 'warn' | 'ember' | 
 }
 
 /** Runs the AI cross-check of all deliverables and shows the latest report. */
-export function ConsistencyPanel({ projectId, hasDocs }: { projectId: string; hasDocs: boolean }) {
+export function ConsistencyPanel({ projectId, hasDocs, expanded, onExpandedChange }: { projectId: string; hasDocs: boolean; expanded?: boolean; onExpandedChange?: (open: boolean) => void }) {
   const qc = useQueryClient()
   const latest = useQuery({ queryKey: ['consistency', projectId], queryFn: () => consistencyApi.latest(projectId) })
   const [running, setRunning] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState<unknown>(null)
-  const [open, setOpen] = useState(true)
+  const [localOpen, setLocalOpen] = useState(true)
+  const open = expanded ?? localOpen
+  const setOpen = (next: boolean) => { setLocalOpen(next); onExpandedChange?.(next) }
 
   async function run() {
     setRunning(true)
@@ -47,7 +49,7 @@ export function ConsistencyPanel({ projectId, hasDocs }: { projectId: string; ha
   return (
     <section className="space-y-3 rounded-xl border border-line bg-panel p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button className="flex items-center gap-2 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open} disabled={!check}>
+        <button className="flex items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open} disabled={!check}>
           <ScanSearch className="size-5 text-forest" />
           <span>
             <span className="block font-display text-lg font-semibold">Consistency check</span>

@@ -1,3 +1,4 @@
+import { workspace } from './workspace.ts'
 // REST API for the data the frontend reads and writes (repository layer lives in src/lib/api.ts).
 import type { DeckContent } from '../shared/deck/types.ts'
 import { Hono } from 'hono'
@@ -7,6 +8,7 @@ import { query, queryOne, withTransaction } from './db.ts'
 import { HttpError, UUID_RE, idParam, notFound, parseJson } from './http.ts'
 import { removeOwnerFiles } from './attachments.ts'
 import { latestConsistencyCheck } from './ai/consistency.ts'
+import { enhancement } from './enhancement.ts'
 import { buildDeckPptx } from './deck/build.ts'
 import { languageForNewProject } from './languages.ts'
 import { exportDocumentFiles, exportProjectFiles, removeExportedFiles } from './exports.ts'
@@ -30,6 +32,8 @@ import {
 } from './validation.ts'
 
 export const api = new Hono()
+api.route('/', enhancement)
+api.route('/', workspace)
 
 /** Disk export runs after the response; a failure is logged, never shown as a failed save. */
 function exportLater(run: () => Promise<unknown>): void {
@@ -354,16 +358,19 @@ api.get('/projects/:id/consistency', async (c) => c.json(await latestConsistency
 api.get('/dashboard', async (c) =>
   c.json(
     await query(
-      `select p.id, p.name, p.client_name, p.industry, p.package, p.status, p.language, p.updated_at,
+      `select p.id, p.name, p.client_name, p.industry, p.package, p.status, p.language, p.description, p.updated_at,
          (select count(distinct d.type) from documents d
             where d.project_id = p.id and d.type in ('assessment', 'tor', 'timeline', 'sow_cekat', 'sow_cif', 'onboarding', 'user_journey', 'deck'))::int as drafted,
          (select count(*) from documents d where d.project_id = p.id and d.type = 'custom')::int as custom_docs,
          (select count(*) from documents d where d.project_id = p.id and d.type = 'diagram')::int as diagrams,
          (select count(*) from open_questions q where q.project_id = p.id and q.status = 'open')::int as open_questions,
          (select count(*) from sources s where s.project_id = p.id)::int as sources,
+         (select count(*) from review_alerts r where r.project_id=p.id and r.reviewed_at is null)::int as review_alerts,
+         (select count(*) from enhancement_batches b where b.project_id=p.id and b.state='draft'
+            and exists (select 1 from jsonb_array_elements(b.items) i where i->>'state'='ready'))::int as revision_drafts,
          (select jsonb_array_length(cc.result->'issues') from consistency_checks cc
             where cc.project_id = p.id order by cc.created_at desc limit 1) as last_check_issues,
-         coalesce((select max(a.at) from audit_log a where a.project_id = p.id), p.updated_at) as last_activity
+         greatest(p.updated_at, coalesce((select max(a.at) from audit_log a where a.project_id = p.id), p.updated_at)) as last_activity
        from projects p order by last_activity desc`,
     ),
   ),

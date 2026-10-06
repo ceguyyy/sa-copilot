@@ -1,3 +1,4 @@
+import { contextEvidence } from '../evidence.ts'
 // AI endpoints: `chat` (streamed conversation) and `generate` (structured document), plus model/effort settings.
 // Responses stream NDJSON lines: {type:"delta"|"progress"|"tool"|"done"|"error", ...}.
 
@@ -18,6 +19,7 @@ import { summarizeVersionDiff } from './versionDiff.ts'
 import { generateDemoScenarios } from './demoScenarios.ts'
 import { generatePocDraft } from './pocDraft.ts'
 import { revisePoc } from './pocRevise.ts'
+import { enhanceProject } from './enhancement.ts'
 import { prepareQa } from './pocQaPrepare.ts'
 import { runQa, stopQa } from './pocQaRun.ts'
 import { generateSuiteCases, prepareSuiteQa, runSuiteQa } from './qaSuite.ts'
@@ -37,7 +39,7 @@ const MAX_INSTRUCTION_CHARS = 8000
 type Body = Record<string, unknown>
 
 export const ai = new Hono()
-ai.get('/activity', (c) => c.json(activitySnapshot(), 200, { 'Cache-Control': 'no-store' }))
+ai.get('/activity', async (c) => c.json(await activitySnapshot(), 200, { 'Cache-Control': 'no-store' }))
 
 ai.post('/', async (c) => {
   const body = await c.req.json().catch(() => null)
@@ -69,6 +71,7 @@ ai.post('/version-diff', streamed(summarizeVersionDiff))
 ai.post('/demo-scenarios', streamed(generateDemoScenarios))
 ai.post('/poc-draft', streamed(generatePocDraft))
 ai.post('/poc-revise', streamed(revisePoc))
+ai.post('/enhancement', streamed(enhanceProject))
 ai.post('/poc-n8n-review', streamed(reviewPocN8nWorkflow))
 ai.post('/poc-qa-prepare', streamed(prepareQa))
 ai.post('/poc-qa-run', streamed(runQa))
@@ -191,8 +194,9 @@ async function handleGenerate(body: Body, out: Stream) {
     ownerFiles('template', template?.id, model.vision),
   ])
 
+  const evidenceRefs = await contextEvidence(ctx)
   const schema = DOC_SCHEMAS[docType]
-  const task = buildTask(docType, instruction, existing, diagramKind, template)
+  const task = buildTask(docType, instruction, existing, diagramKind, template) + '\nFor material claims, numeric estimates and assumptions, cite the supporting context inline using [source:UUID] or [document:UUID:vNUMBER]. Use only identifiers provided in context. Label unsupported statements as assumptions or needing confirmation. Do not invent citations. Put citations in narrative text or notes allowed by the schema; never insert them into Mermaid/code, endpoints, identifiers, numeric fields or machine-readable values.'
   const structured = !config.anthropic.proxied // native structured outputs only on the Claude API itself
   const stopTool: ToolDef = {
     name: SUBMIT_TOOL,
@@ -237,9 +241,9 @@ async function handleGenerate(body: Body, out: Stream) {
   const docId = existing?.id ?? (await createDocument(projectId, docType, content, template))
   const note = instruction ? `AI: ${instruction.slice(0, 200)}` : existing ? 'AI regenerate' : 'AI initial draft'
   const version = await queryOne<{ id: string; version_no: number }>(
-    `insert into document_versions (document_id, content, origin, skill_id, note)
-     values ($1, $2, 'ai', $3, $4) returning id, version_no`,
-    [docId, content, skill?.id ?? null, `${note} · ${model.id}`],
+    `insert into document_versions (document_id, content, origin, skill_id, note, context_refs)
+     values ($1, $2, 'ai', $3, $4, $5) returning id, version_no`,
+    [docId, content, skill?.id ?? null, `${note} · ${model.id}`, JSON.stringify(evidenceRefs)],
   )
   exportDocumentFiles(docId).catch((e) => console.error('Auto-export failed:', e))
 
@@ -274,6 +278,9 @@ function buildTask(
   if (docType === 'user_journey') lines.push(USER_JOURNEY_TASK.replace('<today dd/mm/yyyy>', new Date().toLocaleDateString('en-GB')))
   if (docType === 'sow_cekat' || docType === 'sow_cif') {
     lines.push('Durations and milestones MUST come from the Timeline document in the context (its SLA/Days are the mandays set by the SA). If no timeline exists, write "TBD — timeline belum dibuat".')
+  }
+  if (docType === 'sow_cekat') {
+    lines.push('The customer chooses the service package. Omit Package metadata and the entire Paket Layanan Cekat section (including TOC entries and placeholders). Do not define or infer package tiers, quotas, pricing or entitlements from project defaults or the Enterprise template. Preserve confirmed technical scope. Support terms must follow confirmed customer agreements/PKS, without assuming a package-based SLA. Renumber remaining sections sequentially.')
   }
   lines.push(instruction ? `Instruction from the SA: ${instruction}` : 'No extra instruction — follow the skill guidance.')
   return lines.join('\n')

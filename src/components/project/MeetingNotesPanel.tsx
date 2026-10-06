@@ -10,10 +10,12 @@ import { Button, ErrorNote, Input, Textarea } from '../ui'
  * Meeting notes → requirements. Paste notes or attach a transcript / recording (markitdown converts it);
  * the AI saves a structured requirement source and sends open questions to the tracker.
  */
-export function MeetingNotesPanel({ projectId }: { projectId: string }) {
+export function MeetingNotesPanel({ projectId, expanded, onExpandedChange }: { projectId: string; expanded?: boolean; onExpandedChange?: (open: boolean) => void }) {
   const qc = useQueryClient()
   const files = useRequestFiles()
-  const [open, setOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = expanded ?? localOpen
+  const setOpen = (next: boolean) => { setLocalOpen(next); onExpandedChange?.(next) }
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState('')
@@ -43,8 +45,8 @@ export function MeetingNotesPanel({ projectId }: { projectId: string }) {
   }
 
   return (
-    <section className="space-y-3 rounded-xl border border-ember/40 bg-ember-soft/40 p-4">
-      <button className="flex w-full items-center gap-2 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+    <section id="project-meeting-notes" className="scroll-mt-6 space-y-3 rounded-xl border border-ember/40 bg-ember-soft/40 p-4">
+      <button className="flex w-full items-center gap-2 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
         <NotebookPen className="size-5 text-ember" />
         <span className="flex-1">
           <span className="block font-display text-lg font-semibold">Meeting notes → requirements</span>
@@ -53,10 +55,9 @@ export function MeetingNotesPanel({ projectId }: { projectId: string }) {
         <ChevronDown className={`size-4 text-muted transition ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
-        <div className="space-y-2">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Meeting title (optional), e.g. Discovery call — tim CS" disabled={running} />
-          <Textarea rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Paste catatan meeting, transkrip, atau chat…" disabled={running} />
+        <div hidden={!open} className="space-y-2">
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Meeting title (optional), e.g. Discovery call with customer support" disabled={running} />
+          <Textarea rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Paste meeting notes, a transcript, or a conversation..." disabled={running} />
           <AttachFiles state={files} disabled={running} />
           <Button variant="ai" icon={<Sparkles className="size-4" />} loading={running} disabled={(!notes.trim() && !files.ids.length) || files.uploading} onClick={run}>
             Extract requirements
@@ -64,10 +65,9 @@ export function MeetingNotesPanel({ projectId }: { projectId: string }) {
           {running && <p className="truncate font-mono text-xs text-ember">{status}</p>}
           <ErrorNote error={error ?? files.error} />
         </div>
-      )}
 
       {result && (
-        <div className="space-y-2 rounded-lg bg-panel p-3 text-sm">
+        <div hidden={!open} className="space-y-2 rounded-lg bg-panel p-3 text-sm">
           <p className="font-semibold text-ok">Saved “{result.title}” as a requirement source.</p>
           <p className="text-muted">{result.summary}</p>
           <p className="font-mono text-xs text-muted">

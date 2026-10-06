@@ -1,3 +1,5 @@
+import { DocumentEvidence } from '../components/DocumentEvidence'
+import { ReviewAlerts } from '../components/ReviewAlerts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, ArrowLeft, BookmarkCheck, BookmarkPlus, Download, Eye, FolderOpen, GitCompare, PenLine, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -192,6 +194,8 @@ function DocumentView() {
 
         <ErrorNote error={exporter.error ?? rename.error ?? knowledge.error ?? openFolder.error ?? remove.error ?? versions.error} />
 
+        <ReviewAlerts projectId={projectId} documentId={documentId} />
+        <DocumentEvidence documentId={documentId} projectId={projectId} versionNo={selected?.version_no ?? latest?.version_no} content={selected?.content ?? draft ?? latest?.content} />
         {timelineOutdated && (
           <div className="flex items-center gap-2 rounded-md border border-warn/40 bg-ember-soft px-3 py-2 text-sm text-warn">
             <AlertTriangle className="size-4 shrink-0" /> The Timeline changed after this SOW was last saved. Revise with AI → "Update timeline" to sync mandays.
@@ -254,7 +258,7 @@ function DocumentView() {
           <DocEditor type={d.type} value={shown} readOnly={viewingOld} onChange={setDraft} />
         ) : mode === 'preview' ? (
           <div className="rounded-xl border border-line bg-panel p-6 md:p-10">
-            <Markdown>{toMarkdown(d.type, d.title, shown)}</Markdown>
+            <Markdown evidenceLinks>{toMarkdown(d.type, d.title, shown)}</Markdown>
           </div>
         ) : (
           <div className="space-y-3">

@@ -263,3 +263,15 @@ npm run account:recovery -- email-pemilik@example.com
 ```
 
 Jalankan dari repo dengan `.env` dan `BACKUP_DIR` yang menunjuk profil pemilik (`account-owner.json`). Perintah hanya mengizinkan email dan ID akun yang cocok dengan profil lokal. Ini adalah alat administrator lokal, bukan endpoint publik; tidak bisa memulihkan akun dari perangkat baru yang belum memiliki profil pemilik. Kode dicetak ke terminal sekali; simpan secara pribadi lalu gunakan **Lupa password?**. Setelah reset, login dan buat kode pemulihan baru. Jangan commit atau membagikan kode pemulihan.
+
+### Workspace review and continuity
+
+- Home uses native React cards for the three projects with the latest audit activity. Continue working and Needs attention appear alongside each other below the compact cards.
+- Search workspace with Ctrl/Cmd+K for projects, requirements/knowledge, questions and document contents. Source and question results open the matching item.
+- Settings → Skills → Built-in skill updates shows each release and a preview. Save as a new non-default skill to preserve customizations, or explicitly replace a selected skill. Previous instructions are retained in Version history and can be loaded into the editor before saving.
+- AI activity is persisted in PostgreSQL, including status, errors and document/version or enhancement batch references. Interrupted jobs are marked after restart. The activity list shows the latest 200 recorded tasks.
+- Changes to sources and upstream assessment/TOR/timeline/user-journey versions mark dependent documents and demo scenarios for review. Review alerts are dependency warnings; Mark reviewed acknowledges the current change without claiming a consistency check passed.
+- Newly generated document versions record their source/document context. Text sources have immutable snapshots; document references include version numbers. Sources & assumptions distinguishes inline citations from available context and warns about unmatched citation identifiers. Earlier/manual versions may not have evidence snapshots.
+- Cloud backup uses a separate local change counter. Local changes since last backup remains visible even when cloud revisions match. Older device states report an unknown baseline until the next successful upload/download. Local restores mark the workspace as changed.
+
+These additions are applied by the normal idempotent local database migration on server startup; `db/supabase-sync.sql` remains the private cloud snapshot schema.

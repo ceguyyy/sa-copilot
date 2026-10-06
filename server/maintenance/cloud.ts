@@ -1,3 +1,4 @@
+import { queryOne } from '../db.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import os from 'node:os'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
@@ -12,7 +13,8 @@ import { exclusive } from './lock.ts'
 import { SUPABASE_CA } from './supabaseCa.ts'
 
 const MAX_CLOUD_BYTES = 100 * 1024 * 1024
-interface DeviceState { device: string; revision: number }
+interface DeviceState { device: string; revision: number; changeRevision?: number; syncedAt?: string }
+async function localRevision() { return (await queryOne<{ revision: number }>('select revision from local_change_clock where id=1'))!.revision }
 const stateFile = (workspace: string) => path.join(config.backupDir, `cloud-${createHash('sha256').update(`${config.cloud.databaseUrl}|${workspace}`).digest('hex').slice(0, 24)}.json`)
 
 async function deviceState(workspace: string): Promise<DeviceState> {
@@ -55,12 +57,13 @@ export function assertRevision(local: number, remote: number) {
 export async function cloudStatus(workspace: string): Promise<CloudStatus> {
   if (!config.cloud.databaseUrl) return { configured: false, workspace, device: os.hostname(), localRevision: 0, remoteRevision: 0 }
   const state = await deviceState(workspace)
+  const changes = await localRevision()
   const client = await connectCloud()
   try {
     const { rows } = await client.query(`select w.revision, s.device, s.updated_at from sa_copilot_sync.workspaces w
       left join sa_copilot_sync.snapshots s on s.workspace_id = w.id and s.revision = w.revision where w.id = $1`, [workspace])
     return { configured: true, workspace, device: state.device, localRevision: state.revision,
-      remoteRevision: rows[0]?.revision ?? 0, updatedAt: rows[0]?.updated_at?.toISOString(), updatedBy: rows[0]?.device }
+      remoteRevision: rows[0]?.revision ?? 0, updatedAt: rows[0]?.updated_at?.toISOString(), updatedBy: rows[0]?.device, lastSyncedAt: state.syncedAt, localChanges: state.changeRevision === undefined ? undefined : changes !== state.changeRevision, localChangeStatus: state.changeRevision === undefined ? 'unknown' : changes !== state.changeRevision ? 'changed' : 'clean' }
   } catch (e) {
     if ((e as { code?: string }).code === '42P01') throw new HttpError(400, 'Run db/supabase-sync.sql in your Supabase SQL editor first')
     throw e
@@ -70,6 +73,7 @@ export async function cloudStatus(workspace: string): Promise<CloudStatus> {
 export async function pushCloud(workspace: string) {
   return exclusive(async () => {
     const state = await deviceState(workspace)
+    const changeRevision = await localRevision()
     const { data } = await createBackup()
     if (data.byteLength > MAX_CLOUD_BYTES) throw new HttpError(413, 'Cloud snapshots are limited to 100 MB. Use the local backup for larger workspaces.')
     const client = await connectCloud()
@@ -83,7 +87,7 @@ export async function pushCloud(workspace: string) {
       await client.query('update sa_copilot_sync.workspaces set revision = $2 where id = $1', [workspace, revision])
       await client.query('delete from sa_copilot_sync.snapshots where workspace_id = $1 and revision <= $2', [workspace, revision - 10])
       await client.query('commit')
-      await saveState(workspace, { ...state, revision })
+      await saveState(workspace, { ...state, revision, changeRevision, syncedAt: new Date().toISOString() })
       return { revision }
     } catch (e) { await client.query('rollback').catch(() => {}); throw e } finally { await client.end() }
   })
@@ -104,7 +108,7 @@ export async function pullCloud(expectedRevision: number, workspace: string) {
     if (data.byteLength > MAX_CLOUD_BYTES) throw new HttpError(413, 'Cloud snapshot is too large')
     unpackBackup(data)
     const result = await restoreBackup(data)
-    await saveState(workspace, { ...state, revision: expectedRevision })
+    await saveState(workspace, { ...state, revision: expectedRevision, changeRevision: await localRevision(), syncedAt: new Date().toISOString() })
     return { revision: expectedRevision, safetyBackup: result.safetyBackup }
   })
 }

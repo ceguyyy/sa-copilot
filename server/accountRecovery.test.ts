@@ -22,7 +22,7 @@ describe('single-use account recovery', () => {
     expect(JSON.stringify(mocks.query.mock.calls)).not.toContain(one)
   })
   it('rejects wrong email, wrong code or consumed code without changing a password', async () => {
-    await expect(resetWithRecoveryCode('wrong@example.com', 'a'.repeat(43), 'new-password-123')).rejects.toThrow('tidak valid')
+    await expect(resetWithRecoveryCode('wrong@example.com', 'a'.repeat(43), 'new-password-123')).rejects.toThrow('invalid')
     expect(mocks.query.mock.calls.some(([sql]) => sql.startsWith('update sa_copilot_sync.accounts'))).toBe(false)
     expect(mocks.query).toHaveBeenCalledWith('rollback')
     expect(mocks.query).not.toHaveBeenCalledWith('commit')
@@ -41,7 +41,7 @@ describe('single-use account recovery', () => {
     expect(mocks.query).toHaveBeenCalledWith('commit')
     expect(mocks.end).toHaveBeenCalled()
     mocks.query.mockResolvedValue({ rows: [] })
-    await expect(resetWithRecoveryCode('owner@example.com', 'a'.repeat(43), 'another-password-123')).rejects.toThrow('tidak valid')
+    await expect(resetWithRecoveryCode('owner@example.com', 'a'.repeat(43), 'another-password-123')).rejects.toThrow('invalid')
   })
   it('rolls back code consumption if the password update fails', async () => {
     mocks.query.mockImplementation(async (sql: string) => {

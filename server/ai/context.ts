@@ -22,6 +22,7 @@ interface SourceRow {
 }
 
 interface DocSnapshot {
+  project_id?: string
   id: string
   type: DocType
   title: string
@@ -43,7 +44,7 @@ export interface ProjectContext {
 
 // Latest version of each document, joined laterally so one query covers all documents.
 const LATEST_DOCS = `
-  select d.id, d.type, d.title, v.version_no as version, v.content, p.name as project_name
+  select d.id, d.project_id, d.type, d.title, v.version_no as version, v.content, p.name as project_name
   from documents d
   join projects p on p.id = d.project_id
   join lateral (
@@ -87,10 +88,10 @@ export async function loadGlobalKnowledgeText(): Promise<string> {
   return parts.join('\n\n')
 }
 
-const sourceBlock = (s: SourceRow) => `<source name="${s.name}">\n${s.extracted_text}\n</source>`
+const sourceBlock = (s: SourceRow) => `<source id="${s.id}" name="${s.name}">\n${s.extracted_text}\n</source>`
 
 const knowledgeDocBlock = (d: ProjectContext['knowledgeDocs'][number]) =>
-  `<reference_document from_project="${d.project_name}" type="${d.type}" title="${d.title}">\n${JSON.stringify(d.content)}\n</reference_document>`
+  `<reference_document id="${d.id}" version="${d.version}" from_project="${d.project_name}" type="${d.type}" title="${d.title}">\n${JSON.stringify(d.content)}\n</reference_document>`
 
 /** Stable, cacheable text block describing the project, its sources and current documents. */
 /** The Timeline's computed totals, so every document quotes the same mandays. */

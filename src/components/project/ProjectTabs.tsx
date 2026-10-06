@@ -18,7 +18,7 @@ interface Props<Id extends string> {
 
 /**
  * Section switcher laid out as a wrapping grid of cards so it never scrolls. Columns follow the width of the
- * content area (not the window, since the chat panel takes the right side): 2, 4, or all 7 in one row.
+ * content area (not the window, since the chat panel takes the right side): 2 or 4 balanced columns.
  * Arrow keys move between tabs.
  */
 export function ProjectTabs<Id extends string>({ tabs, active, onSelect }: Props<Id>) {
@@ -33,7 +33,7 @@ export function ProjectTabs<Id extends string>({ tabs, active, onSelect }: Props
 
   return (
     <div className="@container">
-      <div role="tablist" aria-label="Project sections" className="grid grid-cols-2 gap-2 @lg:grid-cols-4 @6xl:grid-cols-7">
+      <div role="tablist" aria-label="Project sections" className="grid grid-cols-2 gap-2 @3xl:grid-cols-4">
         {tabs.map(({ id, label, icon: Icon, meta }, i) => {
           const selected = id === active
           return (

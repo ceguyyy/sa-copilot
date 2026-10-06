@@ -1,3 +1,4 @@
+import { SkillHistory, SkillUpdates } from '../../components/SkillUpdates'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Download, Plus, RotateCcw, Save, Star, Trash2, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
@@ -15,9 +16,9 @@ import { useResetState } from '../../lib/useResetState'
 const label = (t: SkillOutputType) => (t === 'chat' ? 'Chat persona' : t === 'custom' ? 'Custom deliverables (all)' : DOC_LABELS[t])
 
 const STARTERS = [
-  'Buat skill SOW Cekat yang selalu menyebut batasan paket dan SLA dari dokumentasi Cekat',
-  'Perbaiki skill ini supaya output lebih ringkas dan pakai bahasa formal',
-  'Buat chat persona yang menjawab seperti SA senior dan selalu cek dokumentasi Cekat dulu',
+  'Improve the Cekat SOW skill using confirmed technical scope and PKS support terms; omit customer package selection',
+  'Make this skill produce more concise output in a formal tone',
+  'Create a senior SA persona that checks Cekat documentation before answering',
 ]
 const BLANK: SkillInput = { name: 'New skill', output_type: 'assessment', description: '', instructions: '', is_default: false }
 
@@ -100,6 +101,8 @@ export function SkillsSettings() {
 
   return (
     <div className="space-y-6">
+      <SkillUpdates />
+      {selected && <SkillHistory skillId={selected.id} onRestore={previous => setForm({ ...pick(previous), is_default: form.is_default })} />}
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" icon={<Upload className="size-4" />} loading={importFile.isPending} onClick={() => importInput.current?.click()}>
           Import .md

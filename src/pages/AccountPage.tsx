@@ -19,7 +19,7 @@ export function AccountPage({ configured, onDone, onRecoveryPending }: { configu
   const submit = useMutation({
     mutationFn: async () => {
       if (mode === 'reset') {
-        if (password !== confirmPassword) throw new Error('Konfirmasi password tidak sama')
+        if (password !== confirmPassword) throw new Error('Passwords do not match')
         return authApi.resetPassword(email, recoveryCode.trim(), password)
       }
       return (mode === 'register' ? authApi.register : authApi.login)(email, password)
@@ -34,25 +34,25 @@ export function AccountPage({ configured, onDone, onRecoveryPending }: { configu
   const changeMode = (next: typeof mode) => { setMode(next); setPassword(''); setConfirmPassword(''); setRecoveryCode(''); setMessage(''); submit.reset() }
   return <main className="mx-auto max-w-xl space-y-5 p-8">
     <h1 className="font-display text-3xl font-semibold">SA Copilot v2.0.1</h1>
-    <p className="text-sm text-muted">Login atau register untuk menghubungkan backup dan data cloud ke akun Anda. Gunakan akun yang sama pada komputer lain untuk restore.</p>
-    <p className="text-sm text-muted">Data lokal yang sudah ada akan dikaitkan ke akun pertama yang login. Satu profil instalasi hanya dapat digunakan oleh satu akun.</p>
+    <p className="text-sm text-muted">Sign in or create an account to connect your cloud data and backups. Use the same account on another computer to restore your workspace.</p>
+    <p className="text-sm text-muted">Existing local data will be linked to the first account that signs in. Each installation profile can only be used by one account.</p>
     {!configured && <Card className="space-y-3 p-5">
-      <p>Konfigurasi koneksi cloud terlebih dahulu.</p>
-      {desktop ? <ConnectionsForm onSaved={() => { void qc.invalidateQueries({ queryKey: ['account'] }) }} /> : <p className="text-sm text-muted">Isi CLOUD_DATABASE_URL di .env, jalankan db/supabase-sync.sql di Supabase, lalu restart server.</p>}
+      <p>Configure your cloud connection first.</p>
+      {desktop ? <ConnectionsForm onSaved={() => { void qc.invalidateQueries({ queryKey: ['account'] }) }} /> : <p className="text-sm text-muted">Set CLOUD_DATABASE_URL in .env, run db/supabase-sync.sql in Supabase, then restart the server.</p>}
     </Card>}
     <Card className="space-y-4 p-5">
-      {newCode ? <><RecoveryCode code={newCode} /><Button onClick={finish}>Sudah disimpan, lanjutkan</Button></> : <form className="space-y-4" onSubmit={e => { e.preventDefault(); submit.mutate() }}>
-        <h2 className="text-lg font-semibold">{mode === 'register' ? 'Register akun' : mode === 'reset' ? 'Reset password' : 'Login'}</h2>
-        {mode === 'reset' && <p className="text-sm text-muted">Masukkan kode pemulihan yang Anda simpan. Reset tetap memakai akun dan backup yang sama. Setelah berhasil, kode tidak bisa dipakai lagi.</p>}
+      {newCode ? <><RecoveryCode code={newCode} /><Button onClick={finish}>I have saved my code, continue</Button></> : <form className="space-y-4" onSubmit={e => { e.preventDefault(); submit.mutate() }}>
+        <h2 className="text-lg font-semibold">{mode === 'register' ? 'Create an account' : mode === 'reset' ? 'Reset password' : 'Sign in'}</h2>
+        {mode === 'reset' && <p className="text-sm text-muted">Enter your saved recovery code. Resetting your password keeps the same account and backups. The code cannot be reused after a successful reset.</p>}
         {message && <p className="text-sm text-ok" role="status">{message}</p>}
         <Field label="Email"><Input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></Field>
-        {mode === 'reset' && <Field label="Kode pemulihan"><Input autoComplete="off" required minLength={43} maxLength={43} value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} /></Field>}
-        <Field label={mode === 'reset' ? 'Password baru' : 'Password'} hint="Minimal 12 karakter"><Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} /></Field>
-        {mode === 'reset' && <Field label="Konfirmasi password baru"><Input type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></Field>}
+        {mode === 'reset' && <Field label="Recovery code"><Input autoComplete="off" required minLength={43} maxLength={43} value={recoveryCode} onChange={e => setRecoveryCode(e.target.value)} /></Field>}
+        <Field label={mode === 'reset' ? 'New password' : 'Password'} hint="At least 12 characters"><Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={12} maxLength={128} required value={password} onChange={e => setPassword(e.target.value)} /></Field>
+        {mode === 'reset' && <Field label="Confirm new password"><Input type="password" autoComplete="new-password" minLength={12} maxLength={128} required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></Field>}
         <ErrorNote error={submit.error} />
-        <Button type="submit" loading={submit.isPending} disabled={!configured}>{mode === 'register' ? 'Register' : mode === 'reset' ? 'Reset password' : 'Login'}</Button>
-        <Button type="button" variant="ghost" disabled={submit.isPending} onClick={() => changeMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Belum punya akun? Register' : 'Kembali ke login'}</Button>
-        {mode === 'login' && <Button type="button" variant="ghost" disabled={submit.isPending} onClick={() => changeMode('reset')}>Lupa password?</Button>}
+        <Button type="submit" loading={submit.isPending} disabled={!configured}>{mode === 'register' ? 'Register' : mode === 'reset' ? 'Reset password' : 'Sign in'}</Button>
+        <Button type="button" variant="ghost" disabled={submit.isPending} onClick={() => changeMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Need an account? Register' : 'Back to sign in'}</Button>
+        {mode === 'login' && <Button type="button" variant="ghost" disabled={submit.isPending} onClick={() => changeMode('reset')}>Forgot password?</Button>}
       </form>}
     </Card>
   </main>

@@ -11,6 +11,8 @@ export function ActivityDetails({ job, now, projectName, compact = false }: { jo
     ['Last activity', `${formatElapsed(Math.max(0, (job.finishedAt ?? now) - (job.updatedAt ?? job.startedAt)))} ago`],
     ['Output', `${(job.characters ?? 0).toLocaleString()} characters`],
     ['Model calls / Tools', `${job.modelCalls ?? 0} / ${job.toolCalls ?? 0}`],
+    ...(job.versionNo ? [['Result version', `v${job.versionNo}`]] : []),
+    ...(job.batchId ? [['Revision batch', job.batchId]] : []),
     ...(job.tool ? [['Last tool', job.tool]] : []),
     ...(!compact ? [
       ['Effort / Output limit', `${job.effort ?? 'default'} / ${job.maxTokens?.toLocaleString() ?? 'pending'} tokens`],

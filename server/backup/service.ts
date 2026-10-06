@@ -88,6 +88,7 @@ export async function restoreBackup(data: Uint8Array): Promise<{ manifest: Backu
     throw e
   }
   await applySchema()
+  await query('update local_change_clock set revision=revision+1,changed_at=clock_timestamp() where id=1')
 
   for (const key of previousKeys) {
     if (key in contents.files) continue

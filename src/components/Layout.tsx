@@ -1,6 +1,11 @@
+import { WorkspaceSearch } from './WorkspaceSearch'
 import clsx from 'clsx'
 import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, Settings } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { authApi } from '../lib/api'
+import { rememberWork } from '../lib/recentWork'
 import { CurrentModel } from './CurrentModel'
 
 const NAV = [
@@ -13,6 +18,9 @@ const NAV = [
 ]
 
 export function Layout() {
+  const location = useLocation()
+  const account = useQuery({ queryKey: ['account'], queryFn: authApi.session })
+  useEffect(() => { if (account.data?.account) rememberWork(account.data.account.id, location.pathname) }, [account.data?.account, location.pathname])
   return (
     <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
       <aside className="flex flex-wrap items-center justify-between gap-4 border-b border-line bg-forest px-4 py-3 text-paper md:sticky md:top-0 md:h-screen md:flex-nowrap md:flex-col md:items-stretch md:justify-start md:border-b-0 md:px-5 md:py-6">
@@ -23,6 +31,7 @@ export function Layout() {
             <p className="mt-1 hidden font-mono text-[10px] uppercase tracking-[0.25em] text-paper/60 md:block">By Christian Gunawan</p>
           </div>
         </div>
+        
         <nav aria-label="Main navigation" className="flex gap-1 md:mt-10 md:flex-col">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink
@@ -47,6 +56,7 @@ export function Layout() {
         </div>
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-10 md:py-8">
+        <WorkspaceSearch />
         <Outlet />
       </main>
     </div>

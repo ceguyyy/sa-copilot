@@ -18,6 +18,9 @@ export type AiActivity = {
   maxTokens?: number
   documentType?: string
   documentId?: string
+  versionId?: string
+  versionNo?: number
+  batchId?: string
   attachmentCount?: number
   added?: number
 }

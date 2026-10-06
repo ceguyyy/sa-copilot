@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea } from '../components/ui'
 import { projectsApi } from '../lib/api'
 import { LanguageSelect } from '../components/LanguageSelect'
@@ -13,7 +13,8 @@ const EMPTY: ProjectInput = { name: '', client_name: '', industry: '', package: 
 export function ProjectsPage() {
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const [creating, setCreating] = useState(false)
+  const [params] = useSearchParams()
+  const [creating, setCreating] = useState(() => params.get('create') === '1')
   const [form, setForm] = useState<ProjectInput>(EMPTY)
   const projects = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list })
 

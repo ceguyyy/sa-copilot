@@ -29,6 +29,12 @@ export const BACKUP_TABLES = [
   'open_questions',
   'consistency_checks',
   'demo_scenarios',
+  'enhancement_batches',
+  'ai_activity',
+  'source_evidence',
+  'skill_releases',
+  'skill_history',
+  'review_alerts',
 ] as const
 export type BackupTable = (typeof BACKUP_TABLES)[number]
 

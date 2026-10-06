@@ -29,7 +29,7 @@ export async function resetWithRecoveryCode(email: string, code: string, passwor
     // DELETE locks and consumes the code atomically; rollback preserves it on failure.
     const { rows } = await client.query(`delete from sa_copilot_sync.account_recovery r using sa_copilot_sync.accounts a
       where r.account_id = a.id and a.email = $1 and r.code_hash = $2 returning r.account_id`, [email, recoveryDigest(code)])
-    if (!rows[0]) throw new HttpError(400, 'Email atau kode pemulihan tidak valid, atau kode sudah terpakai.')
+    if (!rows[0]) throw new HttpError(400, 'The email or recovery code is invalid, or the code has already been used.')
     const hash = await hashPassword(password)
     await client.query('update sa_copilot_sync.accounts set password_hash = $2 where id = $1', [rows[0].account_id, hash])
     await client.query('commit')

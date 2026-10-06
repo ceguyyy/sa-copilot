@@ -32,7 +32,7 @@ const stepSchema = obj({
   }),
 })
 
-const scenarioSchema = obj({
+export const scenarioSchema = obj({
   name: str('Short name, 2–4 words'),
   title: str('Full scenario title'),
   tag: str('e.g. "Appointment", "Triage", "Lab Results"'),

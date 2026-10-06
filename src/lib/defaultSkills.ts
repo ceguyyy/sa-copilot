@@ -1,7 +1,7 @@
 // Default skill library, seeded on first sign-in. Distilled from the SA's templates:
 // Assessment Requirement.xlsx, Template TOR.xlsx, Template Timeline Development.xlsx,
 // [Cekat] Template SOW (Enterprise).docx and 2026 CIF for Meta Business Agent SOW Template.docx.
-import type { SkillInput } from './types'
+import type { SkillInput } from './types.ts'
 
 const chat: SkillInput = {
   name: 'Solution Architect Copilot',
@@ -104,7 +104,7 @@ const sowCekat: SkillInput = {
   is_default: true,
   description: 'Internal Cekat SOW (Bahasa Indonesia) following the Enterprise template.',
   instructions: `Write the Cekat Scope of Work in Bahasa Indonesia, formal, following the Cekat Enterprise template.
-meta (key/value, in this order): Client Name, Project Name, Date (bulan tahun), Document Version ("1.0" unless revising), Package (Business/Enterprise/Unlimited), Partner (if any, else "-").
+meta (key/value, in this order): Client Name, Project Name, Date (bulan tahun), Document Version ("1.0" unless revising), Partner (if any, else "-").
 sections (title → markdown), in this order:
 1. "Revision History" — table: Date | Revision | Description | Author.
 2. "Distribution List" — table: Name | Company | Title (Client PIC, Project Manager, VP Sales, Business Development, AI Consultant — use role placeholders like "[Nama]" when names are unknown).
@@ -113,16 +113,16 @@ sections (title → markdown), in this order:
 5. "Pendahuluan — Latar Belakang" — client (called "Mitra") needs, Cekat AI description (AI Agent builder & Omnichannel CRM since 2024, 24/7 AI Agent across WhatsApp, IG, FB, Marketplace), project purpose. Document is part of the PKS.
 6. "Pendahuluan — Ketentuan dan Ruang Lingkup Proyek" — anything not listed is a Change Request handled after the project; PKS reference.
 7. "Ruang Lingkup — Deskripsi Proyek".
-8. "Ruang Lingkup — Paket Layanan Cekat" — numbered list of the chosen package features (see TOR).
-9. "Ruang Lingkup — Flow / Activity Diagram" — describe the main flows; if a Diagram document exists, reference it by title and include its Mermaid in a \`\`\`mermaid block.
-10. "Ruang Lingkup — Scope of Work" — sub-headings: AI Agent topics & knowledge; Integrasi API Client / 3rd Party (numbered: API name → purpose); Custom Fitur / Custom Integration; Cekat AI Dashboard Adjustment. Derive strictly from TOR + assessment.
-11. "Registrasi Masking/Sender ID" (only if new WA Official) — table Task | Note (Register Business Approval, Register Business Name, Registrasi & Approval Template Push Message, Approval Business Name) + FBM checklist (NPWP/SIUP/NIB, utility invoice matching legal address, website address consistency) + notes: approval is Meta's authority, rejected applications can re-apply after 30 days, improve digital footprint.
-12. "Migrasi WA Official" (only if migrating from another BSP) — table Task | Keterangan (Matikan 2FA — Cloud API unregister vs On-Prem docker; Migrasi Nomor — Credit Line requires delete & re-register; Migrasi via Embedded Sign-Up with OTP; Selesai) + notes (manual backup of chat/templates/contacts; Credit Line path 2–4 days up to >1 week; otherwise ~1 hour–1 working day).
-13. "Out of Scope" — bullets: issues from client/3rd-party API changes (Meta, Telegram, IP, etc.), bluetick decisions by Meta, template approval by Meta, plus project-specific exclusions.
-14. "Dashboard Cekat AI" — numbered features: Chat, Ticket Eskalasi L2, Analytic, Contact, Connect Platform, AI Agent, Human Agent, Setting, Profile (short descriptions).
-15. "Waktu Pengerjaan (Timeline)" — total mandays & weeks and a markdown table Activity | PIC | SLA/Days built from the Timeline document; state Cekat may deactivate custom features if there is no communication from Mitra for 1 month.
-16. "Bantuan dan Dukungan" — 24/7 support chat after go-live via WhatsApp group for Enterprise/Unlimited; after-sales support in working hours; bug/error fixes caused by provider system; other support per PKS. Sub-section "Laporan dan Komunikasi" with a table Penyedia | Mitra listing Penanggung Jawab Teknis & Bisnis (Nama/Jabatan/No. HP/Email placeholders).
-Use "[...]" placeholders for any unknown names, numbers or dates — never invent them.`,
+8. "Ruang Lingkup — Flow / Activity Diagram" — describe the main flows; if a Diagram document exists, reference it by title and include its Mermaid in a \`\`\`mermaid block.
+9. "Ruang Lingkup — Scope of Work" — sub-headings: AI Agent topics & knowledge; Integrasi API Client / 3rd Party (numbered: API name → purpose); Custom Fitur / Custom Integration; Cekat AI Dashboard Adjustment. Derive strictly from TOR + assessment.
+10. "Registrasi Masking/Sender ID" (only if new WA Official) — table Task | Note (Register Business Approval, Register Business Name, Registrasi & Approval Template Push Message, Approval Business Name) + FBM checklist (NPWP/SIUP/NIB, utility invoice matching legal address, website address consistency) + notes: approval is Meta's authority, rejected applications can re-apply after 30 days, improve digital footprint.
+11. "Migrasi WA Official" (only if migrating from another BSP) — table Task | Keterangan (Matikan 2FA — Cloud API unregister vs On-Prem docker; Migrasi Nomor — Credit Line requires delete & re-register; Migrasi via Embedded Sign-Up with OTP; Selesai) + notes (manual backup of chat/templates/contacts; Credit Line path 2–4 days up to >1 week; otherwise ~1 hour–1 working day).
+12. "Out of Scope" — bullets: issues from client/3rd-party API changes (Meta, Telegram, IP, etc.), bluetick decisions by Meta, template approval by Meta, plus project-specific exclusions.
+13. "Dashboard Cekat AI" — numbered features: Chat, Ticket Eskalasi L2, Analytic, Contact, Connect Platform, AI Agent, Human Agent, Setting, Profile (short descriptions).
+14. "Waktu Pengerjaan (Timeline)" — total mandays & weeks and a markdown table Activity | PIC | SLA/Days built from the Timeline document; state Cekat may deactivate custom features if there is no communication from Mitra for 1 month.
+15. "Bantuan dan Dukungan" — support channels, working hours, SLAs and bug/error fixes as explicitly agreed with the customer in the PKS; use placeholders for unconfirmed terms. Sub-section "Laporan dan Komunikasi" with a table Penyedia | Mitra listing Penanggung Jawab Teknis & Bisnis (Nama/Jabatan/No. HP/Email placeholders).
+Use "[...]" placeholders for any unknown names, numbers or dates — never invent them.
+Package selection belongs to the customer. Omit package/tier metadata and the entire Paket Layanan Cekat section, including placeholders and table-of-contents entries. Never choose, recommend or infer a package, pricing, quotas or entitlements from the Enterprise template title, project package defaults or TOR. Keep independently confirmed technical requirements, integrations and deliverables in Scope of Work. Support hours and SLAs must follow confirmed customer agreements/PKS; do not infer 24/7 support from a package label. Treat template examples, sample contacts and sample timelines as illustrative only; never copy them as client facts. Renumber remaining sections sequentially.`,
 }
 
 const sowCif: SkillInput = {

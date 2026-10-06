@@ -56,3 +56,21 @@
 .pixel-tooltip-hint { display: block; margin-top: 12px; font-size: 9px; color: #95b3c4; }
 @media (max-width: 900px) { .pixel-task-tooltip, .pixel-desk:nth-child(3n) .pixel-task-tooltip { left: 50%; right: auto; top: 24px; transform: translateX(-50%); width: 280px; } }
 @media (max-width: 600px) { .pixel-workspace-stats { grid-template-columns: repeat(2, 1fr); } .pixel-workspace-stats > span { padding: 12px; } .pixel-task-tooltip, .pixel-desk:nth-child(3n) .pixel-task-tooltip { left: 0; transform: none; width: min(300px, calc(100vw - 90px)); } .pixel-desk:nth-child(2n) .pixel-task-tooltip { right: 0; left: auto; } }
+
+/* Compact studio scene: project work is the focus of Home. */
+.pixel-office { border-width: 2px; border-radius: 16px; box-shadow: 0 4px 0 #111b29; }
+.pixel-office-header { padding: 18px 24px; border-bottom-width: 2px; }
+.pixel-office-header > div { flex: 1; min-width: 180px; }
+.pixel-office-header h2 { font-size: 20px; }
+.pixel-motion-toggle { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #668a9c; border-radius: 6px; padding: 8px 10px; font-size: 11px; color: #d7e6df; }
+.pixel-motion-toggle:hover { background: #344c5b; }
+.pixel-motion-toggle:focus-visible { outline: 2px solid #9ae6c4; outline-offset: 3px; }
+.pixel-room-scenery { display: block; width: 100%; max-height: 140px; background: #293f4c; border-bottom: 6px solid #182433; image-rendering: pixelated; }
+.pixel-floor { gap: 12px; padding: 18px; background-color: #3b514f; background-image: linear-gradient(90deg, #b6ccac08 50%, transparent 50%), linear-gradient(#162b250d 50%, transparent 50%); }
+.pixel-desk { border-radius: 8px; padding: 10px 6px; }
+.pixel-desk svg { width: 120px; height: 110px; image-rendering: pixelated; }
+.pixel-workspace-stats > span { padding: 12px 18px; }
+.pixel-workspace-stats b { font-size: 20px; }
+.pixel-paused .pixel-worker, .pixel-paused .pixel-screen { animation-play-state: paused; }
+.pixel-office-footer { border-top-width: 2px; }
+@media (max-width: 600px) { .pixel-floor { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 8px; } .pixel-office-header { padding: 16px; } .pixel-room-scenery { min-height: 70px; } }

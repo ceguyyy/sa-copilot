@@ -324,7 +324,7 @@ where s.project_id is not null
   and not exists (select 1 from audit_log a where a.detail->>'sourceId' = s.id::text and a.action = 'source.add');
 
 -- Audit rows are written by triggers so every path (UI, AI, split, restore) is covered.
--- The `exists (select 1 from projects …)` guards skip logging while a whole project is being deleted.
+-- The `exists (select 1 from projects â€¦)` guards skip logging while a whole project is being deleted.
 create or replace function audit(p_project uuid, p_action text, p_summary text, p_detail jsonb)
 returns void language plpgsql as $$
 begin
@@ -364,7 +364,7 @@ begin
     return old;
   end if;
   if new.name is distinct from old.name then
-    perform audit(new.project_id, 'poc.rename', format('Renamed POC "%s" → "%s"', old.name, new.name), jsonb_build_object('pocId', new.id));
+    perform audit(new.project_id, 'poc.rename', format('Renamed POC "%s" â†’ "%s"', old.name, new.name), jsonb_build_object('pocId', new.id));
   end if;
   return new;
 end $$;
@@ -378,7 +378,7 @@ begin
     return old;
   end if;
   if new.title is distinct from old.title then
-    perform audit(new.project_id, 'document.rename', format('Renamed "%s" → "%s"', old.title, new.title), jsonb_build_object('documentId', new.id));
+    perform audit(new.project_id, 'document.rename', format('Renamed "%s" â†’ "%s"', old.title, new.title), jsonb_build_object('documentId', new.id));
   end if;
   if new.is_knowledge is distinct from old.is_knowledge then
     perform audit(new.project_id, 'document.knowledge',
@@ -408,7 +408,7 @@ for each row execute function audit_source();
 create or replace function audit_project() returns trigger language plpgsql as $$
 begin
   if new.status is distinct from old.status then
-    perform audit(new.id, 'project.status', format('Status %s → %s', old.status, new.status), '{}');
+    perform audit(new.id, 'project.status', format('Status %s â†’ %s', old.status, new.status), '{}');
   end if;
   if new.name is distinct from old.name or new.client_name is distinct from old.client_name
      or new.description is distinct from old.description or new.package is distinct from old.package
@@ -416,7 +416,7 @@ begin
     perform audit(new.id, 'project.update', 'Project details updated', '{}');
   end if;
   if new.language is distinct from old.language then
-    perform audit(new.id, 'project.language', format('Language %s → %s', old.language, new.language), '{}');
+    perform audit(new.id, 'project.language', format('Language %s â†’ %s', old.language, new.language), '{}');
   end if;
   return new;
 end $$;
@@ -459,7 +459,7 @@ begin
     perform audit(new.project_id, 'question.add', format('Open question (%s): %s', new.origin, left(new.question, 160)), jsonb_build_object('questionId', new.id));
   elsif new.status is distinct from old.status then
     perform audit(new.project_id, 'question.' || new.status,
-      format('Question %s: %s%s', new.status, left(new.question, 120), case when new.status = 'answered' then ' → ' || left(new.answer, 120) else '' end),
+      format('Question %s: %s%s', new.status, left(new.question, 120), case when new.status = 'answered' then ' â†’ ' || left(new.answer, 120) else '' end),
       jsonb_build_object('questionId', new.id));
   end if;
   return new;
@@ -534,3 +534,98 @@ create table if not exists n8n_node_skills (
 );
 create or replace trigger n8n_node_skills_touch before update on n8n_node_skills
 for each row execute function touch_updated_at();
+
+-- Project enhancement drafts and reversible revision batches (included in backups).
+create table if not exists enhancement_batches (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects on delete cascade,
+  prompt text not null,
+  rules text not null default '',
+  context jsonb not null default '[]',
+  items jsonb not null default '[]',
+  report jsonb,
+  resolutions jsonb not null default '{}',
+  review jsonb,
+  review_keys jsonb not null default '[]',
+  accepted jsonb not null default '[]',
+  state text not null default 'draft' check (state in ('draft', 'applied', 'undone')),
+  created_at timestamptz not null default now()
+);
+create index if not exists enhancement_batches_project_idx on enhancement_batches (project_id, created_at desc);
+
+-- Durable AI work history, evidence snapshots, and downstream review alerts.
+create table if not exists ai_activity (
+ id uuid primary key, payload jsonb not null, updated_at timestamptz not null default now()
+);
+alter table document_versions add column if not exists context_refs jsonb not null default '[]';
+create table if not exists skill_releases (
+ skill_id uuid primary key references skills on delete cascade,
+ release_key text not null, builtin_name text not null default '', baseline jsonb not null, updated_at timestamptz not null default now()
+);
+create table if not exists skill_history (
+ id uuid primary key default gen_random_uuid(), skill_id uuid not null references skills on delete cascade,
+ snapshot jsonb not null, created_at timestamptz not null default now()
+);
+create or replace function record_skill_history() returns trigger language plpgsql as $$
+begin
+ if new.instructions is distinct from old.instructions or new.description is distinct from old.description or new.name is distinct from old.name then
+ insert into skill_history(skill_id,snapshot) values(old.id,to_jsonb(old));
+ end if;
+ return new;
+end $$;
+create or replace trigger skills_history before update on skills for each row execute function record_skill_history();
+create table if not exists review_alerts (
+ id uuid primary key default gen_random_uuid(), project_id uuid not null references projects on delete cascade,
+ target_kind text not null, target_id uuid not null, reason text not null,
+ change_no integer not null default 1, changed_at timestamptz not null default now(), reviewed_at timestamptz,
+ unique(target_kind,target_id)
+);
+alter table review_alerts add column if not exists change_no integer not null default 1;
+create or replace function flag_downstream_review() returns trigger language plpgsql as $$
+declare pid uuid; dtype text; changed_doc uuid; why text;
+begin
+ if tg_table_name='sources' then
+  if tg_op='UPDATE' and new.extracted_text is not distinct from old.extracted_text and new.enabled is not distinct from old.enabled then return new; end if;
+  if tg_op='DELETE' then pid:=old.project_id; why:='Source removed: '||old.name; else pid:=new.project_id; why:='Source changed: '||new.name; end if;
+ else
+  select project_id,type into pid,dtype from documents where id=new.document_id;
+  changed_doc:=new.document_id;
+  if dtype not in ('assessment','tor','timeline','user_journey') then return new; end if;
+  why:=dtype||' updated to v'||new.version_no;
+ end if;
+ if pid is not null and not exists(select 1 from projects where id=pid) then
+ if tg_op='DELETE' then return old; else return new; end if;
+ end if;
+ insert into review_alerts(project_id,target_kind,target_id,reason)
+ select d.project_id,'document',d.id,why from documents d
+ where (pid is null or d.project_id=pid) and d.id is distinct from changed_doc
+ and (tg_table_name='sources' or (dtype='assessment' and d.type in ('tor','timeline','sow_cekat','sow_cif','diagram','user_journey','deck','onboarding')) or (dtype='tor' and d.type in ('timeline','sow_cekat','sow_cif','diagram','user_journey','deck','onboarding')) or (dtype='timeline' and d.type in ('sow_cekat','sow_cif','deck')) or (dtype='user_journey' and d.type in ('diagram','deck')))
+ on conflict(target_kind,target_id) do update set reason=excluded.reason,change_no=review_alerts.change_no+1,changed_at=clock_timestamp(),reviewed_at=null;
+ insert into review_alerts(project_id,target_kind,target_id,reason)
+ select project_id,'demo',id,why from demo_scenarios where pid is null or project_id=pid
+ on conflict(target_kind,target_id) do update set reason=excluded.reason,change_no=review_alerts.change_no+1,changed_at=clock_timestamp(),reviewed_at=null;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end $$;
+create or replace trigger sources_review after insert or update or delete on sources for each row execute function flag_downstream_review();
+create or replace trigger document_versions_review after insert on document_versions for each row execute function flag_downstream_review();
+-- Monotonic local change clock; independent of cloud revision and restored snapshots.
+create table if not exists local_change_clock (id integer primary key check(id=1), revision bigint not null default 0, changed_at timestamptz);
+insert into local_change_clock(id) values(1) on conflict do nothing;
+create or replace function track_local_change() returns trigger language plpgsql as $$
+begin update local_change_clock set revision=revision+1,changed_at=clock_timestamp() where id=1; return null; end $$;
+do $$ declare t text; begin
+ foreach t in array array['projects','sources','documents','document_versions','skills','skill_releases','messages','open_questions','pocs','poc_versions','demo_scenarios','enhancement_batches','doc_templates','attachments','app_settings','n8n_node_skills','review_alerts'] loop
+ execute format('create or replace trigger local_changes after insert or update or delete on %I for each statement execute function track_local_change()',t);
+ end loop;
+end $$;
+
+create table if not exists source_evidence (
+ fingerprint text primary key, source_id uuid not null, name text not null, body text not null, captured_at timestamptz not null default now()
+);
+create or replace function remove_review_alerts() returns trigger language plpgsql as $$
+begin delete from review_alerts where target_id=old.id and target_kind=case when tg_table_name='documents' then 'document' else 'demo' end; return old; end $$;
+create or replace trigger documents_review_cleanup after delete on documents for each row execute function remove_review_alerts();
+create or replace trigger demos_review_cleanup after delete on demo_scenarios for each row execute function remove_review_alerts();
+
+alter table skill_releases add column if not exists builtin_name text not null default '';

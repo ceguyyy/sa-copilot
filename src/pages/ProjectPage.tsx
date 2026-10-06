@@ -1,6 +1,8 @@
+import { ReviewAlerts } from '../components/ReviewAlerts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, FileClock, FileDown, FolderOpen, GitBranch, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ChevronsDownUp, ChevronsUpDown, ExternalLink, FileClock, FileDown, FolderOpen, GitBranch, HelpCircle, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
 import { ChatPanel } from '../components/ChatPanel'
 import { CHAT_GRID, useChatSize } from '../lib/chatSize'
@@ -8,6 +10,8 @@ import { LanguageSelect } from '../components/LanguageSelect'
 import { CustomDeliverables } from '../components/CustomDeliverables'
 import { AuditPanel } from '../components/project/AuditPanel'
 import { ConsistencyPanel } from '../components/project/ConsistencyPanel'
+import { EnhancementPanel } from '../components/project/EnhancementPanel'
+import { ProjectSection } from '../components/project/ProjectSection'
 import { MeetingNotesPanel } from '../components/project/MeetingNotesPanel'
 import { QuestionsPanel } from '../components/project/QuestionsPanel'
 import { ProjectTabs } from '../components/project/ProjectTabs'
@@ -87,10 +91,25 @@ type TabId = (typeof TABS)[number]['id']
 export function ProjectPage() {
   const { projectId = '' } = useParams()
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const launchAction = params.get('action')
   const [chatSize, setChatSize] = useChatSize()
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const [sectionState, setSectionState] = useState<Record<string, Record<string, boolean>>>({})
+  const expanded = (id: string) => sectionState[projectId]?.[id] ?? (id !== 'meeting' || params.get('action') === 'meeting')
+  const setExpanded = (id: string, open: boolean) => setSectionState(previous => ({ ...previous, [projectId]: { ...previous[projectId], [id]: open } }))
+  const expandAll = (open: boolean) => setSectionState(previous => ({ ...previous, [projectId]: Object.fromEntries(['meeting', 'sources', 'questions', 'progress', 'consistency', 'deliverables', 'custom', 'diagrams', 'poc', 'files', 'demo', 'audit'].map(id => [id, open])) }))
   const project = useQuery({ queryKey: ['project', projectId], queryFn: () => projectsApi.get(projectId) })
+  const loadedProjectId = project.data?.id
+  useEffect(() => {
+    if (!loadedProjectId) return
+    const section = launchAction === 'upload' || (location.hash === '#project-requirements' || location.hash.startsWith('#source-')) ? 'sources' : launchAction === 'meeting' ? 'meeting' : (location.hash === '#project-questions' || location.hash.startsWith('#question-')) ? 'questions' : null
+    if (!section) return
+    const target = section === 'sources' ? 'project-requirements' : section === 'meeting' ? 'project-meeting-notes' : 'project-questions'
+    const frame = requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }))
+    return () => cancelAnimationFrame(frame)
+  }, [loadedProjectId, launchAction, location.hash])
   const docs = useQuery({ queryKey: ['documents', projectId], queryFn: () => documentsApi.list(projectId) })
   const pocs = useQuery({ queryKey: ['pocs', projectId], queryFn: () => pocsApi.list(projectId) })
   const gen = useGenerate(projectId)
@@ -151,8 +170,9 @@ export function ProjectPage() {
   }
 
   return (
-    <div className={`grid gap-8 ${CHAT_GRID[chatSize]}`}>
+    <div className={`mx-auto grid w-full max-w-[1600px] gap-6 ${CHAT_GRID[chatSize]}`}>
       <div className="min-w-0 space-y-6">
+        <ReviewAlerts projectId={projectId} />
         <PageHeader
           kicker={p.client_name}
           title={p.name}
@@ -207,6 +227,14 @@ export function ProjectPage() {
           onSelect={selectTab}
         />
 
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel px-4 py-3">
+          <EnhancementPanel key={projectId} projectId={projectId} initialOpen={['enhance', 'review-revisions'].includes(params.get('action') ?? '')} initialHistory={params.get('action') === 'review-revisions'} />
+          <div className="flex flex-wrap gap-1">
+            <Button variant="ghost" icon={<ChevronsDownUp className="size-4" />} onClick={() => expandAll(false)}>Collapse all</Button>
+            <Button variant="ghost" icon={<ChevronsUpDown className="size-4" />} onClick={() => expandAll(true)}>Expand all</Button>
+          </div>
+        </div>
+
         {gen.running && (
           <p className="truncate font-mono text-xs text-ember" aria-live="polite">
             {gen.activity || `Drafting ${DOC_LABELS[gen.running]}… ${gen.chars.toLocaleString()} chars`}
@@ -215,29 +243,33 @@ export function ProjectPage() {
         <ErrorNote error={gen.error} />
 
         {tab.id === 'requirements' && (
-          <div className="space-y-8">
-            <MeetingNotesPanel projectId={projectId} />
-            <SourcesPanel projectId={projectId} kinds={['requirement', 'knowledge']} title="Requirements & knowledge" />
-            <QuestionsPanel projectId={projectId} />
+          <div className="space-y-4">
+            <MeetingNotesPanel projectId={projectId} expanded={expanded('meeting')} onExpandedChange={open => setExpanded('meeting', open)} />
+            <ProjectSection anchor="project-requirements" title="Requirements & knowledge" description={`${sources.data?.length ?? 0} sources · Reference material for every AI draft and revision`} icon={NotebookText} expanded={expanded('sources')} onToggle={() => setExpanded('sources', !expanded('sources'))}>
+              <SourcesPanel projectId={projectId} kinds={['requirement', 'knowledge']} title="Requirements & knowledge" hideTitle initialUpload={params.get('action') === 'upload'} />
+            </ProjectSection>
+            <ProjectSection anchor="project-questions" title="Open questions" description={`${questions.data?.filter(q => q.status === 'open').length ?? 0} awaiting confirmation · Answers become confirmed facts for AI`} icon={HelpCircle} expanded={expanded('questions')} onToggle={() => setExpanded('questions', !expanded('questions'))}>
+              <QuestionsPanel projectId={projectId} hideTitle />
+            </ProjectSection>
           </div>
         )}
         {tab.id === 'deliverables' && (
           <div className="space-y-6">
-            <DeliverablesProgress projectId={projectId} docs={all} />
-            <ConsistencyPanel projectId={projectId} hasDocs={all.length > 0} />
-            <DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type, instruction, { maxTokens }) => generateAndOpen(type, { instruction, maxTokens })} />
+            <ProjectSection title="Deliverables progress" icon={ListChecks} expanded={expanded('progress')} onToggle={() => setExpanded('progress', !expanded('progress'))}><DeliverablesProgress projectId={projectId} docs={all} /></ProjectSection>
+            <ConsistencyPanel projectId={projectId} hasDocs={all.length > 0} expanded={expanded('consistency')} onExpandedChange={open => setExpanded('consistency', open)} />
+            <ProjectSection title="Project deliverables" description="Draft, review and open your client documents" icon={ListChecks} expanded={expanded('deliverables')} onToggle={() => setExpanded('deliverables', !expanded('deliverables'))}><DeliverablesPanel projectId={projectId} docs={all} running={gen.running} onGenerate={(type, instruction, { maxTokens }) => generateAndOpen(type, { instruction, maxTokens })} /></ProjectSection>
           </div>
         )}
         {tab.id === 'custom' && (
-          <CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId, instruction, { maxTokens }) => generateAndOpen('custom', { templateId, instruction, maxTokens })} />
+          <ProjectSection title="Custom documents" icon={LayoutTemplate} expanded={expanded('custom')} onToggle={() => setExpanded('custom', !expanded('custom'))}><CustomDeliverables projectId={projectId} docs={ofType('custom')} running={gen.running === 'custom'} onGenerate={(templateId, instruction, { maxTokens }) => generateAndOpen('custom', { templateId, instruction, maxTokens })} /></ProjectSection>
         )}
         {tab.id === 'diagrams' && (
-          <DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind, instruction, { maxTokens }) => generateAndOpen('diagram', { diagramKind, instruction, maxTokens })} />
+          <ProjectSection title="Project diagrams" icon={GitBranch} expanded={expanded('diagrams')} onToggle={() => setExpanded('diagrams', !expanded('diagrams'))}><DiagramsPanel projectId={projectId} diagrams={ofType('diagram')} running={gen.running === 'diagram'} onGenerate={(diagramKind, instruction, { maxTokens }) => generateAndOpen('diagram', { diagramKind, instruction, maxTokens })} /></ProjectSection>
         )}
-        {tab.id === 'poc' && <PocPanel projectId={projectId} clientName={p.client_name || p.name} />}
-        {tab.id === 'files' && <ProjectFilesPanel projectId={projectId} />}
-        {tab.id === 'demo' && <DemoPanel projectId={projectId} />}
-        {tab.id === 'audit' && <AuditPanel projectId={projectId} />}
+        {tab.id === 'poc' && <ProjectSection title="Proof of concept" icon={NotebookText} expanded={expanded('poc')} onToggle={() => setExpanded('poc', !expanded('poc'))}><PocPanel projectId={projectId} clientName={p.client_name || p.name} /></ProjectSection>}
+        {tab.id === 'files' && <ProjectSection title="Project files" icon={FolderOpen} expanded={expanded('files')} onToggle={() => setExpanded('files', !expanded('files'))}><ProjectFilesPanel projectId={projectId} /></ProjectSection>}
+        {tab.id === 'demo' && <ProjectSection title="Demo scenarios" icon={MonitorPlay} expanded={expanded('demo')} onToggle={() => setExpanded('demo', !expanded('demo'))}><DemoPanel projectId={projectId} /></ProjectSection>}
+        {tab.id === 'audit' && <ProjectSection title="Project activity" icon={FileClock} expanded={expanded('audit')} onToggle={() => setExpanded('audit', !expanded('audit'))}><AuditPanel projectId={projectId} /></ProjectSection>}
       </div>
 
       <ChatPanel projectId={projectId} focus={tab.focus} starters={[...tab.starters]} size={chatSize} onSizeChange={setChatSize} />

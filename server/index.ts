@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Hono } from 'hono'
+import { recoverActivity } from './ai/activity.ts'
 import { ai } from './ai/handler.ts'
 import { config } from './config.ts'
 import { setupDatabase } from './db.ts'
@@ -76,6 +77,7 @@ if (existsSync(config.distDir)) {
 
 try {
   await setupDatabase()
+  await recoverActivity()
   await seedDefaultServers()
   await purgeOldRequestFiles()
 } catch (e) {

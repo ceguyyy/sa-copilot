@@ -37,7 +37,7 @@ async function bindOwner(account: Account) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
   }
   if (owner && owner.id !== account.id) throw new HttpError(409,
-    'Data lokal perangkat ini milik akun lain. Gunakan instalasi/profil data terpisah untuk akun ini.')
+    'This computer\'s local data belongs to another account. Use a separate installation or data profile for this account.')
   if (!owner) {
     await mkdir(config.backupDir, { recursive: true })
     await writeFile(ownerFile(), JSON.stringify(account), { mode: 0o600, flag: 'wx' })
@@ -48,7 +48,7 @@ const credentials = z.object({ email: z.string().trim().toLowerCase().email().ma
 let attempts: number[] = []
 function limitAttempts() {
   attempts = attempts.filter(t => t > Date.now() - 60_000)
-  if (attempts.length >= 10) throw new HttpError(429, 'Terlalu banyak percobaan. Tunggu satu menit.')
+  if (attempts.length >= 10) throw new HttpError(429, 'Too many attempts. Please wait one minute.')
   attempts.push(Date.now())
 }
 // Check against the cloud credential so a reset revokes sessions on other computers too.
@@ -96,7 +96,7 @@ for (const action of ['login', 'register'] as const) {
         let recoveryCode: string | undefined
         if (action === 'register') {
           // Never create another account on a device already bound to local data.
-          try { await readFile(ownerFile()); throw new HttpError(409, 'Perangkat sudah terhubung ke akun. Login dengan akun pemilik data lokal.') }
+          try { await readFile(ownerFile()); throw new HttpError(409, 'This computer is already linked to an account. Sign in with the account that owns its local data.') }
           catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e }
           const hash = await hashPassword(password)
           passwordHash = hash
@@ -107,7 +107,7 @@ for (const action of ['login', 'register'] as const) {
           const row = result.rows[0]
           // Same hashing cost for an unknown email.
           const valid = await verifyPassword(password, row?.password_hash ?? `${'0'.repeat(32)}:${'0'.repeat(128)}`)
-          if (!row || !valid) throw new HttpError(401, 'Email atau password salah')
+          if (!row || !valid) throw new HttpError(401, 'Incorrect email or password')
           account = { id: row.id, email: row.email }
           passwordHash = row.password_hash
         }
@@ -115,7 +115,7 @@ for (const action of ['login', 'register'] as const) {
         if (action === 'register') recoveryCode = await issueRecoveryCode(client, account.id)
         return { account, passwordHash, recoveryCode }
       } catch (e) {
-        if ((e as { code?: string }).code === '23505') throw new HttpError(409, 'Email sudah terdaftar. Silakan login.')
+        if ((e as { code?: string }).code === '23505') throw new HttpError(409, 'This email is already registered. Please sign in.')
         throw e
       } finally { await client.end() }
     })
@@ -144,7 +144,7 @@ auth.post('/auth/recovery-code', async (c) => {
       await ensureRecoveryTable(client)
       await client.query('begin')
       const { rows } = await client.query('select password_hash from sa_copilot_sync.accounts where id = $1 for update', [account.id])
-      if (!rows[0] || !await verifyPassword(password, rows[0].password_hash)) throw new HttpError(401, 'Password salah')
+      if (!rows[0] || !await verifyPassword(password, rows[0].password_hash)) throw new HttpError(401, 'Incorrect password')
       const code = await issueRecoveryCode(client, account.id)
       await client.query('commit')
       return code
@@ -161,5 +161,5 @@ auth.post('/auth/reset-password', async (c) => {
     for (const [token, session] of sessions) if (session.account.id === id) sessions.delete(token)
   })
   deleteCookie(c, COOKIE, { path: '/api' })
-  return c.json({ message: 'Password berhasil direset. Login dengan password baru. Kode pemulihan sudah terpakai; buat kode baru setelah login.' })
+  return c.json({ message: 'Your password has been reset. Sign in with your new password. The recovery code has been used; generate a new one after signing in.' })
 })

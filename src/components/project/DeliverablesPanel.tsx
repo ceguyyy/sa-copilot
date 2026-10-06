@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
+import { workspaceApi } from '../../lib/api'
 import type { AiRunOptions } from '../../lib/useOutputLimit'
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -17,6 +19,7 @@ interface Props {
 
 /** The built-in pipeline: one card per deliverable, drafted by the AI or opened for editing. */
 export function DeliverablesPanel({ projectId, docs, running, onGenerate }: Props) {
+  const reviews = useQuery({ queryKey: ['review-alerts', projectId], queryFn: () => workspaceApi.reviews(projectId), refetchInterval: 15000 })
   const byType = new Map<DocType, DocumentRow>()
   for (const d of docs) if (!byType.has(d.type)) byType.set(d.type, d)
 
@@ -30,6 +33,7 @@ export function DeliverablesPanel({ projectId, docs, running, onGenerate }: Prop
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs text-ember">0{i + 1}</span>
                 <span className="flex gap-1">
+                  {doc && reviews.data?.some(r => r.target_id === doc.id) && <Badge tone="warn">Needs review</Badge>}
                   {doc?.is_knowledge && <Badge tone="forest">knowledge</Badge>}
                   {doc ? <Badge tone="ok">drafted</Badge> : <Badge>empty</Badge>}
                 </span>

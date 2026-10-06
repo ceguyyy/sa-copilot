@@ -1,11 +1,12 @@
 import clsx from 'clsx'
-import { Archive, Cpu, FileStack, KeyRound, Languages, LayoutTemplate, Palette, Plug, Sparkles, Download } from 'lucide-react'
+import { Archive, Cpu, FileStack, KeyRound, Languages, LayoutTemplate, Palette, Plug, Sparkles, Download, UserRound } from 'lucide-react'
 import { Navigate, NavLink, useParams } from 'react-router-dom'
 import { McpServersPanel } from '../components/McpServersPanel'
 import { ModelPicker } from '../components/ModelPicker'
 import { PageHeader } from '../components/ui'
 import { desktop } from '../lib/desktop'
 import { BackupSettings } from './settings/BackupSettings'
+import { AccountSettings } from './settings/AccountSettings'
 import { ConnectionsSettings } from './settings/ConnectionsSettings'
 import { DeliverablesSettings } from './settings/DeliverablesSettings'
 import { FormatsSettings } from './settings/FormatsSettings'
@@ -15,6 +16,7 @@ import { ThemeSettings } from './settings/ThemeSettings'
 import { UpdatesSettings } from './settings/UpdatesSettings'
 
 const TABS = [
+  { id: 'account', label: 'Account', icon: UserRound, intro: 'Manage your account and create a recovery code to keep access if you forget your password.' },
   { id: 'updates', label: 'Updates', icon: Download, intro: 'Check this branch for new Git commits and upgrade your source installation.' },
   {
     id: 'deliverables',
@@ -110,6 +112,8 @@ export function SettingsPage() {
 
 function TabContent({ tab }: { tab: TabId }) {
   switch (tab) {
+    case 'account':
+      return <AccountSettings />
     case 'deliverables':
       return <DeliverablesSettings />
     case 'formats':

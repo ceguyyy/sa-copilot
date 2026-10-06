@@ -19,4 +19,7 @@ export interface CloudStatus {
   remoteRevision: number
   updatedAt?: string
   updatedBy?: string
+  localChanges?: boolean
+  localChangeStatus?: 'changed' | 'clean' | 'unknown'
+  lastSyncedAt?: string
 }

@@ -4,6 +4,16 @@ import type { Theme, ThemeMode } from '../../shared/theme.ts'
 import type { QaKnowledge, QaRunRow, QaSuite } from '../../shared/pocQa.ts'
 import type { AiActivity } from '../../shared/activity.ts'
 import type { CloudStatus, UpdateStatus } from '../../shared/maintenance.ts'
+import type { EnhancementBatch, EnhancementItem } from '../../shared/enhancement.ts'
+
+export const enhancementApi = {
+  items: (projectId: string) => request<EnhancementItem[]>('Load revision items', `/projects/${projectId}/enhancement/items`),
+  history: (projectId: string) => request<EnhancementBatch[]>('Load revision batches', `/projects/${projectId}/enhancement/batches`),
+  create: (projectId: string, input: { prompt: string; rules: string; targets: string[]; context: string[] }) => send<EnhancementBatch>('Create revision batch', 'POST', `/projects/${projectId}/enhancement/batches`, input),
+  resolutions: (id: string, resolutions: Record<string, string>) => send<EnhancementBatch>('Save conflict decisions', 'PATCH', `/enhancement/${id}/resolutions`, { resolutions }),
+  apply: (id: string, accepted: string[]) => send<EnhancementBatch>('Apply revision batch', 'POST', `/enhancement/${id}/apply`, { accepted }),
+  undo: (id: string) => send<EnhancementBatch>('Undo revision batch', 'POST', `/enhancement/${id}/undo`),
+}
 
 export const maintenanceApi = {
   updates: () => request<UpdateStatus>('Load version', '/updates'),
@@ -15,6 +25,20 @@ export const maintenanceApi = {
 }
 
 export const activityApi = { list: () => request<AiActivity[]>('Load AI activity', '/ai/activity') }
+export interface ReviewAlert { id: string; target_kind: string; target_id: string; project_id: string; title: string; reason: string; changed_at: string; change_no: number }
+export interface EvidenceReference { kind: string; id: string; name: string; version?: number; fingerprint?: string; projectId?: string | null }
+export interface SearchHit { kind: string; id: string; project_id: string | null; title: string; excerpt: string | null }
+export interface SkillRelease { release: string; builtin: SkillInput; installed: (Skill & { customized: boolean; available: boolean; release_key: string | null })[] }
+export const workspaceApi = {
+  search: (q: string) => request<SearchHit[]>('Search workspace', `/workspace/search?q=${encodeURIComponent(q)}`),
+  reviews: (id: string) => request<ReviewAlert[]>('Load review alerts', `/projects/${id}/review-alerts`),
+  reviewed: (alert: ReviewAlert) => send('Mark reviewed', 'POST', `/review-alerts/${alert.id}/reviewed`, { change_no: alert.change_no }),
+  sourceEvidence: (fingerprint: string) => request<{ name: string; body: string; captured_at: string }>('Load source snapshot', `/evidence/sources/${fingerprint}`),
+  evidence: (id: string) => request<{ version_no: number; context_refs: EvidenceReference[] }[]>('Load evidence', `/documents/${id}/evidence`),
+  releases: () => request<SkillRelease[]>('Load built-in releases', '/skills/releases'),
+  applyRelease: (release: string, mode: 'copy' | 'replace', skill?: Skill) => send<Skill>('Apply skill release', 'POST', '/skills/releases/apply', { release, mode, id: skill?.id, expected: skill?.updated_at }),
+  skillHistory: (id: string) => request<{ id: string; created_at: string; snapshot: Skill }[]>('Load skill history', `/skills/${id}/history`),
+}
 import type {
   AiModel,
   BackupInspect,
@@ -322,6 +346,7 @@ export interface OpenQuestion {
 }
 
 export const questionsApi = {
+  bulk: (projectId: string, ids: string[], action: 'drop' | 'delete') => send<{ affected: number }>('Update selected questions', 'POST', `/projects/${projectId}/questions/bulk`, { ids, action }),
   list: (projectId: string) => request<OpenQuestion[]>('Load questions', `/projects/${projectId}/questions`),
   create: (projectId: string, input: { question: string; context?: string }) =>
     send<OpenQuestion>('Add question', 'POST', `/projects/${projectId}/questions`, input),
@@ -351,6 +376,8 @@ export const consistencyApi = {
 }
 
 export interface DashboardRow {
+  description: string | null
+  review_alerts: number
   id: string
   name: string
   client_name: string
@@ -364,6 +391,7 @@ export interface DashboardRow {
   diagrams: number
   open_questions: number
   sources: number
+  revision_drafts: number
   last_check_issues: number | null
   last_activity: string
 }

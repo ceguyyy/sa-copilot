@@ -1,8 +1,8 @@
 // Open questions for the client: CRUD. Answered ones feed the AI context as confirmed client answers.
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { query, queryOne } from '../db.ts'
-import { idParam, notFound, parseJson } from '../http.ts'
+import { query, queryOne, withTransaction } from '../db.ts'
+import { HttpError, idParam, notFound, parseJson, UUID_RE } from '../http.ts'
 import { toSetClause } from '../validation.ts'
 
 const questionInput = z.object({
@@ -20,6 +20,23 @@ const questionPatch = z
   .partial()
 
 export const questions = new Hono()
+
+questions.post('/projects/:id/questions/bulk', async c => {
+  const projectId = idParam(c)
+  const req = await parseJson(c, z.object({ ids: z.array(z.string().regex(UUID_RE)).min(1).max(500), action: z.enum(['drop', 'delete']) }))
+  const ids = [...new Set(req.ids)]
+  const affected = await withTransaction(async tx => {
+    const { rows } = await tx.query('select id from open_questions where project_id=$1 and id=any($2::uuid[]) for update', [projectId, ids])
+    if (rows.length !== ids.length) throw new HttpError(409, 'Some selected questions no longer exist in this project. Refresh the list and try again.')
+    if (req.action === 'delete') {
+      await tx.query('delete from open_questions where project_id=$1 and id=any($2::uuid[])', [projectId, ids])
+      await tx.query('select audit($1,$2,$3,$4)', [projectId, 'question.bulk-delete', `Deleted ${rows.length} selected questions`, JSON.stringify({ questionIds: ids })])
+    }
+    else await tx.query("update open_questions set status='dropped' where project_id=$1 and id=any($2::uuid[])", [projectId, ids])
+    return rows.length
+  })
+  return c.json({ affected })
+})
 
 questions.get('/projects/:id/questions', async (c) =>
   c.json(

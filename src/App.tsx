@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
 import { Layout } from './components/Layout'
 import { ThemeSync } from './components/ThemeSync'
@@ -32,6 +32,7 @@ function seedSkillsIfEmpty(): Promise<void> {
 
 export default function App() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [registrationPending, setRegistrationPending] = useState(false)
   const [accountReady, setAccountReady] = useState(false)
   const account = useQuery({ queryKey: ['account'], queryFn: authApi.session, retry: false, refetchInterval: 60_000, enabled: !registrationPending })
@@ -47,10 +48,10 @@ export default function App() {
       })
   }, [qc, account.data?.account, accountReady])
 
-  if (account.isPending) return <Spinner label="Memuat akun..." />
-  if (account.error) return <div className="p-8"><ErrorNote error={account.error} /><Button onClick={() => void account.refetch()}>Coba lagi</Button></div>
+  if (account.isPending) return <Spinner label="Loading account..." />
+  if (account.error) return <div className="p-8"><ErrorNote error={account.error} /><Button onClick={() => void account.refetch()}>Try again</Button></div>
   if (!account.data?.account) return <AccountPage configured={!!account.data?.configured} onRecoveryPending={() => setRegistrationPending(true)} onDone={() => { setRegistrationPending(false); setAccountReady(false); void account.refetch() }} />
-  if (!accountReady) return <div className="mx-auto max-w-3xl space-y-4 p-8"><h1 className="text-2xl font-semibold">Selamat datang, {account.data.account.email}</h1><p>Pilih restore backup cloud Anda atau lanjutkan dengan data lokal perangkat ini.</p><CloudSettings /><Button onClick={() => setAccountReady(true)}>Lanjutkan dengan data lokal</Button></div>
+  if (!accountReady) return <div className="mx-auto max-w-3xl space-y-4 p-8"><h1 className="text-2xl font-semibold">Welcome, {account.data.account.email}</h1><p>Restore your cloud backup or continue with this computer's local data.</p><CloudSettings /><Button onClick={() => { navigate('/home', { replace: true }); setAccountReady(true) }}>Continue with local data</Button></div>
 
   if (desktop && setup.data && !setup.data.configured) return <SetupPage onDone={() => void setup.refetch()} />
 
