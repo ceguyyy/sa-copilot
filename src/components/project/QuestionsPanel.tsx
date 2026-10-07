@@ -1,10 +1,11 @@
 import { useLocation } from 'react-router-dom'
-﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Ban, Check, HelpCircle, Plus, RotateCcw, Search, Sparkles, Trash2 } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { findQuestions } from '../../lib/ai'
 import { questionsApi, type OpenQuestion } from '../../lib/api'
+import { useResetState } from '../../lib/useResetState'
 import { Badge, Button, ErrorNote, Input, Textarea } from '../ui'
 
 type Filter = 'open' | 'answered' | 'dropped' | 'all'
@@ -42,12 +43,14 @@ export function QuestionsPanel({ projectId, hideTitle = false }: { projectId: st
   const key = ['questions', projectId]
   const questions = useQuery({ queryKey: key, queryFn: () => questionsApi.list(projectId) })
   const location = useLocation()
-  const [filter, setFilter] = useState<Filter>('open')
+  const hashId = location.hash.startsWith('#question-') ? location.hash.slice(10) : null
+  const focusedId = hashId && questions.data?.some(question => question.id === hashId) ? hashId : null
+  const [filter, setFilter] = useResetState<Filter>(focusedId, () => 'all', 'open')
   const [draft, setDraft] = useState('')
   const [finding, setFinding] = useState('')
   const [findError, setFindError] = useState<unknown>(null)
   const [found, setFound] = useState<number | null>(null)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useResetState(focusedId, () => '', '')
   const [selection, setSelection] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [notice, setNotice] = useState('')
@@ -75,13 +78,10 @@ export function QuestionsPanel({ projectId, hideTitle = false }: { projectId: st
   const count = (status: Filter) => status === 'all' ? all.length : all.filter(q => q.status === status).length
   const shown = all.filter(q => (filter === 'all' || q.status === filter) && `${q.question} ${q.context} ${q.answer}`.toLowerCase().includes(search.toLowerCase()))
   useEffect(() => {
-    const id = location.hash.startsWith('#question-') ? location.hash.slice(10) : null
-    if (!id || !questions.data?.some(question => question.id === id)) return
-    setFilter('all')
-    setSearch('')
-    const frame = requestAnimationFrame(() => document.getElementById(`question-${id}`)?.scrollIntoView({ block: 'center' }))
+    if (!focusedId) return
+    const frame = requestAnimationFrame(() => document.getElementById(`question-${focusedId}`)?.scrollIntoView({ block: 'center' }))
     return () => cancelAnimationFrame(frame)
-  }, [location.hash, questions.data])
+  }, [focusedId])
   const selected = shown.filter(q => selection.includes(q.id))
   const dropIds = selected.filter(q => q.status !== 'dropped').map(q => q.id)
   const busy = bulk.isPending || update.isPending || remove.isPending

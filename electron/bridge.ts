@@ -11,6 +11,10 @@ export type DesktopStatus = PublicConfig & {
 }
 
 export interface DesktopBridge {
+  getUpdates(): Promise<DesktopUpdateStatus>
+  checkUpdates(): Promise<DesktopUpdateStatus>
+  downloadUpdate(): Promise<DesktopUpdateStatus>
+  installUpdate(): Promise<void>
   getConfig(): Promise<DesktopStatus>
   saveConfig(patch: ConfigPatch): Promise<DesktopStatus>
   restartRouter(): Promise<DesktopStatus>
@@ -18,4 +22,15 @@ export interface DesktopBridge {
   openLogs(): Promise<void>
   openFolder(folder: FolderKey): Promise<void>
   splashAction(action: 'retry' | 'logs' | 'quit'): void
+}
+
+export interface DesktopUpdateStatus {
+  supported: boolean
+  version: string
+  latest?: string
+  phase: 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'downloaded' | 'preparing' | 'installing' | 'error'
+  percent?: number
+  reason?: string
+  error?: string
+  safetyBackup?: string
 }

@@ -5,6 +5,7 @@ import { Brain, BrainCircuit, FileText, Globe, Image as ImageIcon, NotebookPen, 
 import { useEffect, useRef, useState } from 'react'
 import { sourcesApi } from '../lib/api'
 import { ACCEPTED_FILES, extractText } from '../lib/extract'
+import { useResetState } from '../lib/useResetState'
 import type { Source } from '../lib/types'
 import { Badge, Button, ErrorNote, Input, Textarea } from './ui'
 
@@ -29,17 +30,16 @@ export function SourcesPanel({ projectId, kinds, title, hideTitle = false, initi
   const [websiteOpen, setWebsiteOpen] = useState(false)
   const [websiteUrl, setWebsiteUrl] = useState('')
   const [progress, setProgress] = useState('')
-  const [expanded, setExpanded] = useState<string | null>(null)
-
   const sources = useQuery({ queryKey: key, queryFn: () => sourcesApi.list(projectId) })
+  const hashId = location.hash.startsWith('#source-') ? location.hash.slice(8) : null
+  const focusedId = hashId && sources.data?.some(source => source.id === hashId) ? hashId : null
+  const [expanded, setExpanded] = useResetState<string | null>(focusedId, () => focusedId, null)
 
   useEffect(() => {
-    const id = location.hash.startsWith('#source-') ? location.hash.slice(8) : null
-    if (!id || !sources.data?.some(source => source.id === id)) return
-    setExpanded(id)
-    const frame = requestAnimationFrame(() => document.getElementById(`source-${id}`)?.scrollIntoView({ block: 'center' }))
+    if (!focusedId) return
+    const frame = requestAnimationFrame(() => document.getElementById(`source-${focusedId}`)?.scrollIntoView({ block: 'center' }))
     return () => cancelAnimationFrame(frame)
-  }, [location.hash, sources.data])
+  }, [focusedId])
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
       for (const [i, file] of files.entries()) {

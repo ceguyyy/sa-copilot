@@ -2,11 +2,12 @@ import { WorkspaceSearch } from './WorkspaceSearch'
 import clsx from 'clsx'
 import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, PanelLeftClose, PanelLeftOpen, Settings, Trash2 } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '../lib/api'
 import { rememberWork } from '../lib/recentWork'
 import { CurrentModel } from './CurrentModel'
+import { Spinner } from './ui'
 
 const NAV = [
   { to: '/home', label: 'Home', icon: House, end: true },
@@ -77,7 +78,9 @@ export function Layout() {
       </aside>
       <main className="min-w-0 px-4 py-6 md:px-10 md:py-8">
         <WorkspaceSearch />
-        <Outlet />
+        <Suspense fallback={<Spinner label="Loading page..." />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   )

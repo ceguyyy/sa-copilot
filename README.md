@@ -66,11 +66,13 @@ Prefer to run it from source instead (e.g. to develop)? See [Run from the repo](
 
 ### Git updates
 
+Installed Windows apps from **2.1.1** support updates from **Settings → Updates**: check the public GitHub release, download in the background, then restart to install. A local safety backup is required before services shut down. Install 2.1.1 once to enable this on older copies. See [Windows auto-update](docs/windows-auto-update.md).
+
 For a source installation, open **Settings → Updates → Check Git updates**. It checks the upstream of the currently checked-out branch (for example `feat/local-windows-app`), shows the commit IDs and offers **Upgrade to latest commit**.
 
 Upgrade saves a `.sacopilot` backup, performs a fast-forward Git update, runs `npm ci`, and builds the UI. Save your work and let active jobs finish first. Data changes are temporarily blocked during maintenance. When complete, stop the server and run `npm start` again so the new backend and database schema are loaded. Git credentials must already work on that computer. Local changes, untracked files, and local commits block upgrades; the app never discards them. If installation/build fails, fix the checkout and run `npm ci` and `npm start`; the Settings screen reports the failed stage and any saved backup.
 
-Installed `.exe`/`.dmg` apps have a GitHub Releases link instead. Install the new installer to upgrade them; their data is preserved. Source upgrades do not update installed desktop binaries.
+Installed macOS apps and Windows copies predating the updater use the GitHub Releases link to install a new release; their data is preserved. Source upgrades do not update installed desktop binaries.
 
 ### Supabase cloud backup and sync between computers
 

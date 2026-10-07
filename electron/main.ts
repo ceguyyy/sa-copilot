@@ -1,5 +1,6 @@
 // SA Copilot desktop: starts Postgres → 9router → server, shows the UI, and shuts everything down on quit.
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron'
@@ -12,6 +13,8 @@ import { createLogger } from './processes.ts'
 import { startPostgres } from './services/postgres.ts'
 import { startRouter } from './services/router9.ts'
 import { ServerSupervisor } from './services/server.ts'
+import electronUpdater from 'electron-updater'
+import { DesktopUpdates } from './updates.ts'
 
 if (process.env.SA_COPILOT_DATA_DIR) app.setPath('userData', path.resolve(process.env.SA_COPILOT_DATA_DIR))
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -40,6 +43,8 @@ const ports: Ports = { postgres: 0, router: 0, server: 0 }
 let postgres: { stop(): Promise<void> } | null = null
 let router: { port: number; external: boolean; stop(): Promise<void> } | null = null
 let quitting = false
+const updateToken = randomBytes(32).toString('hex')
+const serverEnv = () => ({ ...buildServerEnv(cfg, paths, ports, app.getVersion()), SA_DESKTOP_UPDATE_TOKEN: updateToken })
 
 const supervisor = new ServerSupervisor({
   entry: paths.serverEntry,
@@ -51,6 +56,51 @@ const supervisor = new ServerSupervisor({
 const serverUrl = () => `http://127.0.0.1:${ports.server}`
 const healthUrl = () => `${serverUrl()}/api/health`
 const splashFile = path.join(import.meta.dirname, 'splash.html')
+
+async function updateRequest(action: 'prepare' | 'cancel'): Promise<{ safetyBackup: string }> {
+  const response = await fetch(`${serverUrl()}/api/desktop-update/${action}`, {
+    method: 'POST', headers: { 'X-SA-Desktop-Update': updateToken }, signal: AbortSignal.timeout(120_000),
+  })
+  const body = await response.json() as { safetyBackup: string; error?: string }
+  if (!response.ok) throw new Error(body.error ?? `Update preparation failed (${response.status})`)
+  return body
+}
+
+const updates = new DesktopUpdates(app.isPackaged && process.platform === 'win32' ? electronUpdater.autoUpdater : null,
+  app.getVersion(), process.platform !== 'win32' ? 'Automatic updates are currently available for Windows only.' : 'Automatic updates require the installed Windows app.', {
+    log: logMain,
+    prepare: async () => (await updateRequest('prepare')).safetyBackup,
+    shutdown: async () => {
+      await supervisor.stop()
+      await router?.stop()
+      router = null
+      await postgres?.stop()
+      if (existsSync(path.join(paths.pgDir, 'postmaster.pid'))) throw new Error('PostgreSQL did not stop cleanly. Update cancelled; check the logs.')
+      postgres = null
+    },
+    recover: async (restartServices) => {
+      // Cancel a retained maintenance lock if the old server is still reachable.
+      await updateRequest('cancel').catch(() => {})
+      if (!restartServices) return
+      await supervisor.stop()
+      if (!existsSync(path.join(paths.pgDir, 'postmaster.pid'))) postgres = null
+      await startServices()
+    },
+  })
+
+function validateUpdateSender(event: Electron.IpcMainInvokeEvent): void {
+  if (!win || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame ||
+    new URL(event.senderFrame.url).origin !== serverUrl()) throw new Error('Updates must be requested from the main application window')
+}
+ipcMain.handle('updates:get', event => { validateUpdateSender(event); return updates.status() })
+ipcMain.handle('updates:check', event => { validateUpdateSender(event); return updates.check() })
+ipcMain.handle('updates:download', event => { validateUpdateSender(event); return updates.download() })
+ipcMain.handle('updates:install', event => { validateUpdateSender(event); return updates.install() })
+
+function checkDesktopUpdates() {
+  if (!updates.status().supported || ['checking', 'downloading', 'downloaded', 'preparing', 'installing'].includes(updates.status().phase)) return
+  void updates.check().catch(error => logMain(`Update check: ${error}`))
+}
 
 function secureWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
   const w = new BrowserWindow({
@@ -106,7 +156,7 @@ async function startServices(): Promise<void> {
 
   setStatus('Menjalankan SA Copilot…')
   if (!ports.server) ports.server = await freePort()
-  await supervisor.start(buildServerEnv(cfg, paths, ports, app.getVersion()), healthUrl())
+  await supervisor.start(serverEnv(), healthUrl())
 }
 
 async function boot(): Promise<void> {
@@ -125,6 +175,10 @@ async function boot(): Promise<void> {
     splash = null
   })
   await win.loadURL(`${serverUrl()}/`)
+
+  if (updates.status().supported) {
+    setTimeout(checkDesktopUpdates, 30_000).unref()
+  }
 
   if (process.env.SA_COPILOT_SMOKE === '1') {
     writeFileSync(path.join(paths.logsDir, 'ready.json'), JSON.stringify({ server: ports.server, postgres: ports.postgres, router: ports.router }))
@@ -145,16 +199,18 @@ async function status(): Promise<DesktopStatus> {
 
 ipcMain.handle('config:get', () => status())
 ipcMain.handle('config:save', async (_e, input: unknown) => {
+  if (['preparing', 'installing'].includes(updates.status().phase)) throw new Error('Wait for the application update to finish')
   cfg = await store.save(parsePatch(input))
-  await supervisor.restart(buildServerEnv(cfg, paths, ports, app.getVersion()), healthUrl())
+  await supervisor.restart(serverEnv(), healthUrl())
   return status()
 })
 ipcMain.handle('router:restart', async () => {
+  if (['preparing', 'installing'].includes(updates.status().phase)) throw new Error('Wait for the application update to finish')
   await router?.stop()
   router = null
   router = await startRouter({ execPath: process.execPath, appDir: paths.routerAppDir, port: await freePort(), log: createLogger(paths.logsDir, '9router') })
   ports.router = router.port
-  await supervisor.restart(buildServerEnv(cfg, paths, ports, app.getVersion()), healthUrl())
+  await supervisor.restart(serverEnv(), healthUrl())
   return status()
 })
 ipcMain.handle('shell:open-external', async (_e, url: unknown) => {
@@ -188,6 +244,7 @@ app.on('second-instance', () => {
 app.on('window-all-closed', () => app.quit())
 
 app.on('before-quit', (event) => {
+  if (updates.status().phase === 'preparing') { event.preventDefault(); return }
   if (quitting) return
   event.preventDefault()
   quitting = true
@@ -201,3 +258,4 @@ app.on('before-quit', (event) => {
 })
 
 void app.whenReady().then(boot)
+setInterval(checkDesktopUpdates, 4 * 60 * 60_000).unref()

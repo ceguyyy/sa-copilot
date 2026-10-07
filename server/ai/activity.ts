@@ -6,6 +6,8 @@ import { describeError, type Stream } from './stream.ts'
 
 const context = new AsyncLocalStorage<AiActivity>()
 const jobs: AiActivity[] = []
+let activeJobs = 0
+export const hasActiveAiJobs = () => activeJobs > 0
 export async function activitySnapshot() {
  const persisted = await query<{ payload: AiActivity }>('select payload from ai_activity order by updated_at desc limit 200');
  const combined = new Map(persisted.map(row => [row.payload.id, row.payload]));
@@ -29,6 +31,11 @@ export function activityModel(model: string, metadata: Partial<Pick<AiActivity, 
   }
 }
 export async function trackActivity(task: string, body: unknown, out: Stream, run: (out: Stream) => Promise<void>) {
+  activeJobs++
+  try { return await runTrackedActivity(task, body, out, run) }
+  finally { activeJobs-- }
+}
+async function runTrackedActivity(task: string, body: unknown, out: Stream, run: (out: Stream) => Promise<void>) {
   let projectId = body && typeof body === 'object' && 'projectId' in body && typeof body.projectId === 'string' ? body.projectId : undefined
   const batchId = body && typeof body === 'object' && 'batchId' in body && typeof body.batchId === 'string' && /^[a-f0-9-]{36}$/i.test(body.batchId) ? body.batchId : undefined
   if (!projectId && batchId) projectId = (await query<{ project_id: string }>('select project_id from enhancement_batches where id=$1',[batchId]))[0]?.project_id

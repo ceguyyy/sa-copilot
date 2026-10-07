@@ -50,10 +50,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run dist:win
+      - name: Verify Windows update artifacts
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          foreach ($file in @("release/SA-Copilot-Setup-$version.exe", "release/SA-Copilot-Setup-$version.exe.blockmap", 'release/latest.yml')) {
+            if (-not (Test-Path -LiteralPath $file)) { throw "Missing update artifact: $file" }
+          }
+          if (-not (Select-String -LiteralPath release/latest.yml -Pattern "^version: $([regex]::Escape($version))$")) {
+            throw 'Update metadata version does not match package.json'
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: sa-copilot-windows
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -70,3 +83,4 @@ jobs:
         with:
           files: installers/*
           generate_release_notes: true
+          fail_on_unmatched_files: true

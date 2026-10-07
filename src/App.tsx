@@ -1,26 +1,28 @@
-import { InboxPage } from './pages/InboxPage'
-import { TrashPage } from './pages/TrashPage'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { lazy, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { HomePage } from './pages/HomePage'
 import { Layout } from './components/Layout'
 import { ThemeSync } from './components/ThemeSync'
 import { authApi, skillsApi } from './lib/api'
 import { desktop } from './lib/desktop'
 import { DEFAULT_SKILLS } from './lib/defaultSkills'
-import { DocumentPage } from './pages/DocumentPage'
-import { KnowledgePage } from './pages/KnowledgePage'
-import { ProjectPage } from './pages/ProjectPage'
-import { ProjectsPage } from './pages/ProjectsPage'
-import { DemoPage } from './pages/DemoPage'
-import { QaTestingPage } from './pages/QaTestingPage'
-import { SettingsPage } from './pages/SettingsPage'
 import { SetupPage } from './pages/SetupPage'
 
 import { AccountPage } from './pages/AccountPage'
 import { CloudSettings } from './pages/settings/CloudSettings'
 import { Button, ErrorNote, Spinner } from './components/ui'
+
+// Load editors and QA tools only when their page is opened.
+const HomePage = lazy(() => import('./pages/HomePage').then(module => ({ default: module.HomePage })))
+const InboxPage = lazy(() => import('./pages/InboxPage').then(module => ({ default: module.InboxPage })))
+const TrashPage = lazy(() => import('./pages/TrashPage').then(module => ({ default: module.TrashPage })))
+const DocumentPage = lazy(() => import('./pages/DocumentPage').then(module => ({ default: module.DocumentPage })))
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then(module => ({ default: module.KnowledgePage })))
+const ProjectPage = lazy(() => import('./pages/ProjectPage').then(module => ({ default: module.ProjectPage })))
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(module => ({ default: module.ProjectsPage })))
+const DemoPage = lazy(() => import('./pages/DemoPage').then(module => ({ default: module.DemoPage })))
+const QaTestingPage = lazy(() => import('./pages/QaTestingPage').then(module => ({ default: module.QaTestingPage })))
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(module => ({ default: module.SettingsPage })))
 
 let seeding: Promise<void> | null = null
 

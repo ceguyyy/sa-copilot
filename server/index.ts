@@ -30,8 +30,10 @@ import { beginWrite } from './maintenance/lock.ts'
 import { office } from './routes/office.ts'
 
 import { auth, validateAccount } from './auth.ts'
+import { desktopUpdate } from './maintenance/desktopUpdate.ts'
 
 const app = new Hono()
+app.route('/api/desktop-update', desktopUpdate)
 app.get('/api/health', (c) => c.json({ ready: true }))
 app.route('/api', auth)
 app.use('/api/*', async (c, next) => {

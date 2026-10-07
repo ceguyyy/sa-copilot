@@ -1,5 +1,5 @@
 import { useState } from 'react'
-﻿import { useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { workspaceApi } from '../lib/api'
 import { ErrorNote } from './ui'

@@ -21,6 +21,11 @@ extraResources:
   - from: server/deck/build_deck.py
     to: deck/build_deck.py
 win:
+  publish:
+    provider: github
+    owner: ceguyyy
+    repo: sa-copilot
+    releaseType: release
   target:
     - target: nsis
       arch: [x64]
@@ -30,8 +35,9 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
-  artifactName: ${productName} Setup ${version}.${ext}
+  artifactName: SA-Copilot-Setup-${version}.${ext}
 mac:
+  publish: null
   target:
     - target: dmg
       arch: [arm64, x64]

@@ -1,7 +1,7 @@
 {
   "name": "sa-copilot",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "SA Copilot - presales Solution Architect copilot",
   "author": "Christian Gunawan",
   "main": "electron-dist/main.mjs",
@@ -35,6 +35,7 @@
     "9router": "^0.5.91",
     "clsx": "^2.1.1",
     "docx": "^9.7.2",
+    "electron-updater": "^6.8.9",
     "embedded-postgres": "^18.4.0-beta.17",
     "exceljs": "^4.4.0",
     "fflate": "^0.8.3",

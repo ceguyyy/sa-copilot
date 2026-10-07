@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 vi.stubEnv('DATABASE_URL', 'postgres://test@localhost/test')
 vi.mock('../db.ts', () => ({ query: vi.fn(async () => []) }))
-const { activityModel, activitySnapshot, trackActivity } = await import('./activity.ts')
+const { activityModel, activitySnapshot, trackActivity, hasActiveAiJobs } = await import('./activity.ts')
 
 describe('AI workspace activity', () => {
   it('keeps simultaneous jobs and model selection isolated', async () => {
@@ -11,12 +11,14 @@ describe('AI workspace activity', () => {
       activityModel('model-a')
       await wait
     })
+    expect(hasActiveAiJobs()).toBe(true)
     await trackActivity('second', {}, { send() {} }, async () => { activityModel('model-b') })
     const snapshot = await activitySnapshot()
     expect(snapshot.find((job) => job.task === 'first')).toMatchObject({ status: 'working', model: 'model-a', projectId: 'project-a' })
     expect(snapshot.find((job) => job.task === 'second')).toMatchObject({ status: 'done', model: 'model-b' })
     release()
     await first
+    expect(hasActiveAiJobs()).toBe(false)
     expect((await activitySnapshot()).find((job) => job.task === 'first')?.finishedAt).toBeTypeOf('number')
   })
   it('records failures while preserving stream delivery', async () => {

@@ -2,6 +2,10 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { DesktopBridge } from './bridge.ts'
 
 const bridge: DesktopBridge = {
+  getUpdates: () => ipcRenderer.invoke('updates:get'),
+  checkUpdates: () => ipcRenderer.invoke('updates:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+  installUpdate: () => ipcRenderer.invoke('updates:install'),
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (patch) => ipcRenderer.invoke('config:save', patch),
   restartRouter: () => ipcRenderer.invoke('router:restart'),

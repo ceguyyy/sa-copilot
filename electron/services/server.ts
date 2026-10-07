@@ -1,24 +1,28 @@
 // The SA Copilot server (server-dist/index.mjs) as a child process: start, health check, restart, crash policy.
 import { spawn, type ChildProcess } from 'node:child_process'
+import { setTimeout as delay } from 'node:timers/promises'
 import { killTree } from '../processes.ts'
 
 const START_TIMEOUT_MS = 90_000
 const CRASH_WINDOW_MS = 5 * 60_000
 const TAIL_LINES = 8
 
-export async function waitForHealth(url: string, timeoutMs: number, fetchFn: typeof fetch = fetch, intervalMs = 500): Promise<void> {
+export async function waitForHealth(url: string, timeoutMs: number, fetchFn: typeof fetch = fetch, intervalMs = 500, signal?: AbortSignal): Promise<void> {
   const deadline = Date.now() + timeoutMs
   let last = 'no response'
   for (;;) {
+    signal?.throwIfAborted()
     try {
-      const res = await fetchFn(url, { signal: AbortSignal.timeout(3000) })
+      const requestSignal = AbortSignal.timeout(Math.max(1, Math.min(3000, deadline - Date.now())))
+      const res = await fetchFn(url, { signal: signal ? AbortSignal.any([signal, requestSignal]) : requestSignal })
       if (res.status === 200) return
       last = `HTTP ${res.status}`
     } catch (e) {
+      signal?.throwIfAborted()
       last = e instanceof Error ? e.message : String(e)
     }
     if (Date.now() + intervalMs > deadline) throw new Error(`SA Copilot server did not become ready: ${last}`)
-    await new Promise((r) => setTimeout(r, intervalMs))
+    await delay(intervalMs, undefined, { signal })
   }
 }
 
@@ -51,6 +55,7 @@ export class ServerSupervisor {
   private tail: string[] = []
   /** Rejects the start() in progress when the server dies for good before becoming healthy. */
   private failStart: ((error: Error) => void) | null = null
+  private healthCheck: AbortController | null = null
 
   constructor(opts: SupervisorOptions) {
     this.opts = opts
@@ -79,15 +84,35 @@ export class ServerSupervisor {
     })
     child.stdout?.on('data', (d: Buffer) => this.collect(d))
     child.stderr?.on('data', (d: Buffer) => this.collect(d))
+    child.once('error', (error) => {
+      if (this.child !== child || this.stopping) return
+      this.child = null
+      const failure = new Error(`Could not start the SA Copilot server: ${error.message}`)
+      this.opts.log(failure.message)
+      if (this.failStart) this.failStart(failure)
+      else {
+        this.healthCheck?.abort()
+        this.opts.onFatal(failure.message)
+      }
+    })
     child.once('exit', (code) => {
       if (this.child !== child || this.stopping) return
       this.opts.log(`server exited unexpectedly (code ${code})`)
       if (this.policy.recordCrash(Date.now()) === 'fatal') {
         this.fatal()
+        this.healthCheck?.abort()
         return
       }
       this.spawnChild()
-      waitForHealth(this.healthUrl, START_TIMEOUT_MS).catch((e) => this.opts.onFatal(e instanceof Error ? e.message : String(e)))
+      // During startup, start() already monitors the replacement process.
+      if (!this.failStart) {
+        this.healthCheck?.abort()
+        const check = new AbortController()
+        this.healthCheck = check
+        waitForHealth(this.healthUrl, START_TIMEOUT_MS, fetch, 500, check.signal).catch((e) => {
+          if (!check.signal.aborted) this.opts.onFatal(e instanceof Error ? e.message : String(e))
+        })
+      }
     })
     this.child = child
   }
@@ -97,13 +122,20 @@ export class ServerSupervisor {
     this.healthUrl = healthUrl
     this.stopping = false
     this.tail = []
+    this.healthCheck?.abort()
+    const check = new AbortController()
+    this.healthCheck = check
     const failed = new Promise<never>((_, reject) => {
       this.failStart = reject
     })
     try {
       this.spawnChild()
-      await Promise.race([waitForHealth(healthUrl, START_TIMEOUT_MS), failed])
+      await Promise.race([waitForHealth(healthUrl, START_TIMEOUT_MS, fetch, 500, check.signal), failed])
+    } catch (error) {
+      await this.stop()
+      throw error
     } finally {
+      check.abort()
       this.failStart = null
     }
   }
@@ -115,6 +147,9 @@ export class ServerSupervisor {
 
   async stop(): Promise<void> {
     this.stopping = true
+    this.failStart?.(new Error('SA Copilot server startup was stopped'))
+    this.healthCheck?.abort()
+    this.healthCheck = null
     const child = this.child
     this.child = null
     if (!child?.pid || child.exitCode !== null) return

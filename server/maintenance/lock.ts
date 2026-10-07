@@ -8,7 +8,7 @@ export function beginWrite() {
   writes++
   return () => { writes-- }
 }
-export async function exclusive<T>(run: () => Promise<T>): Promise<T> {
+export async function acquireExclusive(): Promise<() => void> {
   if (busy) throw new HttpError(409, 'An update or cloud sync is already running')
   busy = true
   try {
@@ -17,6 +17,11 @@ export async function exclusive<T>(run: () => Promise<T>): Promise<T> {
       if (Date.now() > deadline) throw new HttpError(409, 'Wait for active requests to finish before running maintenance')
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    return await run()
-  } finally { busy = false }
+    let released = false
+    return () => { if (!released) { released = true; busy = false } }
+  } catch (error) { busy = false; throw error }
+}
+export async function exclusive<T>(run: () => Promise<T>): Promise<T> {
+  const release = await acquireExclusive()
+  try { return await run() } finally { release() }
 }
