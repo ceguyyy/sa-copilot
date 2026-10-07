@@ -1,11 +1,14 @@
 import { z } from 'zod'
+import {jsonPath} from '../shared/saWorkspace.ts'
 import { randomUUID } from 'node:crypto'
 import { executeSaRequest } from './routes/saPostman.ts'
 import type { SaEndpoint, SaResponse, SaCheck } from '../shared/saPostman.ts'
 import { resolveSaVariables } from '../shared/saPostman.ts'
 
-const field = z.object({ name: z.string().max(256), value: z.string().max(500000), enabled: z.boolean().optional(), description: z.string().max(2000).optional() })
+export const field = z.object({ name: z.string().max(256), value: z.string().max(500000), enabled: z.boolean().optional(), description: z.string().max(2000).optional() })
 export const endpointSchema = z.object({
+  extracts:z.array(z.object({name:z.string().regex(/^[\w.-]+$/),path:z.string().min(1).max(1000),secret:z.boolean().optional()})).max(50).optional(),
+  collectionId:z.string().uuid().nullable().optional(),docsHtml:z.string().max(200000).optional(),
   variables: z.array(field.extend({secret:z.boolean().optional()})).max(100).optional().default([]),
   name: z.string().max(300), docs: z.string().max(100000), method: z.enum(['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS']), url: z.string().max(8192), headers: z.array(field).max(100), params: z.array(field).max(100), body: z.string().max(2000000),
   auth: z.object({ type: z.enum(['none','basic','bearer','api-key','jwt','oauth2']), username: z.string().max(1000), password: z.string().max(16000), token: z.string().max(16000), key: z.string().max(256), value: z.string().max(16000), location: z.enum(['header','query']) }),
@@ -13,20 +16,23 @@ export const endpointSchema = z.object({
   scripts: z.object({ pre: z.string().max(20000), post: z.string().max(20000) }), settings: z.object({ timeoutMs: z.number().int().min(1000).max(120000) }),
 })
 const preSchema = z.object({ headers: z.record(z.string(), z.string()).optional(), params: z.record(z.string(), z.string()).optional() }).strict()
-const assertionSchema = z.array(z.object({ name: z.string().max(300), target: z.enum(['status','header','json']), path: z.string().optional(), equals: z.unknown() }).strict()).max(100)
+const assertionSchema = z.array(z.object({ name: z.string().max(300), target: z.enum(['status','header','json']), path: z.string().optional(), operator:z.enum(['equals','exists']).optional(), equals: z.unknown().optional() }).strict().refine(rule=>rule.operator==='exists'||Object.hasOwn(rule,'equals'),'Equals assertions need an expected value')).max(100)
 export function evaluateChecks(script: string, response: SaResponse): SaCheck[] {
   if (!script.trim()) return []
   const tests = assertionSchema.parse(JSON.parse(script))
+  let parsedBody:unknown
+  if(tests.some(test=>test.target==='json'))try{parsedBody=JSON.parse(response.body)}catch{/* Non-JSON assertions fail normally. */}
   return tests.map(test => {
     let actual: unknown = response.status
     if (test.target === 'header') actual = response.headers[(test.path ?? '').toLowerCase()]
     if (test.target === 'json') {
-      try { actual = (test.path ?? '').split('.').filter(Boolean).reduce<unknown>((v, key) => v && typeof v === 'object' ? (v as Record<string, unknown>)[key] : undefined, JSON.parse(response.body)) } catch { actual = undefined }
+      try { actual = jsonPath(parsedBody,test.path??'') } catch { actual = undefined }
     }
-    return { name: test.name, actual: actual ?? null, expected: test.equals, passed: JSON.stringify(actual) === JSON.stringify(test.equals) }
+    return { name: test.name, actual: actual ?? null, expected: test.operator==='exists'?'field exists':test.equals, passed: test.operator==='exists'?actual!==undefined:JSON.stringify(actual) === JSON.stringify(test.equals) }
   })
 }
-export async function runEndpoint(e: SaEndpoint, fetcher: typeof fetch = fetch) {
+export function prepareEndpoint(e: SaEndpoint) {
+  if(['GET','HEAD'].includes(e.method))e={...e,bodyMode:'none'}
   e=resolveSaVariables(e)
   const url = new URL(e.url), headers = new Headers(e.headers.filter(h => h.enabled !== false && h.name.trim()).map(h => [h.name, h.value] as [string,string]))
   for (const p of e.params.filter(p => p.enabled !== false && p.name)) url.searchParams.append(p.name, p.value)
@@ -57,6 +63,10 @@ export async function runEndpoint(e: SaEndpoint, fetcher: typeof fetch = fetch) 
     headers.set('Content-Type', `multipart/form-data; boundary=${boundary}`)
   }
   if (['GET','HEAD'].includes(e.method) && (body || binary?.length)) throw new Error('GET and HEAD cannot have a body; use Params instead')
-  const response = await executeSaRequest({ method: e.method, url: url.toString(), headers: [...headers].map(([name,value]) => ({name,value})), body }, fetcher, e.settings.timeoutMs, binary)
-  return { response, checks: evaluateChecks(e.scripts.post, response) }
+  return { request:{ method:e.method,url:url.toString(),headers:[...headers].map(([name,value])=>({name,value})),body },binary,timeoutMs:e.settings.timeoutMs,post:e.scripts.post }
+}
+export async function runEndpoint(e:SaEndpoint,fetcher:typeof fetch=fetch,signal?:AbortSignal){
+ const prepared=prepareEndpoint(e)
+ const response=await executeSaRequest(prepared.request,fetcher,prepared.timeoutMs,prepared.binary,signal)
+ return {response,checks:evaluateChecks(prepared.post,response)}
 }

@@ -20,12 +20,14 @@ export type StreamEvent =
 type Done = Extract<StreamEvent, { type: 'done' }>
 
 async function post(path: string, body: Record<string, unknown>, onEvent: (e: StreamEvent) => void, signal?: AbortSignal): Promise<Done> {
+  try {
   const res = await fetch(`/api/ai${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
   })
+  window.dispatchEvent(new Event('sa-activity-change'))
   if (!res.ok || !res.body) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
     throw new Error(err.error ?? `AI request failed (${res.status})`)
@@ -51,6 +53,7 @@ async function post(path: string, body: Record<string, unknown>, onEvent: (e: St
   }
   if (!done) throw new Error('Connection closed before the AI finished (server stopped?)')
   return done
+  } finally {window.dispatchEvent(new Event('sa-activity-change'))}
 }
 
 /** Human-readable label for a tool call, e.g. "cekat_docs__searchDocumentation" + {query} → "Searching Cekat docs: broadcast". */

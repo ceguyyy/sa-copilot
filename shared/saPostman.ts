@@ -2,6 +2,9 @@ export interface SaField { name: string; value: string; enabled?: boolean; descr
 export interface SaRequest { method: string; url: string; headers: SaField[]; body: string }
 export interface SaResponse { status: number; statusText: string; headers: Record<string, string>; body: string; durationMs: number; bytes: number; truncated: boolean }
 export interface SaEndpoint extends SaRequest {
+  extracts?: {name:string;path:string;secret?:boolean}[]
+  collectionId?: string | null
+  docsHtml?: string
   variables?: (SaField & { secret?: boolean })[]
   name: string; docs: string; params: SaField[]
   auth: { type: 'none' | 'basic' | 'bearer' | 'api-key' | 'jwt' | 'oauth2'; username: string; password: string; token: string; key: string; value: string; location: 'header' | 'query' }
@@ -12,6 +15,7 @@ export interface SaEndpoint extends SaRequest {
   settings: { timeoutMs: number }
 }
 export interface SaSaved { id: string; name: string; version: number; config: SaEndpoint; updated_at: string }
+export interface SaCollection {id:string;name:string;created_at:string;version?:number;variables?: (SaField & {secret?:boolean})[];updated_at?:string}
 export interface SaVersion { id: string; request_id: string; version: number; config: SaEndpoint; created_at: string }
 export interface SaHistory { id: string; name: string; request: SaEndpoint; response: SaResponse | null; error: string | null; checks: SaCheck[]; created_at: string }
 export interface SaCheck { name: string; passed: boolean; actual: unknown; expected: unknown }
@@ -21,22 +25,31 @@ export function endpointFromRequest(request?: Partial<SaRequest>): SaEndpoint {
 }
 export function redactSaEndpoint(endpoint: SaEndpoint): SaEndpoint {
   const e = structuredClone(endpoint)
+  const vaultReference=(value:unknown,seen=new Set<string>()):boolean=>{
+    if(typeof value!=='string')return false
+    const match=value.match(/^(?:Bearer\s+)?\{\{\s*([\w.-]+)\s*\}\}$/i)
+    if(!match)return false
+    const name=match[1];if(name.startsWith('vault.'))return true
+    if(seen.has(name))return false;seen.add(name)
+    const row=endpoint.variables?.find(v=>v.name.trim()===name&&v.enabled!==false)
+    return !!row&&vaultReference(row.value,seen)
+  }
   const sensitive = [endpoint.auth.password,endpoint.auth.token,endpoint.auth.value,...endpoint.headers.filter(h=>/authorization|cookie|key|token|secret/i.test(h.name)).map(h=>h.value)].join(' ')
   const secretRefs = new Set([...sensitive.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)].map(m=>m[1]))
   // Follow nested references so a secret alias cannot expose the underlying value.
   for(let round=0;round<20;round++)for(const v of endpoint.variables??[])if(v.secret||secretRefs.has(v.name.trim())||/password|token|secret|key/i.test(v.name)){
     secretRefs.add(v.name.trim());for(const m of v.value.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g))secretRefs.add(m[1])
   }
-  e.variables = (e.variables ?? []).map(v => secretRefs.has(v.name.trim()) ? {...v,value:'[REDACTED]'} : v)
-  e.auth = { ...e.auth, password: '', token: '', value: '' }
-  e.headers = e.headers.map(h => /authorization|cookie|key|token|secret/i.test(h.name) ? { ...h, value: '[REDACTED]' } : h)
-  e.params = e.params.map(h => /password|key|token|secret/i.test(h.name) ? { ...h, value: '[REDACTED]' } : h)
-  try { const u = new URL(e.url); for (const key of [...u.searchParams.keys()]) if (/password|key|token|secret/i.test(key)) u.searchParams.set(key, '[REDACTED]'); e.url = u.toString() } catch { /* invalid drafts */ }
+  e.variables = (e.variables ?? []).map(v => secretRefs.has(v.name.trim())&&!vaultReference(v.value) ? {...v,value:'[REDACTED]'} : v)
+  e.auth = { ...e.auth, password:vaultReference(e.auth.password)?e.auth.password:'',token:vaultReference(e.auth.token)?e.auth.token:'',value:vaultReference(e.auth.value)?e.auth.value:'' }
+  e.headers = e.headers.map(h => /authorization|cookie|key|token|secret/i.test(h.name)&&!vaultReference(h.value) ? { ...h, value: '[REDACTED]' } : h)
+  e.params = e.params.map(h => /password|key|token|secret/i.test(h.name)&&!vaultReference(h.value) ? { ...h, value: '[REDACTED]' } : h)
+  try { const u = new URL(e.url); for (const key of [...u.searchParams.keys()]) if (/password|key|token|secret/i.test(key)&&!vaultReference(u.searchParams.get(key))) u.searchParams.set(key, '[REDACTED]'); e.url = u.toString().replace(/%7B%7B(?:%20)*vault\.([\w.-]+)(?:%20)*%7D%7D/gi,'{{vault.$1}}') } catch { /* invalid drafts */ }
   e.binaryBase64 = ''
-  e.form = e.form.map(f => /password|key|token|secret/i.test(f.name) ? {...f,value:'[REDACTED]'} : f)
+  e.form = e.form.map(f => /password|key|token|secret/i.test(f.name)&&!vaultReference(f.value) ? {...f,value:'[REDACTED]'} : f)
   const redact = (value: unknown): unknown => {
     if(Array.isArray(value)) return value.map(redact)
-    if(value && typeof value==='object') return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,/password|secret|token|api.?key/i.test(key)?'[REDACTED]':redact(v)]))
+    if(value && typeof value==='object') return Object.fromEntries(Object.entries(value).map(([key,v])=>[key,/password|secret|token|api.?key/i.test(key)&&!vaultReference(v)?'[REDACTED]':redact(v)]))
     return value
   }
   try { e.body = JSON.stringify(redact(JSON.parse(e.body))) } catch { /* non-JSON bodies need manual review */ }

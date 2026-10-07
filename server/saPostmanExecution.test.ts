@@ -1,9 +1,31 @@
 import { describe,it,expect,vi } from 'vitest'
 import { endpointFromRequest, redactSaEndpoint } from '../shared/saPostman.ts'
-import { runEndpoint } from './saPostmanExecution.ts'
+import { runEndpoint,prepareEndpoint } from './saPostmanExecution.ts'
 vi.mock('./config.ts',()=>({config:{port:3000}}))
 const response=()=>new Response('{"ok":true}',{status:201,headers:{'x-test':'yes'}})
 describe('SAPostman endpoint execution',()=>{
+ it('previews the same resolved params, auth and body as execution without sending',async()=>{
+  const e=endpointFromRequest({url:'{{base}}/hook',method:'POST',body:'{"id":"{{id}}"}'})
+  e.variables=[{name:'base',value:'https://example.com'},{name:'id',value:'42'},{name:'token',value:'private'}];e.auth={...e.auth,type:'bearer',token:'{{token}}'};e.params=[{name:'id',value:'{{id}}'}]
+  const p=prepareEndpoint(e),fetcher=vi.fn().mockResolvedValue(response())
+  expect(fetcher).not.toHaveBeenCalled();await runEndpoint(e,fetcher)
+  expect(String(fetcher.mock.calls[0][0])).toBe(p.request.url)
+  expect(fetcher.mock.calls[0][1].body).toBe(p.request.body)
+  expect(fetcher.mock.calls[0][1].headers.get('Authorization')).toBe(p.request.headers.find(h=>h.name==='authorization')?.value)
+ })
+ it('supports existence assertions and rejects missing expected values before Send',async()=>{
+  const e=endpointFromRequest({url:'https://example.com'}),fetcher=vi.fn().mockResolvedValue(response())
+  e.scripts.post='[{"name":"Has ok","target":"json","path":"ok","operator":"exists"},{"name":"Missing","target":"json","path":"missing","operator":"exists"}]'
+  expect((await runEndpoint(e,fetcher)).checks.map(c=>c.passed)).toEqual([true,false])
+  fetcher.mockClear();e.scripts.post='[{"name":"Bad","target":"json","path":"missing"}]'
+  await expect(runEndpoint(e,fetcher)).rejects.toThrow();expect(fetcher).not.toHaveBeenCalled()
+ })
+ it('ignores retained body content for GET without changing the draft',async()=>{
+  const e=endpointFromRequest({method:'GET',url:'https://example.com?latitude=-6.2088',body:'{"old":"{{unused}}"}'})
+  const fetcher=vi.fn().mockResolvedValue(response());await runEndpoint(e,fetcher)
+  expect(fetcher.mock.calls[0][1].body).toBeUndefined()
+  expect(e.body).toBe('{"old":"{{unused}}"}')
+ })
  it('applies params, basic auth, disabled headers, pre rules and assertions',async()=>{
   const e=endpointFromRequest({method:'POST',url:'https://example.com?old=1',body:'{}',headers:[{name:'Disabled',value:'no',enabled:false}]})
   e.params=[{name:'hello',value:'a b'}];e.auth={...e.auth,type:'basic',username:'u',password:'p'}

@@ -13,6 +13,8 @@ export const guardTrash: MiddlewareHandler = async (c, next) => {
   const path = c.req.path
   if (path.startsWith('/api/trash')) return next()
   const refs: {kind:string;id:string}[] = []
+  const saRequest = path.match(/^\/api\/sapostman\/requests\/([a-f0-9-]{36})(?:\/|$)/i)
+  if (saRequest && await queryOne('select 1 from sa_requests where id=$1 and deleted_at is not null',[saRequest[1]])) throw new HttpError(410,'This API is in Trash. Restore it before opening or editing it.')
   const match = path.match(/^\/api\/(projects|sources|documents|pocs)\/([a-f0-9-]{36})(?:\/|$)/i)
   if (match) refs.push({kind:match[1],id:match[2]})
   const projectId = c.req.query('projectId')
@@ -36,6 +38,7 @@ export const guardTrash: MiddlewareHandler = async (c, next) => {
 const tableFor = (kind: string) => {
   if (kind === 'project') return 'projects'
   if (kind === 'source') return 'sources'
+  if (kind === 'sa-request') return 'sa_requests'
   throw new HttpError(400, 'Invalid trash item type')
 }
 
@@ -46,11 +49,24 @@ trash.get('/trash', async c => c.json({ retentionDays: RETENTION_DAYS, items: aw
   select 'source',s.id,s.name,p.name,s.project_id,s.deleted_at,s.deleted_at + interval '30 days',s.deleted_at <= now() - interval '30 days'
     from sources s left join projects p on p.id=s.project_id
     where s.deleted_at is not null and (p.id is null or p.deleted_at is null)
+  union all
+  select 'sa-request',id,name,null::text,null::uuid,deleted_at,deleted_at + interval '30 days',deleted_at <= now() - interval '30 days'
+    from sa_requests where deleted_at is not null
   order by deleted_at desc`) }))
 
 trash.post('/trash/:kind/:id/restore', async c => {
   const table = tableFor(c.req.param('kind'))
   const row = await withTransaction(async tx => {
+    if(table === 'sa_requests') {
+      const row=(await tx.query("select * from sa_requests where id=$1 and deleted_at > now() - interval '30 days' for update",[idParam(c)])).rows[0]
+      if(!row)return null
+      // A collection may have been removed while this API was in Trash.
+      const collectionId=row.config.collectionId
+      if(collectionId&&!(await tx.query('select id from sa_collections where id=$1',[collectionId])).rows.length)row.config.collectionId=null
+      const restored=(await tx.query('update sa_requests set deleted_at=null,config=$2,version=version+1,updated_at=now() where id=$1 returning *',[row.id,JSON.stringify(row.config)])).rows[0]
+      await tx.query('insert into sa_request_versions(request_id,version,config) values($1,$2,$3)',[row.id,restored.version,JSON.stringify(restored.config)])
+      return restored
+    }
     if (table === 'sources') {
       const source = (await tx.query('select project_id from sources where id=$1', [idParam(c)])).rows[0]
       if (source?.project_id) {
@@ -108,7 +124,7 @@ trash.delete('/trash/:kind/:id', async c => {
 
 export async function cleanupTrash() {
   await exclusive(async () => {
-    for (const kind of ['project','source']) {
+    for (const kind of ['project','source','sa-request']) {
       const rows = await query<{id:string}>(`select id from ${tableFor(kind)} where deleted_at <= now() - interval '30 days'`)
       for (const row of rows) await purgeItem(kind,row.id,true)
     }

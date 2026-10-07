@@ -30,6 +30,11 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 } },
 })
 
+window.addEventListener('sa-activity-change',()=>{
+  void queryClient.invalidateQueries({queryKey:['inbox']})
+  void queryClient.invalidateQueries({queryKey:['dashboard']})
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

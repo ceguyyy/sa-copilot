@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Button, ErrorNote } from './ui'
 
 /** Copies text to the clipboard and shows "Copied" for a moment; if the clipboard is blocked it says how to copy by hand. */
-export function CopyButton({ text, label, title }: { text: string; label: string; title?: string }) {
+export function CopyButton({ text, label, title, compact=false }: { text: string; label: string; title?: string; compact?:boolean }) {
   const [isCopied, setIsCopied] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
 
@@ -19,9 +19,9 @@ export function CopyButton({ text, label, title }: { text: string; label: string
   }
 
   return (
-    <div className="space-y-1">
-      <Button variant="outline" title={title} icon={isCopied ? <Check className="size-4" /> : <Copy className="size-4" />} disabled={!text} onClick={() => void copy()}>
-        {isCopied ? 'Copied' : label}
+    <div className={compact?'inline-flex shrink-0 items-center':'space-y-1'}>
+      <Button variant={compact?'ghost':'outline'} className={compact?'px-1! py-1!':undefined} aria-label={label} title={title??label} icon={isCopied ? <Check className="size-4" /> : <Copy className="size-4" />} disabled={!text} onClick={ev => {ev.stopPropagation();void copy()}}>
+        {compact?<span className="sr-only">{isCopied?'Copied':label}</span>:isCopied ? 'Copied' : label}
       </Button>
       {copyError && <ErrorNote error={copyError} />}
     </div>

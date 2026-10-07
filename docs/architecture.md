@@ -30,7 +30,7 @@ flowchart TB
             FILES[(Filesystem lokal\nUploads, exports, backups, logs)]
             PY[Python\nmarkitdown + python-pptx]
             QA[Playwright\nBrowser QA]
-            HTTP[SAPostman\nHTTP request runner]
+            HTTP[SAPostman\nHTTP request runner, environments\nCollection runner dan assertions]
             API --> AI
             API --> BACKUP
             API <--> PG
@@ -102,7 +102,7 @@ sequenceDiagram
 ## Keputusan arsitektur
 
 - Windows terinstal memakai `electron-updater` dan GitHub Releases publik. Update memasang versi baru setelah safety backup dan shutdown layanan; detail di `windows-auto-update.md`.
-- SAPostman mengimpor cURL dan menerima payload dari use case POC/n8n. Endpoint, dokumentasi, versi, dan riwayat kirim disimpan di PostgreSQL serta ikut backup. Auth dihapus dari snapshot riwayat; endpoint yang sengaja disimpan mencakup auth. Request dijalankan setelah Hit / Send, dengan timeout 1–120 detik, respons maksimal 2 MB, dan redirect manual. AI memberi saran yang direview sebelum diterapkan; detail di `sapostman.md`.
+- SAPostman mengimpor cURL dan menerima payload dari use case POC/n8n. Collection, environment, endpoint, dokumentasi, versi, dan riwayat kirim disimpan di PostgreSQL serta ikut backup. Variable memiliki scope collection/environment/API; runner meneruskan hasil extraction hanya selama run. Auth dihapus dari snapshot riwayat; endpoint yang sengaja disimpan mencakup auth. Request dijalankan setelah Hit / Send, dengan timeout 1–120 detik, respons maksimal 2 MB, dan redirect manual. AI memberi saran yang direview sebelum diterapkan; detail di `sapostman.md`.
 - Database kerja utama berada di komputer pengguna. Supabase menyimpan akun dan snapshot backup untuk perpindahan antar komputer; transfer snapshot dilakukan secara manual dengan pemeriksaan revision.
 - Akses cloud menggunakan koneksi PostgreSQL melalui TLS dengan verifikasi sertifikat. Integrasi healthcare demo menggunakan Supabase REST yang terpisah.
 - Endpoint cloud memakai workspace `account:<account.id>`. Walaupun `CLOUD_WORKSPACE` masih dibaca konfigurasi, route cloud yang membutuhkan login menggunakan workspace akun tersebut.
@@ -111,6 +111,8 @@ sequenceDiagram
 - UI tidak mengakses database atau kredensial cloud secara langsung. Pengaturan desktop melewati preload IPC dengan `contextIsolation`, sandbox, dan tanpa Node integration.
 - Versi dokumen dan POC baru ditambahkan sebagai riwayat. Restore versi tidak mengganti riwayat lama.
 - Backup cloud mencakup tabel dan upload yang direferensikan, maksimal 100 MB per snapshot, dengan retensi sepuluh revision. Konfigurasi koneksi perangkat tidak ikut dipindahkan.
+
+Secret vault SAPostman menyimpan nilai di file lokal terenkripsi AES-256-GCM dengan key dari password via scrypt. File vault berada di luar snapshot database/uploads dan tidak ikut cloud backup; endpoint menyimpan referensi `{{vault.name}}`. Resolve dilakukan server saat Send/Preview; preview menyamarkan nilai. Cancel request memakai AbortController pada server, termasuk saat membaca response.
 
 ## Referensi implementasi
 

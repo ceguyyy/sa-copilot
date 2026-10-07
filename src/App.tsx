@@ -9,7 +9,7 @@ import { DEFAULT_SKILLS } from './lib/defaultSkills'
 import { SetupPage } from './pages/SetupPage'
 
 import { AccountPage } from './pages/AccountPage'
-import { CloudSettings } from './pages/settings/CloudSettings'
+import { WelcomePage } from './pages/WelcomePage'
 import { Button, ErrorNote, Spinner } from './components/ui'
 
 // Load editors and QA tools only when their page is opened.
@@ -56,7 +56,7 @@ export default function App() {
   if (account.isPending) return <Spinner label="Loading account..." />
   if (account.error) return <div className="p-8"><ErrorNote error={account.error} /><Button onClick={() => void account.refetch()}>Try again</Button></div>
   if (!account.data?.account) return <AccountPage configured={!!account.data?.configured} onRecoveryPending={() => setRegistrationPending(true)} onDone={() => { setRegistrationPending(false); setAccountReady(false); void account.refetch() }} />
-  if (!accountReady) return <div className="mx-auto max-w-3xl space-y-4 p-8"><h1 className="text-2xl font-semibold">Welcome, {account.data.account.email}</h1><p>Restore your cloud backup or continue with this computer's local data.</p><CloudSettings /><Button onClick={() => { navigate('/home', { replace: true }); setAccountReady(true) }}>Continue with local data</Button></div>
+  if (!accountReady) return <WelcomePage email={account.data.account.email} onContinue={() => { navigate('/home', { replace: true }); setAccountReady(true) }} />
 
   if (desktop && setup.data && !setup.data.configured) return <SetupPage onDone={() => void setup.refetch()} />
 

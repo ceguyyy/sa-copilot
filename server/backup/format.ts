@@ -38,6 +38,8 @@ export const BACKUP_TABLES = [
   'skill_history',
   'review_alerts',
   'inbox_reads',
+  'sa_environments',
+  'sa_collections',
   'sa_requests',
   'sa_request_versions',
   'sa_send_history',

@@ -5,7 +5,7 @@ import { config } from '../config.ts'
 import type { SaRequest, SaResponse } from '../../shared/saPostman.ts'
 
 const schema = z.object({ method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']), url: z.string().max(8192), headers: z.array(z.object({ name: z.string().max(256), value: z.string().max(16384) })).max(100), body: z.string().max(2_000_000) })
-export async function executeSaRequest(request: SaRequest, fetcher: typeof fetch = fetch, timeoutMs = 30000, binary?: Uint8Array): Promise<SaResponse> {
+export async function executeSaRequest(request: SaRequest, fetcher: typeof fetch = fetch, timeoutMs = 30000, binary?: Uint8Array, cancelSignal?:AbortSignal): Promise<SaResponse> {
   let url: URL
   try { url = new URL(request.url) } catch { throw new HttpError(400, 'Enter a valid HTTP or HTTPS URL') }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new HttpError(400, 'Use HTTP or HTTPS without credentials in the URL')
@@ -18,10 +18,12 @@ export async function executeSaRequest(request: SaRequest, fetcher: typeof fetch
   }
   if (['GET', 'HEAD'].includes(request.method) && request.body) throw new HttpError(400, 'GET and HEAD requests cannot have a body')
   const start = performance.now()
-  const signal = AbortSignal.timeout(timeoutMs)
+  const timeout = AbortSignal.timeout(timeoutMs)
+  const signal = cancelSignal?AbortSignal.any([timeout,cancelSignal]):timeout
+  if(cancelSignal?.aborted)throw new HttpError(499,'Request cancelled')
   let response: Response
   try { response = await fetcher(url, { method: request.method, headers, body: binary ? new Blob([new Uint8Array(binary)]) : request.body || undefined, redirect: 'manual', signal }) }
-  catch (e) { throw new HttpError(502, signal.aborted ? `Request timed out after ${timeoutMs / 1000} seconds` : `Request failed: ${e instanceof Error ? e.message : 'Network error'}`) }
+  catch (e) { throw new HttpError(502, cancelSignal?.aborted ? 'Request cancelled' : signal.aborted ? `Request timed out after ${timeoutMs / 1000} seconds` : `Request failed: ${e instanceof Error ? e.message : 'Network error'}`) }
   const chunks: Uint8Array[] = []
   let bytes = 0, truncated = false
   const reader = response.body?.getReader()
@@ -33,7 +35,7 @@ export async function executeSaRequest(request: SaRequest, fetcher: typeof fetch
       chunks.push(value.subarray(0, remaining)); bytes += Math.min(value.length, remaining)
       if (value.length > remaining || bytes === 2_000_000) { truncated = true; await reader.cancel(); break }
     }
-  } catch { throw new HttpError(502, 'Response could not be read or timed out') }
+  } catch { throw new HttpError(cancelSignal?.aborted?499:502, cancelSignal?.aborted?'Request cancelled':'Response could not be read or timed out') } finally { reader?.releaseLock() }
   return { status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), body: Buffer.concat(chunks).toString('utf8'), durationMs: Math.round(performance.now() - start), bytes, truncated }
 }
 export const saPostman = new Hono()

@@ -120,6 +120,30 @@ body::before {
   height: auto;
 }
 
+/* SAPostman preferences stay scoped to the API workspace. */
+.sa-code-fields textarea.font-mono {
+  font-size: var(--sa-editor-font-size, 12px);
+  white-space: var(--sa-editor-white-space, pre-wrap);
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+[data-sa-density="compact"] .sa-section {
+  padding: 0.75rem;
+}
+[data-sa-density="compact"] .sa-section > div > * + * {
+  margin-top: 0.5rem;
+}
+[data-sa-density="compact"] button.inline-flex {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+}
+[data-sa-density="compact"] input:not([type="checkbox"]):not([type="range"]),
+[data-sa-density="compact"] select {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  font-size: 0.8125rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

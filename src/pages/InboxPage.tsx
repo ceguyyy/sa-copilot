@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {useInboxActivity} from '../lib/useInboxActivity'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCheck, Inbox, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -13,7 +14,7 @@ const LABELS:Record<InboxStatus,string>={working:'Working',done:'Completed',erro
 const CATEGORIES=['all','ai','consistency','review','question','revision','qa','project','system']
 export function InboxPage() {
   const qc=useQueryClient()
-  const inbox=useQuery({queryKey:['inbox'],queryFn:inboxApi.list,refetchInterval:2000})
+  const inbox=useInboxActivity()
   const [filter,setFilter]=useState<'all'|InboxStatus>('all')
   const [category,setCategory]=useState('all')
   const [unreadOnly,setUnreadOnly]=useState(false)

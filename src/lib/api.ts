@@ -1,3 +1,4 @@
+import type {SaEnvironment,SaVariable} from '../../shared/saWorkspace.ts'
 // Data access layer (repository pattern) — every call to the local server's REST API lives here.
 import type { AnyDocContent, DocType } from '../../shared/schemas.ts'
 import type { Theme, ThemeMode } from '../../shared/theme.ts'
@@ -8,20 +9,41 @@ import type { EnhancementBatch, EnhancementItem } from '../../shared/enhancement
 import type { ConfigPatch } from '../../electron/settings.ts'
 import type { DesktopStatus } from '../../electron/bridge.ts'
 import type { InboxItem } from '../../shared/inbox.ts'
-import type { SaRequest, SaResponse, SaEndpoint, SaSaved, SaVersion, SaHistory, SaExecution } from '../../shared/saPostman.ts'
+import type { SaRequest, SaResponse, SaEndpoint, SaSaved, SaVersion, SaHistory, SaExecution, SaCollection } from '../../shared/saPostman.ts'
 
+export interface SaVaultStatus {configured:boolean;unlocked:boolean;entries:{name:string;updatedAt:string}[]}
 export const saPostmanApi = {
+  vault:()=>request<SaVaultStatus>('Load secret vault','/sapostman/vault'),
+  unlockVault:(password:string)=>send<SaVaultStatus>('Unlock vault','POST','/sapostman/vault/unlock',{password}),
+  resetVault:(password:string)=>send<SaVaultStatus>('Reset vault','POST','/sapostman/vault/reset',{password,confirmation:'RESET'}),
+  lockVault:()=>send('Lock vault','POST','/sapostman/vault/lock'),
+  saveSecret:(name:string,value:string)=>send('Save secret','PUT','/sapostman/vault',{name,value}),
+  deleteSecret:(name:string)=>send('Delete secret','DELETE',`/sapostman/vault/${encodeURIComponent(name)}`),
+  cancelExecution:(id:string)=>send('Cancel request','POST',`/sapostman/executions/${id}/cancel`),
+  environments:()=>request<SaEnvironment[]>('Load environments','/sapostman/environments'),
+  createEnvironment:(name:string,variables:SaVariable[]=[])=>send<SaEnvironment>('Create environment','POST','/sapostman/environments',{name,variables}),
+  updateEnvironment:(env:SaEnvironment)=>send<SaEnvironment>('Update environment','PUT',`/sapostman/environments/${env.id}`,{name:env.name,variables:env.variables,expectedVersion:env.version,expectedUpdatedAt:env.updated_at}),
+  deleteEnvironment:(id:string)=>send('Delete environment','DELETE',`/sapostman/environments/${id}`),
+  updateCollection:(c:SaCollection)=>send<SaCollection>('Update collection','PUT',`/sapostman/collections/${c.id}`,{name:c.name,variables:c.variables,expectedVersion:c.version,expectedUpdatedAt:c.updated_at}),
+  importCollection:(data:{name:string;variables:SaVariable[];endpoints:SaEndpoint[]})=>send<{collection:SaCollection;count:number}>('Import APIs','POST','/sapostman/import',data),
+  preview:(e:SaEndpoint)=>send<SaRequest & {binaryBytes:number;timeoutMs:number}>('Preview request','POST','/sapostman/preview',e),
+  collections:()=>request<SaCollection[]>('Load collections','/sapostman/collections'),
+  createCollection:(name:string)=>send<SaCollection>('Add collection','POST','/sapostman/collections',{name}),
+  renameCollection:(id:string,name:string)=>send<SaCollection>('Rename collection','PUT',`/sapostman/collections/${id}`,{name}),
+  deleteCollection:(id:string)=>send('Delete collection','DELETE',`/sapostman/collections/${id}`),
+  exportCollection:(id:string)=>request<{format:string;version:number;name:string;endpoints:SaEndpoint[]}>('Export collection',`/sapostman/collections/${id}/export`),
   send: (input: SaRequest) => send<SaResponse>('Send API request', 'POST', '/sapostman/send', input),
-  execute: (input: SaEndpoint) => send<SaExecution>('Send API request', 'POST', '/sapostman/execute', input),
+  execute: (input: SaEndpoint,executionId?:string) => send<SaExecution>('Send API request', 'POST', `/sapostman/execute${executionId?`?executionId=${encodeURIComponent(executionId)}`:''}`, input),
   list: () => request<SaSaved[]>('Load saved endpoints','/sapostman/requests'),
   create: (input:SaEndpoint) => send<SaSaved>('Save endpoint','POST','/sapostman/requests',input),
   update: (id:string,expectedVersion:number,config:SaEndpoint) => send<SaSaved>('Update endpoint','PUT',`/sapostman/requests/${id}`,{expectedVersion,config}),
+  trashRequests:(ids:string[])=>send<{deleted:boolean;moved:number}>('Move APIs to Trash','POST','/sapostman/requests/trash',{ids}),
   remove: (id:string) => send('Delete endpoint','DELETE',`/sapostman/requests/${id}`),
   versions: (id:string) => request<SaVersion[]>('Load versions',`/sapostman/requests/${id}/versions`),
   history: () => request<(Omit<SaHistory,'response'> & {summary:{status?:number;durationMs?:number}})[]>('Load send history','/sapostman/history'),
   historyItem: (id:string) => request<SaHistory>('Load sent request',`/sapostman/history/${id}`),
   removeHistory: (id:string) => send('Delete send history','DELETE',`/sapostman/history/${id}`),
-  assist: (input:{mode:'generate'|'trace'|'docs'|'ask';prompt:string;endpoint:SaEndpoint;response:string;error:string}) => send<{explanation:string;curl:string;docs:string}>('Ask SAPostman AI','POST','/sapostman/assist',input),
+  assist: (input:{mode:'generate'|'trace'|'docs'|'ask';history?:{role:'user'|'assistant';content:string}[];prompt:string;endpoint:SaEndpoint;response:string;error:string}) => send<{explanation:string;curl:string;docs:string}>('Ask SAPostman AI','POST','/sapostman/assist',input),
 }
 
 export const inboxApi = {
@@ -135,7 +157,7 @@ export const projectsApi = {
 }
 
 export interface TrashItem {
-  kind: 'project' | 'source'; id: string; name: string; project_name: string | null;
+  kind: 'project' | 'source' | 'sa-request'; id: string; name: string; project_name: string | null;
   project_id: string | null; deleted_at: string; expires_at: string; expired: boolean
 }
 export const trashApi = {
