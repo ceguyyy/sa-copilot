@@ -31,6 +31,8 @@ import { office } from './routes/office.ts'
 
 import { auth, validateAccount } from './auth.ts'
 import { desktopUpdate } from './maintenance/desktopUpdate.ts'
+import { saPostman } from './routes/saPostman.ts'
+import { saPostmanWorkspace } from './routes/saPostmanWorkspace.ts'
 
 const app = new Hono()
 app.route('/api/desktop-update', desktopUpdate)
@@ -55,6 +57,8 @@ app.onError((e, c) => {
 
 app.use('/api/*', guardTrash)
 app.route('/api', office)
+app.route('/api', saPostman)
+app.route('/api', saPostmanWorkspace)
 app.route('/api', connections)
 app.route('/api', inbox)
 app.route('/api', api)

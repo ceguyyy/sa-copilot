@@ -23,6 +23,7 @@ const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(module => ({
 const DemoPage = lazy(() => import('./pages/DemoPage').then(module => ({ default: module.DemoPage })))
 const QaTestingPage = lazy(() => import('./pages/QaTestingPage').then(module => ({ default: module.QaTestingPage })))
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(module => ({ default: module.SettingsPage })))
+const SaPostmanPage = lazy(() => import('./pages/SaPostmanPage').then(module => ({ default: module.SaPostmanPage })))
 
 let seeding: Promise<void> | null = null
 
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="demo" element={<DemoPage />} />
           <Route path="qa" element={<QaTestingPage />} />
+          <Route path="sapostman" element={<SaPostmanPage />} />
           <Route path="settings/:tab?" element={<SettingsPage />} />
           {/* Old addresses of pages that moved into Settings */}
           <Route path="skills" element={<Navigate to="/settings/skills" replace />} />

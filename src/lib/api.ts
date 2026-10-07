@@ -8,6 +8,21 @@ import type { EnhancementBatch, EnhancementItem } from '../../shared/enhancement
 import type { ConfigPatch } from '../../electron/settings.ts'
 import type { DesktopStatus } from '../../electron/bridge.ts'
 import type { InboxItem } from '../../shared/inbox.ts'
+import type { SaRequest, SaResponse, SaEndpoint, SaSaved, SaVersion, SaHistory, SaExecution } from '../../shared/saPostman.ts'
+
+export const saPostmanApi = {
+  send: (input: SaRequest) => send<SaResponse>('Send API request', 'POST', '/sapostman/send', input),
+  execute: (input: SaEndpoint) => send<SaExecution>('Send API request', 'POST', '/sapostman/execute', input),
+  list: () => request<SaSaved[]>('Load saved endpoints','/sapostman/requests'),
+  create: (input:SaEndpoint) => send<SaSaved>('Save endpoint','POST','/sapostman/requests',input),
+  update: (id:string,expectedVersion:number,config:SaEndpoint) => send<SaSaved>('Update endpoint','PUT',`/sapostman/requests/${id}`,{expectedVersion,config}),
+  remove: (id:string) => send('Delete endpoint','DELETE',`/sapostman/requests/${id}`),
+  versions: (id:string) => request<SaVersion[]>('Load versions',`/sapostman/requests/${id}/versions`),
+  history: () => request<(Omit<SaHistory,'response'> & {summary:{status?:number;durationMs?:number}})[]>('Load send history','/sapostman/history'),
+  historyItem: (id:string) => request<SaHistory>('Load sent request',`/sapostman/history/${id}`),
+  removeHistory: (id:string) => send('Delete send history','DELETE',`/sapostman/history/${id}`),
+  assist: (input:{mode:'generate'|'trace'|'docs'|'ask';prompt:string;endpoint:SaEndpoint;response:string;error:string}) => send<{explanation:string;curl:string;docs:string}>('Ask SAPostman AI','POST','/sapostman/assist',input),
+}
 
 export const inboxApi = {
   list: () => request<InboxItem[]>('Load inbox','/inbox'),

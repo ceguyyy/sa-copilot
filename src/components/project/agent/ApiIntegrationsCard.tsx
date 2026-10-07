@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { Button, Field, Input, Textarea } from '../../ui'
 import { CopyButton } from '../../CopyButton'
+import { OpenSaPostman } from '../../OpenSaPostman'
 import { ReviseField, ReviseHeading } from '../PocReviseParts'
 import { defaultApiIntegration, HTTP_METHODS, type SetPocDraft } from '../pocConfig'
 import type { PocRevise } from '../usePocRevise'
@@ -98,6 +99,7 @@ export function ApiIntegrationsCard({ integrations, setDraft, revise, clientName
           </Field>
           <div className="flex flex-wrap items-start justify-end gap-2">
             <CopyButton text={curlForIntegration(integration)} label="Copy cURL" title="cURL to the Cekat webhook with a sample body from the AI Input Schema — paste it into Postman (Import → Raw text) or a terminal" />
+            <OpenSaPostman curl={curlForIntegration(integration)} title={integration.name || 'API integration'} />
             <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => setIntegrations((items) => items.filter((_, i) => i !== index))}>
               Remove API
             </Button>

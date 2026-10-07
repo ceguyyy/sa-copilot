@@ -648,3 +648,19 @@ create table if not exists inbox_reads (
   id text primary key,
   token text not null
 );
+
+create table if not exists sa_requests (
+ id uuid primary key default gen_random_uuid(), name text not null,
+ version integer not null default 1, config jsonb not null, updated_at timestamptz not null default now()
+);
+create table if not exists sa_request_versions (
+ id uuid primary key default gen_random_uuid(), request_id uuid not null references sa_requests(id) on delete cascade,
+ version integer not null, config jsonb not null, created_at timestamptz not null default now(), unique(request_id, version)
+);
+create table if not exists sa_send_history (
+ id uuid primary key default gen_random_uuid(), name text not null, request jsonb not null,
+ response jsonb, error text, checks jsonb not null default '[]', created_at timestamptz not null default now()
+);
+create index if not exists sa_send_history_time on sa_send_history(created_at desc);
+create or replace trigger sa_requests_changes after insert or update or delete on sa_requests for each statement execute function track_local_change();
+create or replace trigger sa_history_changes after insert or update or delete on sa_send_history for each statement execute function track_local_change();

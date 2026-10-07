@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, ErrorNote } from '../../components/ui'
 import { maintenanceApi } from '../../lib/api'
 import { desktop } from '../../lib/desktop'
+import { getDesktopUpdates } from '../../lib/desktopUpdates'
 
 function DesktopUpdatesSettings() {
   const qc = useQueryClient()
   const key = ['desktop-updates']
-  const status = useQuery({ queryKey: key, queryFn: () => desktop!.getUpdates(), refetchInterval: 1500 })
+  const status = useQuery({ queryKey: key, queryFn: () => getDesktopUpdates(desktop!), refetchInterval: 1500 })
   const check = useMutation({ mutationFn: () => desktop!.checkUpdates(), onSuccess: data => qc.setQueryData(key, data) })
   const download = useMutation({ mutationFn: () => desktop!.downloadUpdate(), onSuccess: data => qc.setQueryData(key, data) })
   const install = useMutation({ mutationFn: () => desktop!.installUpdate(), onSettled: () => qc.invalidateQueries({ queryKey: key }) })

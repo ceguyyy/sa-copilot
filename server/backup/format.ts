@@ -38,6 +38,9 @@ export const BACKUP_TABLES = [
   'skill_history',
   'review_alerts',
   'inbox_reads',
+  'sa_requests',
+  'sa_request_versions',
+  'sa_send_history',
 ] as const
 export type BackupTable = (typeof BACKUP_TABLES)[number]
 

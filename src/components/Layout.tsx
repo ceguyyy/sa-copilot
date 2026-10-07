@@ -1,6 +1,6 @@
 import { WorkspaceSearch } from './WorkspaceSearch'
 import clsx from 'clsx'
-import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, PanelLeftClose, PanelLeftOpen, Settings, Trash2 } from 'lucide-react'
+import { BookOpen, FlaskConical, FolderKanban, House, MonitorPlay, PanelLeftClose, PanelLeftOpen, Settings, Trash2, Send } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Suspense, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -15,6 +15,7 @@ const NAV = [
   { to: '/knowledge', label: 'Knowledge', icon: BookOpen, end: false },
   { to: '/demo', label: 'Demo', icon: MonitorPlay, end: false },
   { to: '/qa', label: 'QA Testing', icon: FlaskConical, end: false },
+  { to: '/sapostman', label: 'SAPostman', icon: Send, end: false },
   { to: '/trash', label: 'Trash', icon: Trash2, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]

@@ -30,12 +30,14 @@ flowchart TB
             FILES[(Filesystem lokal\nUploads, exports, backups, logs)]
             PY[Python\nmarkitdown + python-pptx]
             QA[Playwright\nBrowser QA]
+            HTTP[SAPostman\nHTTP request runner]
             API --> AI
             API --> BACKUP
             API <--> PG
             API <--> FILES
             API --> PY
             API --> QA
+            API --> HTTP
             AI --> PG
             AI --> FILES
             AI <-->|Model API| ROUTER
@@ -100,6 +102,7 @@ sequenceDiagram
 ## Keputusan arsitektur
 
 - Windows terinstal memakai `electron-updater` dan GitHub Releases publik. Update memasang versi baru setelah safety backup dan shutdown layanan; detail di `windows-auto-update.md`.
+- SAPostman mengimpor cURL dan menerima payload dari use case POC/n8n. Endpoint, dokumentasi, versi, dan riwayat kirim disimpan di PostgreSQL serta ikut backup. Auth dihapus dari snapshot riwayat; endpoint yang sengaja disimpan mencakup auth. Request dijalankan setelah Hit / Send, dengan timeout 1–120 detik, respons maksimal 2 MB, dan redirect manual. AI memberi saran yang direview sebelum diterapkan; detail di `sapostman.md`.
 - Database kerja utama berada di komputer pengguna. Supabase menyimpan akun dan snapshot backup untuk perpindahan antar komputer; transfer snapshot dilakukan secara manual dengan pemeriksaan revision.
 - Akses cloud menggunakan koneksi PostgreSQL melalui TLS dengan verifikasi sertifikat. Integrasi healthcare demo menggunakan Supabase REST yang terpisah.
 - Endpoint cloud memakai workspace `account:<account.id>`. Walaupun `CLOUD_WORKSPACE` masih dibaca konfigurasi, route cloud yang membutuhkan login menggunakan workspace akun tersebut.

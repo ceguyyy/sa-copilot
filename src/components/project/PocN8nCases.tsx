@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useId } from 'react'
 import { CopyButton } from '../CopyButton'
+import { OpenSaPostman } from '../OpenSaPostman'
 import { Button, Field, Input, Textarea } from '../ui'
 import type { PocN8nCase } from '../../../shared/pocN8n.ts'
 
@@ -49,6 +50,7 @@ export function PocN8nCases({ cases, tools, onChange }: Props) {
               <Input value={c.title} onChange={(e) => update(i, { title: e.target.value })} placeholder="e.g. Create a procurement ticket" />
             </Field>
             <CopyButton text={c.curl} label="Copy cURL" title="Paste into Postman (Import → Raw text) or a terminal" />
+            <OpenSaPostman curl={c.curl} title={c.title || c.action || 'n8n use case'} />
             <Button variant="ghost" icon={<Trash2 className="size-4" />} onClick={() => onChange(cases.filter((_, x) => x !== i))}>
               Remove
             </Button>
