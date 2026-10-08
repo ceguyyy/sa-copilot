@@ -57,6 +57,7 @@ export const connectionsApi = {
 }
 
 export const enhancementApi = {
+  get: (id: string) => request<EnhancementBatch>('Load revision batch', `/enhancement/${id}`),
   items: (projectId: string) => request<EnhancementItem[]>('Load revision items', `/projects/${projectId}/enhancement/items`),
   history: (projectId: string) => request<EnhancementBatch[]>('Load revision batches', `/projects/${projectId}/enhancement/batches`),
   create: (projectId: string, input: { prompt: string; rules: string; targets: string[]; context: string[] }) => send<EnhancementBatch>('Create revision batch', 'POST', `/projects/${projectId}/enhancement/batches`, input),

@@ -128,6 +128,93 @@ describe('project enhancement (isolated PostgreSQL)', () => {
     const dashboard = await response.json() as { id: string; revision_drafts: number }[]
     expect(dashboard.find(p => p.id === projectId)?.revision_drafts).toBeGreaterThan(0)
   })
+  async function conflicted() {
+    const b = await ready()
+    const conflict = { id: 'scope', detail: 'TOR still includes B2B while the brief requires B2C', question: 'Which scope should prevail?', targetKeys: [`document:${docId}`] }
+    await db.query('update enhancement_batches set review=$2 where id=$1', [b.id, { ...report, conflicts: [conflict] }])
+    return svc.loadEnhancement(b.id)
+  }
+  it('repairs a conflict in only the chosen preview, persists the decision, then requires a fresh review before apply', async () => {
+    model.mockReset()
+    const b = await conflicted()
+    const docKey = `document:${docId}`
+    const repaired = { rows: [{ requirement: 'After, limited to B2C' }] }
+    const out = { send: vi.fn() }
+    model.mockResolvedValueOnce({ data: { content: repaired, summary: 'Remove B2B; keep earlier changes' }, model: { id: 'test' } })
+    await ai.enhanceProject({ batchId: b.id, action: 'repair', conflictId: 'scope', decision: 'B2C only', keys: [docKey], accepted: b.review_keys }, out)
+    const fixed = await svc.loadEnhancement(b.id)
+    expect(fixed.id).toBe(b.id)
+    expect(fixed.items.find(i => i.key === docKey)).toMatchObject({ state: 'ready', content: before, proposed: repaired })
+    expect(fixed.items.find(i => i.id === sourceId)).toEqual(b.items.find(i => i.id === sourceId))
+    expect(fixed.review).toBeNull()
+    expect(fixed.review_keys).toEqual([])
+    expect(Object.values(fixed.resolutions).join()).toContain('B2C only')
+    expect(model.mock.calls[0][0].system.join()).toContain(JSON.stringify(after))
+    expect(model.mock.calls[0][0].task).toContain('CURRENT PROPOSED content')
+    expect((await svc.enhancementInventory(projectId)).find(i => i.id === docId)?.content).toEqual(before)
+    await expect(svc.applyEnhancement(b.id, b.review_keys)).rejects.toMatchObject({ status: 400 })
+    model.mockResolvedValueOnce({ data: report, model: { id: 'test' } })
+    await ai.enhanceProject({ batchId: b.id, action: 'review', accepted: b.review_keys }, out)
+    expect(model.mock.calls[1][0].system.join()).toContain('B2C only')
+    await svc.applyEnhancement(b.id, b.review_keys)
+    expect((await svc.enhancementInventory(projectId)).find(i => i.id === docId)?.content).toEqual(repaired)
+    await svc.applyEnhancement(b.id, [], true)
+  })
+  it('validates conflict, selection and editable target boundaries before repairing', async () => {
+    model.mockReset()
+    const b = await conflicted()
+    const req = { batchId: b.id, action: 'repair', conflictId: 'scope', decision: 'B2C only', keys: [`document:${docId}`], accepted: b.review_keys }
+    const out = { send: vi.fn() }
+    await expect(ai.enhanceProject({ ...req, conflictId: 'missing' }, out)).rejects.toMatchObject({ status: 400 })
+    await expect(ai.enhanceProject({ ...req, accepted: [`document:${docId}`] }, out)).rejects.toMatchObject({ status: 400 })
+    await expect(ai.enhanceProject({ ...req, keys: [`source:${uploadedId}`] }, out)).rejects.toMatchObject({ status: 400 })
+    await expect(ai.enhanceProject({ ...req, keys: ['document:missing'] }, out)).rejects.toMatchObject({ status: 400 })
+    await expect(ai.enhanceProject({ ...req, decision: '  ' }, out)).rejects.toBeDefined()
+    await expect(ai.enhanceProject({ ...req, keys: [] }, out)).rejects.toBeDefined()
+    await db.query('update enhancement_batches set review_keys=$2 where id=$1', [b.id, JSON.stringify([`document:${docId}`])])
+    await expect(ai.enhanceProject({ ...req, accepted: [`document:${docId}`], keys: [`source:${sourceId}`] }, out)).rejects.toMatchObject({ status: 400 })
+    await db.query("update enhancement_batches set state='applied' where id=$1", [b.id])
+    await expect(ai.enhanceProject(req, out)).rejects.toMatchObject({ status: 409 })
+    expect(model).not.toHaveBeenCalled()
+  })
+  it('keeps every earlier preview and the review if any targeted repair fails, then supports a retry', async () => {
+    model.mockReset()
+    const b = await conflicted()
+    const docKey = `document:${docId}`
+    const sourceKey = `source:${sourceId}`
+    const repaired = { rows: [{ requirement: 'B2C only' }] }
+    const req = { batchId: b.id, action: 'repair', conflictId: 'scope', decision: 'B2C only', keys: [docKey, sourceKey], accepted: b.review_keys }
+    const out = { send: vi.fn() }
+    model.mockResolvedValueOnce({ data: { content: repaired, summary: 'Limit scope' }, model: { id: 'test' } }).mockRejectedValueOnce(new Error('Provider timeout'))
+    await expect(ai.enhanceProject(req, out)).rejects.toThrow('Provider timeout')
+    expect(await svc.loadEnhancement(b.id)).toEqual(b)
+    expect(model.mock.calls[1][0].system.join()).toContain(JSON.stringify(repaired))
+    model.mockResolvedValueOnce({ data: { content: repaired, summary: 'Limit scope' }, model: { id: 'test' } }).mockResolvedValueOnce({ data: { content: 'B2C requirement', summary: 'Limit scope' }, model: { id: 'test' } })
+    await ai.enhanceProject(req, out)
+    expect((await svc.loadEnhancement(b.id)).items.map(i => i.proposed)).toEqual([repaired, 'B2C requirement'])
+    expect((await svc.enhancementInventory(projectId)).find(i => i.id === sourceId)?.content).toBe('Original requirement')
+  })
+  it('rejects invalid repaired document content without losing the current preview', async () => {
+    model.mockReset()
+    const b = await conflicted()
+    model.mockResolvedValueOnce({ data: { content: 'Invalid TOR', summary: 'Invalid' }, model: { id: 'test' } })
+    await expect(ai.enhanceProject({ batchId: b.id, action: 'repair', conflictId: 'scope', decision: 'B2C only', keys: [`document:${docId}`], accepted: b.review_keys }, { send: vi.fn() })).rejects.toMatchObject({ status: 422 })
+    expect(await svc.loadEnhancement(b.id)).toEqual(b)
+  })
+  it('maps review conflicts only to accepted editable targets and excludes unaccepted proposals during repair', async () => {
+    model.mockReset()
+    const b = await ready()
+    const docKey = `document:${docId}`
+    const out = { send: vi.fn() }
+    model.mockResolvedValueOnce({ data: { ...report, conflicts: [{ id: 'scope', detail: 'B2B in TOR', question: 'Which scope?', targetKeys: [docKey, docKey, `source:${sourceId}`, `source:${uploadedId}`, 'document:missing'] }] }, model: { id: 'test' } })
+    await ai.enhanceProject({ batchId: b.id, action: 'review', accepted: [docKey] }, out)
+    expect((await svc.loadEnhancement(b.id)).review?.conflicts[0].targetKeys).toEqual([docKey])
+    model.mockResolvedValueOnce({ data: { content: after, summary: 'Fix scope' }, model: { id: 'test' } })
+    await ai.enhanceProject({ batchId: b.id, action: 'repair', conflictId: 'scope', decision: 'B2C only', keys: [docKey], accepted: [docKey] }, out)
+    const context = JSON.parse(model.mock.calls[1][0].system[3])
+    expect(context.existingProposals.map((i: { key: string }) => i.key)).toEqual([docKey])
+    expect(context.revisionTargets.find((i: { key: string }) => i.key === `source:${sourceId}`).content).toBe('Original requirement')
+  })
   it('revises demo payloads locally and restores their previous content without publishing', async () => {
     const payload = { name: 'Support', title: 'Customer Support', steps: [{ userReply: 'Hello', aiResponse: 'Welcome' }] }
     const demoId = (await db.query<{ id: string }>('insert into demo_scenarios (project_id,payload,pushed_at) values ($1,$2,now()) returning id', [projectId, payload]))[0].id

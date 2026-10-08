@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCheck, History, RotateCcw, ScanSearch, Sparkles, X } from 'lucide-react'
 import type { EnhancementBatch, EnhancementItem, EnhancementReport } from '../../../shared/enhancement.ts'
 import { enhanceProject } from '../../lib/ai'
-import { enhancementApi } from '../../lib/api'
+import { activityApi, enhancementApi } from '../../lib/api'
 import { Badge, Button, ErrorNote, Field, Input, Textarea } from '../ui'
 
 const format = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value, null, 2)
 const toggle = (keys: string[], key: string) => keys.includes(key) ? keys.filter(k => k !== key) : [...keys, key]
+type ConflictDraft = { decision: string; targets: string[] }
 
 function Report({ report }: { report: EnhancementReport }) {
   return <div className="space-y-2 rounded-xl border border-line bg-paper/50 p-4 text-sm">
@@ -29,14 +30,40 @@ export function EnhancementPanel({ projectId, initialOpen = false, initialHistor
   const [batch, setBatch] = useState<EnhancementBatch | null>(null)
   const [accepted, setAccepted] = useState<string[]>([])
   const [resolutions, setResolutions] = useState<Record<string, string>>({})
-  const [busy, setBusy] = useState(false)
+  const [localBusy, setBusy] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [pauseRequested, setPauseRequested] = useState(false)
   const [activity, setActivity] = useState('')
   const [error, setError] = useState<unknown>(null)
+  const [repairStatus, setRepairStatus] = useState<{ conflictId: string; phase: 'revising' | 'checking' | 'done' | 'error'; text: string } | null>(null)
+  const [conflictDrafts, setConflictDrafts] = useState<Record<string, ConflictDraft>>({})
+  const [backgroundJobId, setBackgroundJobId] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(initialHistory)
   const inventory = useQuery({ queryKey: ['enhancement-items', projectId], queryFn: () => enhancementApi.items(projectId), enabled: open })
   const history = useQuery({ queryKey: ['enhancement-history', projectId], queryFn: () => enhancementApi.history(projectId), enabled: open })
+  const { refetch: refetchHistory } = history
+  const activityQuery = useQuery({ queryKey: ['enhancement-activity', projectId], queryFn: async () => {
+    const jobs = await activityApi.list()
+    const working = jobs.find(job => job.batchId === batch?.id && job.status === 'working')
+    if (!localBusy && working) setBackgroundJobId(working.id)
+    return jobs
+  }, enabled: open && !!batch, refetchInterval: 2000 })
+  const backgroundJob = activityQuery.data?.find(job => job.batchId === batch?.id && job.status === 'working')
+  const completedBackgroundJob = activityQuery.data?.find(job => job.id === backgroundJobId && job.batchId === batch?.id && job.status !== 'working')
+  const busy = localBusy || !!backgroundJob
+
+  useEffect(() => {
+    if (!open || localBusy || !batch || !completedBackgroundJob) return
+    let cancelled = false
+    void enhancementApi.get(batch.id).then(latest => {
+      if (cancelled) return
+      setBatch(latest); setResolutions(latest.resolutions); setBackgroundJobId(null)
+      setError(completedBackgroundJob.status === 'error' ? new Error(completedBackgroundJob.detail) : null)
+      setRepairStatus({ conflictId: '', phase: completedBackgroundJob.status === 'error' ? 'error' : 'done', text: completedBackgroundJob.status === 'error' ? completedBackgroundJob.detail : latest.review ? 'Background task finished. Updated previews and consistency findings are shown below.' : 'Target previews updated. Run Check selected previews before applying.' })
+      void refetchHistory()
+    }).catch(e => { if (!cancelled) { setError(e); setBackgroundJobId(null) } })
+    return () => { cancelled = true }
+  }, [open, localBusy, batch, completedBackgroundJob, refetchHistory])
 
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal()
@@ -53,7 +80,7 @@ export function EnhancementPanel({ projectId, initialOpen = false, initialHistor
   }
   function selectBatch(b: EnhancementBatch) {
     setBatch(b); setResolutions(b.resolutions); setAccepted(b.state === 'draft' ? b.review_keys.length ? b.review_keys : b.items.filter(i => i.state === 'ready').map(i => i.key) : b.accepted)
-    setShowHistory(false); setError(null)
+    setShowHistory(false); setError(null); setRepairStatus(null); setConflictDrafts({}); setBackgroundJobId(null)
   }
   async function analyze() {
     await run(async () => {
@@ -84,11 +111,41 @@ export function EnhancementPanel({ projectId, initialOpen = false, initialHistor
     })
     setGenerating(false)
   }
+  async function repairConflict(conflictId: string, decision: string, keys: string[]) {
+    if (!batch) return
+    await run(async () => {
+      let repaired = false
+      const progress = (phase: 'revising' | 'checking', text: string) => { setActivity(text); setRepairStatus({ conflictId, phase, text }) }
+      try {
+        progress('revising', `Revising ${keys.length} target documents. Waiting for AI response...`)
+        const revised = await enhanceProject({ batchId: batch.id, action: 'repair', conflictId, decision, keys, accepted }, {
+          onProgress: chars => progress('revising', `Revising target documents · ${chars.toLocaleString()} characters`),
+          onTool: label => progress('revising', label),
+        })
+        repaired = true
+        setBatch(revised); setResolutions(revised.resolutions)
+        progress('checking', 'Target previews updated. Checking consistency...')
+        const checked = await enhanceProject({ batchId: batch.id, action: 'review', accepted }, {
+          onProgress: chars => progress('checking', `Checking consistency · ${chars.toLocaleString()} characters`),
+          onTool: label => progress('checking', label),
+        })
+        setBatch(checked)
+        setRepairStatus({ conflictId, phase: 'done', text: `Updated ${keys.length} target previews. ${checked.review?.conflicts.length ? `${checked.review.conflicts.length} consistency conflicts remain; review them below.` : 'Consistency check passed. You can apply the selected revisions.'}` })
+        await refresh()
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e)
+        const staleServer = /Invalid option.*analyze[\s\S]*preview[\s\S]*review/.test(message)
+        const detail = staleServer ? 'The server is running an older version that cannot revise conflicts. Restart the SA Copilot server, then retry.' : message
+        setRepairStatus({ conflictId, phase: 'error', text: `${repaired ? 'Target previews were updated, but the consistency check failed. Retry Check selected previews.' : 'Revision failed. Your previous previews are kept.'} ${detail}` })
+        throw e
+      }
+    })
+  }
   function newPlan(extra?: string) {
     if (batch) {
       setPrompt(batch.prompt); setRules(batch.rules); setTargets([...new Set([...batch.items.map(i => i.key), ...(extra ? [extra] : [])])]); setContext(batch.context.map(i => i.key))
     }
-    setBatch(null); setAccepted([]); setResolutions({}); setError(null)
+    setBatch(null); setAccepted([]); setResolutions({}); setError(null); setRepairStatus(null); setConflictDrafts({})
   }
   const items = inventory.data ?? []
   const visible = items.filter(i => `${i.title} ${i.category}`.toLowerCase().includes(search.toLowerCase()))
@@ -107,7 +164,7 @@ export function EnhancementPanel({ projectId, initialOpen = false, initialHistor
         <Button variant="ghost" aria-label="Close enhancement" disabled={busy} onClick={() => setOpen(false)}><X className="size-5" /></Button>
       </header>
       <div className="space-y-5 p-5 sm:p-6">
-        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => { setBatch(null); setShowHistory(false); setError(null) }}>New revision plan</Button><Button variant="outline" disabled={busy} icon={<History className="size-4" />} onClick={() => setShowHistory(v => !v)}>Revision history ({history.data?.length ?? 0})</Button></div>
+        <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => { setBatch(null); setShowHistory(false); setError(null); setRepairStatus(null) }}>New revision plan</Button><Button variant="outline" disabled={busy} icon={<History className="size-4" />} onClick={() => setShowHistory(v => !v)}>Revision history ({history.data?.length ?? 0})</Button></div>
         <ErrorNote error={error ?? inventory.error ?? history.error} />
         {showHistory && <section className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-line p-4"><h3 className="font-semibold">Saved revision batches</h3>{history.isPending ? <p className="text-sm text-muted">Loading history...</p> : !history.data?.length ? <p className="text-sm text-muted">No revision batches yet.</p> : history.data.map(b => <button key={b.id} disabled={busy} onClick={() => selectBatch(b)} className="block w-full rounded-lg border border-line p-3 text-left hover:bg-forest-soft"><div className="flex items-center gap-2"><Badge tone={b.state === 'applied' ? 'ok' : 'neutral'}>{b.state}</Badge><span className="text-xs text-muted">{new Date(b.created_at).toLocaleString()}</span></div><p className="mt-1 line-clamp-2 text-sm font-medium">{b.prompt}</p><p className="mt-1 text-xs text-muted">{b.items.length} targets · {b.items.filter(i => i.state === 'ready').length} previews · {b.accepted.length} applied</p></button>)}</section>}
         {!batch ? <>
@@ -126,18 +183,51 @@ export function EnhancementPanel({ projectId, initialOpen = false, initialHistor
           {!batch.report && draft && <Button disabled={busy} onClick={() => { void run(async () => { setActivity('Analyzing revision plan...'); selectBatch(await enhanceProject({ batchId: batch.id, action: 'analyze' })) }) }}>Retry analysis</Button>}
           {batch.report && <><h3 className="font-semibold">Revision plan & consistency findings</h3><Report report={batch.report} />
             {!!batch.report.impacts.length && <section className="space-y-2 rounded-xl border border-forest/25 p-4"><h4 className="text-sm font-semibold">Impact suggestions</h4>{batch.report.impacts.map(i => <div key={i.key} className="flex flex-wrap items-start justify-between gap-2 text-sm"><div><p className="font-medium">{items.find(x => x.key === i.key)?.title ?? i.key}</p><p className="text-muted">{i.reason}</p></div>{draft && <Button variant="outline" disabled={busy} onClick={() => newPlan(i.key)}>Add to new plan</Button>}</div>)}<p className="text-xs text-muted">Adding targets creates a new plan for analysis. The current draft stays in history.</p></section>}
-            {!!batch.report.conflicts.length && <section className="space-y-4 rounded-xl border border-warn/30 bg-ember-soft/40 p-4"><h4 className="font-semibold">Clarify conflicts before revising</h4>{batch.report.conflicts.map(c => <div key={c.id} className="space-y-2"><p className="text-sm text-warn">{c.detail}</p><Field label={c.question}><Textarea rows={2} maxLength={4000} value={resolutions[c.id] ?? ''} disabled={busy || !draft || readyCount > 0} onChange={e => setResolutions(v => ({ ...v, [c.id]: e.target.value }))} placeholder="Specify which value or rule the AI should follow." /></Field></div>)}{readyCount > 0 && <p className="text-xs text-muted">Decisions are locked after previews are generated. Start a new plan to change them.</p>}</section>}
+            {!!batch.report.conflicts.length && <section className="space-y-4 rounded-xl border border-warn/30 bg-ember-soft/40 p-4"><h4 className="font-semibold">Clarify conflicts before revising</h4>{batch.report.conflicts.map(c => <div key={c.id} className="space-y-2"><p className="text-sm text-warn">{c.detail}</p><Field label={c.question}><Textarea rows={2} maxLength={4000} value={resolutions[c.id] ?? ''} disabled={busy || !draft || readyCount > 0} onChange={e => setResolutions(v => ({ ...v, [c.id]: e.target.value }))} placeholder="Specify which value or rule the AI should follow." /></Field></div>)}{readyCount > 0 && <p className="text-xs text-muted">These decisions were used to generate the previews. Resolve any remaining conflicts in the preview consistency check below.</p>}</section>}
           </>}
           {draft && batch.report && <div className="flex flex-wrap gap-2"><Button icon={<Sparkles className="size-4" />} disabled={busy || unresolved || batch.items.every(i => i.state === 'ready')} onClick={() => { void previews(batch.items.filter(i => i.state !== 'ready').map(i => i.key)) }}>Generate remaining previews</Button>{batch.items.some(i => i.state === 'failed') && <Button variant="outline" disabled={busy || unresolved} onClick={() => { void previews(batch.items.filter(i => i.state === 'failed').map(i => i.key)) }}>Retry failed items</Button>}<Button variant="ghost" disabled={busy} onClick={() => newPlan()}>Edit as new plan</Button></div>}
           <div className="space-y-3">{batch.items.map(i => <section key={i.key} className="overflow-hidden rounded-xl border border-line"><div className="flex flex-wrap items-center justify-between gap-3 bg-paper/50 p-4"><div className="flex min-w-0 items-center gap-3">{draft && i.state === 'ready' && <input type="checkbox" className="size-4 accent-forest" aria-label={`Accept ${i.title}`} disabled={busy} checked={accepted.includes(i.key)} onChange={() => setAccepted(v => toggle(v, i.key))} />}<div><p className="break-words text-sm font-semibold">{i.title}</p><p className="text-xs text-muted">{i.category}</p></div></div><div className="flex items-center gap-2"><Badge tone={i.state === 'ready' ? 'ok' : i.state === 'failed' ? 'warn' : 'neutral'}>{i.state}</Badge>{draft && i.state === 'failed' && <Button variant="outline" disabled={busy || unresolved} onClick={() => { void previews([i.key]) }}>Retry</Button>}</div></div>{i.error && <div className="p-4"><ErrorNote error={i.error} /></div>}{i.state === 'ready' && <div className="space-y-3 p-4"><p className="text-sm">{i.summary}</p><details><summary className="cursor-pointer text-sm font-medium text-forest">Compare before & after</summary><div className="mt-3 grid gap-3 md:grid-cols-2">{[{ label: 'Before', value: i.content }, { label: 'Proposed revision', value: i.proposed }].map(v => <div key={v.label} className="min-w-0"><p className="mb-2 text-xs font-semibold uppercase text-muted">{v.label}</p><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-line bg-paper p-3 text-xs">{format(v.value)}</pre></div>)}</div></details></div>}</section>)}</div>
-          {draft && readyCount > 0 && <section className="space-y-4 border-t border-line pt-5"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => setAccepted(accepted.length === readyCount ? [] : batch.items.filter(i => i.state === 'ready').map(i => i.key))}>{accepted.length === readyCount ? 'Clear accepted previews' : 'Accept all ready previews'}</Button><Button variant="outline" icon={<ScanSearch className="size-4" />} disabled={busy || !accepted.length} onClick={() => { void run(async () => { setActivity('Checking selected previews and preserve rules...'); setBatch(await enhanceProject({ batchId: batch.id, action: 'review', accepted }, { onProgress: chars => setActivity(`Checking consistency · ${chars.toLocaleString()} characters`) })); await refresh() }) }}>Check selected previews</Button></div>{batch.review && <><h3 className="font-semibold">Preview consistency check</h3><Report report={batch.review} />{batch.review.conflicts.map(c => <p key={c.id} className="rounded-lg bg-ember-soft p-3 text-sm text-warn">{c.detail} {c.question}</p>)}{!reviewMatches && <p className="text-sm text-warn">Selection changed. Check the selected previews again.</p>}</>}<p className="text-sm text-muted">Apply {accepted.length} selected revisions together. Original versions are kept for undo.</p><Button icon={<CheckCheck className="size-4" />} disabled={busy || !accepted.length || !reviewMatches || !!batch.review?.conflicts.length} onClick={() => { void run(async () => { setActivity('Applying selected revisions...'); setBatch(await enhancementApi.apply(batch.id, accepted)); await refresh() }) }}>Apply selected revisions</Button></section>}
+          {draft && readyCount > 0 && <section className="space-y-4 border-t border-line pt-5">
+            <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => setAccepted(accepted.length === readyCount ? [] : batch.items.filter(i => i.state === 'ready').map(i => i.key))}>{accepted.length === readyCount ? 'Clear accepted previews' : 'Accept all ready previews'}</Button><Button variant="outline" icon={<ScanSearch className="size-4" />} disabled={busy || !accepted.length} onClick={() => { void run(async () => { setActivity('Checking selected previews and preserve rules...'); setBatch(await enhanceProject({ batchId: batch.id, action: 'review', accepted }, { onProgress: chars => setActivity(`Checking consistency · ${chars.toLocaleString()} characters`) })); await refresh() }) }}>Check selected previews</Button></div>
+            {!localBusy && backgroundJob && <p role="status" className="rounded-lg bg-forest-soft p-3 text-sm text-forest">This batch is still being processed. {backgroundJob.detail}{backgroundJob.characters ? ` · ${backgroundJob.characters.toLocaleString()} characters` : ''}. The saved previews will refresh when it finishes.</p>}
+            {repairStatus && <p role={repairStatus.phase === 'error' ? 'alert' : 'status'} aria-live="polite" className={`rounded-lg p-3 text-sm ${repairStatus.phase === 'error' ? 'bg-ember-soft text-warn' : 'bg-forest-soft text-forest'}`}>{repairStatus.text}</p>}
+            {batch.review && <>
+              <h3 className="font-semibold">Preview consistency check</h3><Report report={batch.review} />
+              {!!batch.review.conflicts.length && <p className="text-sm text-muted">Resolve each conflict here and revise its target documents. The updated previews will be checked automatically.</p>}
+              {batch.review.conflicts.map(c => {
+                const draftKey = `${c.id}:${c.detail}:${c.question}`
+                return <ConflictRevision key={`${batch.id}:${draftKey}`} conflict={c} items={batch.items.filter(i => i.state === 'ready' && i.editable && accepted.includes(i.key))} draft={conflictDrafts[draftKey]} onChange={value => setConflictDrafts(previous => ({ ...previous, [draftKey]: value }))} disabled={busy || !reviewMatches} status={repairStatus?.conflictId === c.id ? repairStatus : null} onRevise={(decision, keys) => { void repairConflict(c.id, decision, keys) }} />
+              })}
+              {!reviewMatches && <p className="text-sm text-warn">Selection changed. Check the selected previews again.</p>}
+            </>}
+            {!batch.review && <p className="text-sm text-muted">Check selected previews before applying.</p>}
+            {!!batch.review?.conflicts.length && <p role="status" className="text-sm text-warn">Apply is blocked until the consistency conflicts are resolved.</p>}
+            <p className="text-sm text-muted">Apply {accepted.length} selected revisions together. Original versions are kept for undo.</p><Button icon={<CheckCheck className="size-4" />} disabled={busy || !accepted.length || !reviewMatches || !!batch.review?.conflicts.length} onClick={() => { void run(async () => { setActivity('Applying selected revisions...'); setBatch(await enhancementApi.apply(batch.id, accepted)); await refresh() }) }}>Apply selected revisions</Button>
+          </section>}
           {batch.state === 'applied' && <div className="space-y-3 rounded-xl bg-forest-soft p-4"><p className="text-sm font-medium">Applied {batch.accepted.length} revisions. Undo restores the previous contents together and preserves the version history.</p><p className="text-xs text-muted">Undo is blocked if any applied item has been edited since this batch. Demo changes here do not update an already published demo.</p><Button variant="outline" icon={<RotateCcw className="size-4" />} disabled={busy} onClick={() => { void run(async () => { setActivity('Restoring previous versions...'); setBatch(await enhancementApi.undo(batch.id)); await refresh() }) }}>Undo this batch</Button></div>}
           {batch.state === 'undone' && <p role="status" className="rounded-lg bg-forest-soft p-4 text-sm text-ok">This batch was undone. Previous contents were restored.</p>}
         </>}
-        {busy && <div role="status" aria-live="polite" className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ember/30 bg-panel p-4 shadow-lg"><p className="text-sm text-ember">{activity || 'Working...'}{batch && ` · ${readyCount}/${batch.items.length} previews ready`}</p>{generating && <Button variant="outline" disabled={pauseRequested} onClick={() => { pause.current = true; setPauseRequested(true) }}>{pauseRequested ? 'Pausing after current item...' : 'Pause after current item'}</Button>}</div>}
+        {busy && <div role="status" aria-live="polite" className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ember/30 bg-panel p-4 shadow-lg"><p className="text-sm text-ember">{localBusy ? activity || 'Working...' : `Processing this batch · ${backgroundJob?.detail ?? 'Waiting for AI response'}`}{batch && ` · ${readyCount}/${batch.items.length} previews ready`}</p>{generating && <Button variant="outline" disabled={pauseRequested} onClick={() => { pause.current = true; setPauseRequested(true) }}>{pauseRequested ? 'Pausing after current item...' : 'Pause after current item'}</Button>}</div>}
       </div>
     </dialog>
   </>
+}
+
+function ConflictRevision({ conflict, items, draft, onChange, disabled, status, onRevise }: { conflict: EnhancementReport['conflicts'][number]; items: EnhancementItem[]; draft?: ConflictDraft; onChange: (value: ConflictDraft) => void; disabled: boolean; status: { phase: 'revising' | 'checking' | 'done' | 'error'; text: string } | null; onRevise: (decision: string, keys: string[]) => void }) {
+  const decision = draft?.decision ?? ''
+  const targets = draft?.targets ?? conflict.targetKeys ?? []
+  const selected = targets.filter(k => items.some(i => i.key === k))
+  return <section className="space-y-3 rounded-lg border border-warn/30 bg-ember-soft p-4">
+    <p className="text-sm text-warn">{conflict.detail}</p>
+    <Field label={conflict.question}><Textarea rows={2} maxLength={4000} value={decision} disabled={disabled} onChange={e => onChange({ decision: e.target.value, targets })} placeholder="Specify the decision to apply to the target documents." /></Field>
+    <fieldset disabled={disabled} className="space-y-2">
+      <legend className="mb-2 text-sm font-medium">Target documents to revise</legend>
+      {items.map(i => <label key={i.key} className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-forest" checked={selected.includes(i.key)} onChange={() => onChange({ decision, targets: toggle(targets, i.key) })} /><span>{i.title}</span></label>)}
+    </fieldset>
+    <p className="text-xs text-muted">Earlier revisions are kept. Changes stay in preview until you apply them.</p>
+    <Button icon={<Sparkles className="size-4" />} loading={status?.phase === 'revising' || status?.phase === 'checking'} disabled={disabled || !decision.trim() || !selected.length} onClick={() => onRevise(decision, selected)}>Revise target documents</Button>
+    {status && <p role={status.phase === 'error' ? 'alert' : 'status'} aria-live="polite" className={`text-sm ${status.phase === 'error' ? 'text-warn' : 'text-forest'}`}>{status.text}</p>}
+  </section>
 }
 
 function ItemSelection({ item, context, target, disabled, onContext, onTarget }: { item: EnhancementItem; context: boolean; target: boolean; disabled: boolean; onContext: () => void; onTarget: () => void }) {
