@@ -92,6 +92,8 @@ export interface KnowledgeDocument extends DocumentRow {
 export type PocLabel = {
   name: string
   condition: string
+  /** Event name sent to each ad platform when this label is added; empty = not sent. */
+  conversion: import('../../shared/pocConversions.ts').AdEventTargets
 }
 
 export type PocPipelineStep = {
@@ -120,6 +122,7 @@ export type PocApiIntegration = {
   authUrl: string
 }
 
+export type { AdEventTargets, AdPlatform, SdkEvent, SdkEventProperty } from '../../shared/pocConversions.ts'
 export type { CrmBoard, CrmColumn, CrmColumnType, CrmOption, PocCrm } from '../../shared/pocCrm.ts'
 export type { HappyCase, HappyCaseStep, PocFlow } from '../../shared/pocFlow.ts'
 export type { PocN8n, PocN8nWorkflow } from '../../shared/pocN8n.ts'
@@ -137,14 +140,23 @@ export type PocAdditionalSettings = {
   ignoreTeamHandoff: boolean
 }
 
+export type PocCustomInstruction = { title: string; content: string }
+
 export type PocConfig = {
+  /** Legacy single behavior prompt; POCs now use the segments below (see shared/pocBehavior.ts). */
   agentBehavior: string
+  communicationStyle: string
+  conversationFlow: string
+  rulesRestrictions: string
+  customInstructions: PocCustomInstruction[]
   welcomeMessage: string
   welcomeImage?: string | null
   agentTransferConditions: string
   stopAiAfterHandoff: boolean
   silentAgentHandoff: boolean
   labels: PocLabel[]
+  /** Custom events the client's system sends with the Cekat SDK, optionally sent on as ads conversions. */
+  sdkEvents: import('../../shared/pocConversions.ts').SdkEvent[]
   pipeline: PocPipelineStep[]
   knowledgeBase: PocKnowledgeBase
   apiIntegrations: PocApiIntegration[]

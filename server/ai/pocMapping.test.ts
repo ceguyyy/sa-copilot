@@ -9,7 +9,10 @@ describe('toPocConfig', () => {
   it('maps a full AI draft onto a valid POC config', () => {
     const cfg = toPocConfig(
       {
-        agentBehavior: '# Agata',
+        communicationStyle: 'Ramah',
+        conversationFlow: '1. Sapa pasien',
+        rulesRestrictions: 'Jangan diagnosa',
+        customInstructions: [{ title: 'Promo', content: 'Diskon 10%' }, { title: 'Kosong', content: '  ' }],
         welcomeMessage: 'Halo!',
         agentTransferConditions: 'Darurat',
         stopAiAfterHandoff: true,
@@ -57,6 +60,8 @@ describe('toPocConfig', () => {
       { label: 'Terkonfirmasi', condition: 'Slot dipilih' },
     ])
     expect(cfg.additionalSettings.aiHistoryLimit).toBe(30)
+    expect(cfg).toMatchObject({ communicationStyle: 'Ramah', conversationFlow: '1. Sapa pasien', rulesRestrictions: 'Jangan diagnosa', agentBehavior: '' })
+    expect(cfg.customInstructions).toEqual([{ title: 'Promo', content: 'Diskon 10%' }])
     expect(cfg.additionalSettings.timezone).toContain('Jakarta')
   })
 
@@ -116,9 +121,11 @@ describe('section mappers', () => {
   it('maps knowledge base, labels and pipeline sections, keeping uploaded files', () => {
     const kb = knowledgeBaseFromAi({ textSections: [{ title: 'Jam', content: '09-17' }], websites: [{ url: 'bad' }], qna: [{ question: 'Parkir?', answer: 'Ada' }] }, [{ name: 'a.pdf', size: 1 }])
     expect(kb).toEqual({ textSections: [{ title: 'Jam', content: '09-17' }], websites: [], qna: [{ question: 'Parkir?', answer: 'Ada' }], files: [{ name: 'a.pdf', size: 1 }] })
-    expect(labelsFromAi([{ name: 'Booking', condition: 'x' }, 'junk'])).toEqual([{ name: 'Booking', condition: 'x' }])
+    expect(labelsFromAi([{ name: 'Booking', condition: 'x', conversion: { meta: 'QualifiedLead' } }, 'junk'])).toEqual([
+      { name: 'Booking', condition: 'x', conversion: { meta: 'QualifiedLead', tiktok: '', google: '' } },
+    ])
     const long = 'x'.repeat(POC_LABEL_MAX_CHARS + 50)
-    expect(labelsFromAi([{ name: long, condition: long }])).toEqual([{ name: 'x'.repeat(POC_LABEL_MAX_CHARS), condition: 'x'.repeat(POC_LABEL_MAX_CHARS) }])
+    expect(labelsFromAi([{ name: long, condition: long }])).toEqual([{ name: 'x'.repeat(POC_LABEL_MAX_CHARS), condition: 'x'.repeat(POC_LABEL_MAX_CHARS), conversion: { meta: '', tiktok: '', google: '' } }])
     expect(pipelineFromAi([{ status: 'Baru', condition: 'y' }, { status: 'Booked', condition: 'z' }])).toEqual([
       { order: 1, status: 'Baru', condition: '' },
       { order: 2, status: 'Booked', condition: 'z' },

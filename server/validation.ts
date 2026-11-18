@@ -5,6 +5,8 @@ import { CRM_COLUMN_TYPES, normalizeCrm } from '../shared/pocCrm.ts'
 import { isValidWelcomeImage } from '../shared/pocImage.ts'
 import { isLivechatUrl } from '../shared/pocQa.ts'
 import { POC_LABEL_MAX_CHARS } from '../shared/pocLimits.ts'
+import { BEHAVIOR_LIMITS, MAX_CUSTOM_INSTRUCTIONS } from '../shared/pocBehavior.ts'
+import { CONVERSION_LIMITS, SDK_EVENT_KEY_RE, SDK_PROPERTY_TYPES } from '../shared/pocConversions.ts'
 import { type LegacyWorkflow, workflowCases } from '../shared/pocN8n.ts'
 import { DOC_TYPES, SKILL_OUTPUT_TYPES } from '../shared/schemas.ts'
 import { HttpError, UUID_RE } from './http.ts'
@@ -249,6 +251,31 @@ const welcomeImage = z
     'Welcome image must be a link or a PNG, JPEG, GIF or WebP image up to 2 MB',
   )
 
+// Ad event names: letters, digits, spaces and _ . - (Meta/TikTok standard names or the client's own custom ones).
+const adEventName = z
+  .string()
+  .trim()
+  .max(CONVERSION_LIMITS.eventName)
+  .refine((v) => v === '' || /^[\p{L}\p{N} _.-]+$/u.test(v), 'Ad event names may only use letters, digits, spaces, _ . and -')
+  .default('')
+const adEventTargets = z.object({ meta: adEventName, tiktok: adEventName, google: adEventName }).default({ meta: '', tiktok: '', google: '' })
+const sdkEventKey = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(CONVERSION_LIMITS.sdkEventKey)
+    .refine((v) => v === '' || SDK_EVENT_KEY_RE.test(v), `${label} must use lowercase letters, digits and _ and start with a letter`)
+const pocSdkEvent = z.object({
+  name: z.string().trim().max(CONVERSION_LIMITS.sdkEventName).default(''),
+  key: sdkEventKey('Event key').default(''),
+  description: z.string().max(CONVERSION_LIMITS.sdkEventDescription).default(''),
+  properties: z
+    .array(z.object({ key: sdkEventKey('Property key').default(''), type: z.enum(SDK_PROPERTY_TYPES).default('string') }))
+    .max(CONVERSION_LIMITS.sdkEventProperties, `An event can have at most ${CONVERSION_LIMITS.sdkEventProperties} properties`)
+    .default([]),
+  targets: adEventTargets,
+})
+
 const pocApiIntegration = z.object({
   name: z.string().trim().max(64).refine((v) => v === '' || /^[a-z][a-z0-9_]{0,63}$/.test(v), 'Must be a valid API name or blank'),
   httpMethod: pocApiMethod,
@@ -263,13 +290,29 @@ const pocApiIntegration = z.object({
 })
 
 export const pocConfig = z.object({
+  // Legacy single prompt (POCs saved before the behavior segments); new POCs leave it empty.
   agentBehavior: z.string().max(200_000).default(''),
+  communicationStyle: z.string().max(BEHAVIOR_LIMITS.communicationStyle, `Communication Style can be at most ${BEHAVIOR_LIMITS.communicationStyle} characters`).default(''),
+  conversationFlow: z.string().max(BEHAVIOR_LIMITS.conversationFlow, `Conversation Flow can be at most ${BEHAVIOR_LIMITS.conversationFlow} characters`).default(''),
+  rulesRestrictions: z.string().max(BEHAVIOR_LIMITS.rulesRestrictions, `Rules & Restrictions can be at most ${BEHAVIOR_LIMITS.rulesRestrictions} characters`).default(''),
+  customInstructions: z
+    .array(
+      z.object({
+        title: z.string().max(BEHAVIOR_LIMITS.customInstructionTitle).default(''),
+        content: z.string().max(BEHAVIOR_LIMITS.customInstruction, `A custom instruction can be at most ${BEHAVIOR_LIMITS.customInstruction} characters`).default(''),
+      }),
+    )
+    .max(MAX_CUSTOM_INSTRUCTIONS)
+    .default([]),
   welcomeMessage: z.string().max(5_000).default(''),
   welcomeImage: welcomeImage.nullable().optional(),
   agentTransferConditions: z.string().max(5_000).default(''),
   stopAiAfterHandoff: z.boolean().default(false),
   silentAgentHandoff: z.boolean().default(false),
-  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).default(''), condition: z.string().max(POC_LABEL_MAX_CHARS).default('') })).default([]),
+  labels: z
+    .array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).default(''), condition: z.string().max(POC_LABEL_MAX_CHARS).default(''), conversion: adEventTargets }))
+    .default([]),
+  sdkEvents: z.array(pocSdkEvent).max(CONVERSION_LIMITS.sdkEvents).default([]),
   pipeline: pocPipeline,
   knowledgeBase: pocKnowledgeBase.default({
     textSections: [],
@@ -313,7 +356,7 @@ export const pocConfig = z.object({
 
 const pocConfigPatch = pocConfig.partial().extend({
   knowledgeBase: pocKnowledgeBasePatch.optional(),
-  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).optional(), condition: z.string().max(POC_LABEL_MAX_CHARS).default('').optional() }).partial()).optional(),
+  labels: z.array(z.object({ name: z.string().trim().max(POC_LABEL_MAX_CHARS).optional(), condition: z.string().max(POC_LABEL_MAX_CHARS).default('').optional(), conversion: adEventTargets.optional() }).partial()).optional(),
   pipeline: z.array(z.object({ order: z.number().int().min(1).optional(), status: z.string().trim().max(120).optional(), condition: z.string().max(2_000).default('').optional() }).partial()).optional(),
   apiIntegrations: z.array(pocApiIntegration.partial()).optional(),
   additionalSettings: z.object({
@@ -335,12 +378,17 @@ export const pocInput = z.object({
   name: z.string().trim().min(1).max(120),
   config: pocConfig.default({
     agentBehavior: '',
+    communicationStyle: '',
+    conversationFlow: '',
+    rulesRestrictions: '',
+    customInstructions: [],
     welcomeMessage: '',
     welcomeImage: null,
     agentTransferConditions: '',
     stopAiAfterHandoff: false,
     silentAgentHandoff: false,
     labels: [],
+    sdkEvents: [],
     pipeline: [],
     knowledgeBase: {
       textSections: [],

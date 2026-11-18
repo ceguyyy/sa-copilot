@@ -8,6 +8,8 @@ import { loadProjectContext, renderContextText } from './context.ts'
 import type { Stream } from './stream.ts'
 import { arr, obj, runStructured, str } from './structured.ts'
 import { crmFromAi, toPocConfig } from './pocMapping.ts'
+import { BEHAVIOR_LIMITS, composeAgentBehavior } from '../../shared/pocBehavior.ts'
+import { SDK_PROPERTY_TYPES } from '../../shared/pocConversions.ts'
 import { CRM_COLUMN_TYPES, crmN8nValueGuide } from '../../shared/pocCrm.ts'
 import { flowFromAi } from '../../shared/pocFlow.ts'
 import { n8nFromAi } from '../../shared/pocN8n.ts'
@@ -28,6 +30,15 @@ export const GROUNDING =
 const bool = { type: 'boolean' }
 const int = (description: string) => ({ type: 'integer', description })
 const oneOf = (values: string[]) => ({ type: 'string', enum: values })
+
+const adTargetsSchema = obj({
+  meta: str('Meta Ads event name to send (e.g. QualifiedLead, LeadSubmitted, Purchase), or a custom name; empty if not sent to Meta'),
+  tiktok: str('TikTok Ads event name to send (e.g. SubmitForm, Contact, CompletePayment), or a custom name; empty if not sent to TikTok'),
+  google: str('Google Ads conversion name to send (e.g. Qualified lead, Purchase), or a custom name; empty if not sent to Google'),
+})
+
+export const CONVERSIONS_TASK =
+  'Ads conversions (CAPI): when the client runs Meta, TikTok or Google ads, set on each label that marks a funnel step the event to send to each ad platform (e.g. a "Qualified" label as QualifiedLead to Meta). Use the standard event names; a custom name is sent as a custom event. Leave a platform empty when the client does not advertise there or the label is not a conversion. Add sdkEvents only for actions that happen in the client system outside the chat (e.g. payment confirmed in their backend).'
 
 export const crmSchema = obj({
   boards: arr(
@@ -78,12 +89,28 @@ export const FLOW_TASK = [
 ].join('\n')
 
 export const schema = obj({
-  agentBehavior: str('Full AI Agent Behavior prompt in markdown: identity, tone, rules, flows, limits'),
+  communicationStyle: str(`AI Agent Behavior — Communication Style (markdown): identity, persona, tone, language and reply format. Max ${BEHAVIOR_LIMITS.communicationStyle} characters`),
+  conversationFlow: str(`AI Agent Behavior — Conversation Flow (markdown): greeting, intent detection, each main flow step by step and when to call which API tool, label or handoff. Max ${BEHAVIOR_LIMITS.conversationFlow} characters`),
+  rulesRestrictions: str(`AI Agent Behavior — Rules & Restrictions (markdown): what the AI must always or never do, limits, topics it must not answer. Max ${BEHAVIOR_LIMITS.rulesRestrictions} characters`),
+  customInstructions: arr(
+    obj({ title: str('Short name of the extra instruction'), content: str(`The instruction (markdown). Max ${BEHAVIOR_LIMITS.customInstruction} characters`) }),
+    'Extra instructions that fit none of the three segments (e.g. promo rules, a special case); usually empty or a few',
+  ),
   welcomeMessage: str('First message the AI sends to the user'),
   agentTransferConditions: str('When the AI hands the chat over to a human agent'),
   stopAiAfterHandoff: bool,
   silentAgentHandoff: bool,
-  labels: arr(obj({ name: str('Label name, e.g. "Booking"'), condition: str('When the AI applies this label') })),
+  labels: arr(obj({ name: str('Label name, e.g. "Booking"'), condition: str('When the AI applies this label'), conversion: adTargetsSchema })),
+  sdkEvents: arr(
+    obj({
+      name: str('Event name, e.g. "Trial started"'),
+      key: str('Event key: lowercase letters, digits and _, e.g. "trial_started"'),
+      description: str('When the client system sends this event to Cekat'),
+      properties: arr(obj({ key: str('Property key, lowercase and _'), type: oneOf([...SDK_PROPERTY_TYPES]) }), 'Up to 10 properties, e.g. value, order_id'),
+      targets: adTargetsSchema,
+    }),
+    'Custom events the client system sends to Cekat with the SDK (e.g. order paid in their backend); empty when the client has no such system events',
+  ),
   pipeline: arr(obj({ status: str('Pipeline status name'), condition: str('Condition to move from the previous status into this one; empty for the first status') }), 'Ordered pipeline statuses'),
   knowledgeBase: obj({
     textSections: arr(obj({ title: str(), content: str('Static facts in markdown, only from the provided sources') })),
@@ -117,15 +144,20 @@ type PocDraftScope = z.infer<typeof input>['scope']
 
 type ScopePlan = { task: string[]; schema: Record<string, unknown>; resultName: string; note: string; apply: (data: Record<string, unknown>) => PocConfig }
 
-const MAX_BEHAVIOR_CHARS = 8000
+const MAX_BEHAVIOR_CHARS = 24_000
+
+export const BEHAVIOR_KEYS = ['communicationStyle', 'conversationFlow', 'rulesRestrictions', 'customInstructions'] as const
+
+export const BEHAVIOR_TASK = `AI Agent Behavior is written in segments that Cekat receives as one prompt: Communication Style (max ${BEHAVIOR_LIMITS.communicationStyle} characters), Conversation Flow (max ${BEHAVIOR_LIMITS.conversationFlow}), Rules & Restrictions (max ${BEHAVIOR_LIMITS.rulesRestrictions}) and optional Custom Instructions (max ${BEHAVIOR_LIMITS.customInstruction} each). Put each instruction in the segment it belongs to, never repeat it in another one, and stay within the limits.`
 
 /** What the flow draft must stay consistent with: the POC as it is now. */
 export function currentPocSummary(current: PocConfig): string {
   const summary = {
-    agentBehavior: current.agentBehavior.slice(0, MAX_BEHAVIOR_CHARS),
+    agentBehavior: composeAgentBehavior(current).slice(0, MAX_BEHAVIOR_CHARS),
     welcomeMessage: current.welcomeMessage,
     agentTransferConditions: current.agentTransferConditions,
     labels: current.labels,
+    sdkEvents: current.sdkEvents.map(({ name, key, description }) => ({ name, key, description })),
     pipeline: current.pipeline,
     apiIntegrations: current.apiIntegrations.map(({ name, description, aiInput }) => ({ name, description, aiInput })),
     crmSelectValuesForN8n: crmN8nValueGuide(current.crm),
@@ -169,7 +201,9 @@ function scopePlan(scope: Exclude<PocDraftScope, 'n8n'>, pocName: string, curren
   return {
     task: [
       `Draft the complete Cekat AI Agent configuration for the POC "${pocName}" of this project, ready to copy into the Cekat dashboard.`,
-      'Fill every section: AI Agent Behavior (a thorough prompt), Welcome Message, handoff conditions, AI Action labels, conversation pipeline, Knowledge Base (static text, websites, Q&A), the API Integrations the agent needs to call the client systems, the conversation flowchart and the happy cases.',
+      'Fill every section: AI Agent Behavior (thorough segments), Welcome Message, handoff conditions, AI Action labels, conversation pipeline, Knowledge Base (static text, websites, Q&A), the API Integrations the agent needs to call the client systems, the conversation flowchart and the happy cases.',
+      BEHAVIOR_TASK,
+      CONVERSIONS_TASK,
       CRM_TASK,
       'API Integrations: the Cekat AI Agent never calls the client API directly. It calls an n8n webhook on https://workflows.cekat.ai/webhook/ (SA Copilot fills that address), and the n8n workflow first authenticates to the client system (authUrl) and then calls its endpoint (targetUrl, targetMethod), returning the result to Cekat. The httpMethod is how Cekat calls the webhook (usually POST). Describe in each description what the tool returns.',
       FLOW_TASK,

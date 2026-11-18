@@ -7,9 +7,10 @@ import { pocConfig } from '../validation.ts'
 import { BASE_SYSTEM, toolEvents } from './common.ts'
 import { loadProjectContext, renderContextText } from './context.ts'
 import { apiIntegrationsForAi, apiIntegrationsFromAi, crmFromAi, knowledgeBaseFromAi, labelsFromAi, pipelineFromAi } from './pocMapping.ts'
-import { CRM_TASK, FLOW_TASK, GROUNDING, crmSchema, currentPocSummary, flowFields, schema as draftSchema } from './pocDraft.ts'
+import { BEHAVIOR_KEYS, BEHAVIOR_TASK, CONVERSIONS_TASK, CRM_TASK, FLOW_TASK, GROUNDING, crmSchema, currentPocSummary, flowFields, schema as draftSchema } from './pocDraft.ts'
 import type { Stream } from './stream.ts'
 import { obj, runStructured, str } from './structured.ts'
+import { BEHAVIOR_LIMITS, behaviorFromAi } from '../../shared/pocBehavior.ts'
 import { boardToAi } from '../../shared/pocCrm.ts'
 import { flowFromAi } from '../../shared/pocFlow.ts'
 import {
@@ -50,10 +51,14 @@ type RevisePlan = {
   apply: (data: Record<string, unknown>) => PocRevision
 }
 
-const PER_ITEM_FIELDS = new Set(['kbTextContent', 'qnaAnswer', 'apiDescription'])
+const PER_ITEM_FIELDS = new Set(['kbTextContent', 'qnaAnswer', 'apiDescription', 'customInstruction'])
+const BEHAVIOR_FIELDS = new Set(['communicationStyle', 'conversationFlow', 'rulesRestrictions', 'customInstruction'])
 
 const FIELD_GUIDE: Partial<Record<(typeof POC_REVISE_FIELDS)[number], string>> = {
-  agentBehavior: 'It is the full AI Agent Behavior prompt (markdown): identity, tone, rules, flows, limits.',
+  communicationStyle: `It is the Communication Style part of the AI Agent Behavior prompt (markdown): identity, persona, tone, language and reply format. At most ${BEHAVIOR_LIMITS.communicationStyle} characters.`,
+  conversationFlow: `It is the Conversation Flow part of the AI Agent Behavior prompt (markdown): greeting, intent detection, each main flow step by step and when to call which tool. At most ${BEHAVIOR_LIMITS.conversationFlow} characters.`,
+  rulesRestrictions: `It is the Rules & Restrictions part of the AI Agent Behavior prompt (markdown): what the AI must always or never do and its limits. At most ${BEHAVIOR_LIMITS.rulesRestrictions} characters.`,
+  customInstruction: `It is one extra custom instruction of the AI Agent Behavior prompt. At most ${BEHAVIOR_LIMITS.customInstruction} characters.`,
   welcomeMessage: 'It is the first message the AI sends to the user; keep it short and friendly.',
   agentTransferConditions: 'It lists when the AI hands the chat over to a human agent.',
   kbTextContent: 'It is static knowledge base text in markdown; only facts from the project sources.',
@@ -74,14 +79,16 @@ const json = (label: string, value: unknown) => `CURRENT ${label.toUpperCase()} 
 function sectionPlan(section: PocReviseSection, current: PocConfig, clientName: string): Omit<RevisePlan, 'task' | 'resultName' | 'useDocTools'> & { shown: unknown; extra?: string } {
   switch (section) {
     case 'agent': {
-      const keys = ['agentBehavior', 'welcomeMessage', 'agentTransferConditions', 'stopAiAfterHandoff', 'silentAgentHandoff'] as const
+      const keys = [...BEHAVIOR_KEYS, 'welcomeMessage', 'agentTransferConditions', 'stopAiAfterHandoff', 'silentAgentHandoff'] as const
       return {
         shown: Object.fromEntries(keys.map((k) => [k, current[k]])),
+        extra: BEHAVIOR_TASK,
         schema: pick([...keys]),
         apply: (d) => ({
           kind: 'section',
           patch: {
-            agentBehavior: String(d.agentBehavior ?? ''),
+            ...behaviorFromAi(d),
+            agentBehavior: '',
             welcomeMessage: String(d.welcomeMessage ?? ''),
             agentTransferConditions: String(d.agentTransferConditions ?? ''),
             stopAiAfterHandoff: d.stopAiAfterHandoff === true,
@@ -91,7 +98,7 @@ function sectionPlan(section: PocReviseSection, current: PocConfig, clientName: 
       }
     }
     case 'labels':
-      return { shown: current.labels, schema: pick(['labels']), apply: (d) => ({ kind: 'section', patch: { labels: labelsFromAi(d.labels) } }) }
+      return { shown: current.labels, extra: CONVERSIONS_TASK, schema: pick(['labels']), apply: (d) => ({ kind: 'section', patch: { labels: labelsFromAi(d.labels) } }) }
     case 'pipeline':
       return { shown: current.pipeline.map(({ status, condition }) => ({ status, condition })), schema: pick(['pipeline']), apply: (d) => ({ kind: 'section', patch: { pipeline: pipelineFromAi(d.pipeline) } }) }
     case 'knowledgeBase': {
@@ -122,6 +129,19 @@ function sectionPlan(section: PocReviseSection, current: PocConfig, clientName: 
   }
 }
 
+const FIELD_MAX: Partial<Record<(typeof POC_REVISE_FIELDS)[number], number>> = {
+  communicationStyle: BEHAVIOR_LIMITS.communicationStyle,
+  conversationFlow: BEHAVIOR_LIMITS.conversationFlow,
+  rulesRestrictions: BEHAVIOR_LIMITS.rulesRestrictions,
+  customInstruction: BEHAVIOR_LIMITS.customInstruction,
+}
+
+/** Behavior segments have hard limits; a slightly long AI answer is cut rather than rejected. */
+const clampFieldText = (field: (typeof POC_REVISE_FIELDS)[number], text: string) => {
+  const max = FIELD_MAX[field]
+  return max ? text.slice(0, max) : text
+}
+
 /** What to ask the model for a target, and how to turn its answer into a revision. Pure, for tests. */
 export function revisePlan(t: PocReviseTarget, current: PocConfig, pocName: string, clientName: string): RevisePlan {
   const label = reviseTargetLabel(current, t)
@@ -132,13 +152,13 @@ export function revisePlan(t: PocReviseTarget, current: PocConfig, pocName: stri
         `Revise the "${label}" text of the POC "${pocName}" of this project.`,
         FIELD_GUIDE[t.field] ?? '',
         `CURRENT TEXT:\n<current_text>\n${fieldText(current, t)}\n</current_text>`,
-        t.field === 'agentBehavior' ? '' : `For consistency with the rest of the POC:\n${currentPocSummary(current)}`,
+        BEHAVIOR_FIELDS.has(t.field) ? '' : `For consistency with the rest of the POC:\n${currentPocSummary(current)}`,
         KEEP_REST,
       ].filter(Boolean),
       schema: obj({ text: str('The complete revised text') }),
       resultName: `revised ${label}`,
       useDocTools: false,
-      apply: (d) => ({ kind: 'field', text: String(d.text ?? '') }),
+      apply: (d) => ({ kind: 'field', text: clampFieldText(t.field, String(d.text ?? '')) }),
     }
   }
   const plan = sectionPlan(t.section, current, clientName)
@@ -162,6 +182,7 @@ function isExistingItem(current: PocConfig, t: Extract<PocReviseTarget, { kind: 
   if (t.field === 'kbTextContent') return !!current.knowledgeBase.textSections[i]
   if (t.field === 'qnaAnswer') return !!current.knowledgeBase.qna[i]
   if (t.field === 'apiDescription') return !!current.apiIntegrations[i]
+  if (t.field === 'customInstruction') return !!current.customInstructions[i]
   return true
 }
 

@@ -1,4 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { splitLegacyBehavior } from '../../../shared/pocBehavior.ts'
+import { emptyTargets, normalizeSdkEvents, normalizeTargets } from '../../../shared/pocConversions.ts'
 import { normalizeCrm } from '../../../shared/pocCrm.ts'
 import { emptyFlow, normalizeFlow } from '../../../shared/pocFlow.ts'
 import { emptyN8n, normalizeN8n } from '../../../shared/pocN8n.ts'
@@ -9,12 +11,17 @@ export type SetPocDraft = Dispatch<SetStateAction<PocConfig>>
 
 export const emptyConfig = (): PocConfig => ({
   agentBehavior: '',
+  communicationStyle: '',
+  conversationFlow: '',
+  rulesRestrictions: '',
+  customInstructions: [],
   welcomeMessage: '',
   welcomeImage: null,
   agentTransferConditions: '',
   stopAiAfterHandoff: false,
   silentAgentHandoff: false,
   labels: [],
+  sdkEvents: [],
   pipeline: [],
   knowledgeBase: {
     textSections: [],
@@ -42,7 +49,7 @@ export const emptyConfig = (): PocConfig => ({
   },
 })
 
-export const defaultLabel = (): PocLabel => ({ name: '', condition: '' })
+export const defaultLabel = (): PocLabel => ({ name: '', condition: '', conversion: emptyTargets() })
 export const defaultPipelineStep = (): PocPipelineStep => ({ order: 1, status: '', condition: '' })
 export const defaultApiIntegration = (): PocApiIntegration => ({
   name: '',
@@ -67,10 +74,12 @@ export const POC_SECTIONS: { id: PocSection; label: string; disabled?: boolean }
   { id: 'marketing', label: 'POC Marketing', disabled: true },
 ]
 
-/** POCs saved before the n8n target fields, CRM section and flow existed get empty ones. */
+/** POCs saved before the n8n target fields, CRM section and flow existed get empty ones; a legacy behavior prompt moves into the segments. */
 export function normalizeConfig(config: PocConfig): PocConfig {
   return {
-    ...config,
+    ...splitLegacyBehavior(config),
+    labels: (config.labels ?? []).map((l) => ({ ...l, conversion: normalizeTargets(l.conversion) })),
+    sdkEvents: normalizeSdkEvents(config.sdkEvents),
     apiIntegrations: config.apiIntegrations.map((a) => ({ ...defaultApiIntegration(), ...a })),
     crm: normalizeCrm(config.crm),
     flow: normalizeFlow(config.flow),

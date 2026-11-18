@@ -2,7 +2,7 @@
 // proposes a new value; the UI shows the diff and applies it to the unsaved draft only when accepted.
 
 export const POC_REVISE_SECTIONS = ['agent', 'labels', 'pipeline', 'knowledgeBase', 'apiIntegrations', 'crm', 'flow'] as const
-export const POC_REVISE_FIELDS = ['agentBehavior', 'welcomeMessage', 'agentTransferConditions', 'kbTextContent', 'qnaAnswer', 'apiDescription'] as const
+export const POC_REVISE_FIELDS = ['communicationStyle', 'conversationFlow', 'rulesRestrictions', 'customInstruction', 'welcomeMessage', 'agentTransferConditions', 'kbTextContent', 'qnaAnswer', 'apiDescription'] as const
 
 export type PocReviseSection = (typeof POC_REVISE_SECTIONS)[number]
 export type PocReviseField = (typeof POC_REVISE_FIELDS)[number]
@@ -10,7 +10,7 @@ export type PocReviseField = (typeof POC_REVISE_FIELDS)[number]
 export type PocReviseTarget = { kind: 'section'; section: PocReviseSection } | { kind: 'field'; field: PocReviseField; index?: number }
 
 export const SECTION_LABELS: Record<PocReviseSection, string> = {
-  agent: 'AI Agent Behavior (behavior, welcome message, handoff)',
+  agent: 'AI Agent Behavior (communication style, conversation flow, rules, custom instructions, welcome message, handoff)',
   labels: 'AI Action — Labels',
   pipeline: 'Conversation Pipeline',
   knowledgeBase: 'Knowledge Base',
@@ -20,7 +20,10 @@ export const SECTION_LABELS: Record<PocReviseSection, string> = {
 }
 
 export const FIELD_LABELS: Record<PocReviseField, string> = {
-  agentBehavior: 'AI Agent Behavior',
+  communicationStyle: 'Communication Style',
+  conversationFlow: 'Conversation Flow',
+  rulesRestrictions: 'Rules & Restrictions',
+  customInstruction: 'Custom Instruction',
   welcomeMessage: 'Welcome Message',
   agentTransferConditions: 'Agent Transfer Conditions',
   kbTextContent: 'Knowledge text',
@@ -30,7 +33,10 @@ export const FIELD_LABELS: Record<PocReviseField, string> = {
 
 /** The parts of a POC config the field targets read and write. */
 export interface ReviseFieldConfig {
-  agentBehavior: string
+  communicationStyle: string
+  conversationFlow: string
+  rulesRestrictions: string
+  customInstructions: { title: string; content: string }[]
   welcomeMessage: string
   agentTransferConditions: string
   knowledgeBase: { textSections: { title: string; content: string }[]; qna: { question: string; answer: string }[] }
@@ -42,10 +48,14 @@ type FieldTarget = Extract<PocReviseTarget, { kind: 'field' }>
 export function fieldText(config: ReviseFieldConfig, target: FieldTarget): string {
   const i = target.index ?? -1
   switch (target.field) {
-    case 'agentBehavior':
+    case 'communicationStyle':
+    case 'conversationFlow':
+    case 'rulesRestrictions':
     case 'welcomeMessage':
     case 'agentTransferConditions':
       return config[target.field]
+    case 'customInstruction':
+      return config.customInstructions[i]?.content ?? ''
     case 'kbTextContent':
       return config.knowledgeBase.textSections[i]?.content ?? ''
     case 'qnaAnswer':
@@ -62,10 +72,15 @@ export function withFieldText<C extends ReviseFieldConfig>(config: C, target: Fi
   const i = target.index ?? -1
   const kb = config.knowledgeBase
   switch (target.field) {
-    case 'agentBehavior':
+    case 'communicationStyle':
+    case 'conversationFlow':
+    case 'rulesRestrictions':
     case 'welcomeMessage':
     case 'agentTransferConditions':
       return { ...config, [target.field]: text }
+    case 'customInstruction':
+      if (!config.customInstructions[i]) return config
+      return { ...config, customInstructions: replaceAt(config.customInstructions, i, { content: text }) }
     case 'kbTextContent':
       if (!kb.textSections[i]) return config
       return { ...config, knowledgeBase: { ...kb, textSections: replaceAt(kb.textSections, i, { content: text }) } }
@@ -84,6 +99,7 @@ function itemName(config: ReviseFieldConfig, target: FieldTarget): string {
   if (target.field === 'kbTextContent') return config.knowledgeBase.textSections[i]?.title ? `"${config.knowledgeBase.textSections[i].title}"` : ''
   if (target.field === 'qnaAnswer') return config.knowledgeBase.qna[i]?.question ? `"${config.knowledgeBase.qna[i].question}"` : ''
   if (target.field === 'apiDescription') return config.apiIntegrations[i]?.name ?? ''
+  if (target.field === 'customInstruction') return config.customInstructions[i] ? `"${config.customInstructions[i].title || `#${i + 1}`}"` : ''
   return ''
 }
 

@@ -1,13 +1,15 @@
+import { composeAgentBehavior, customInstructionsOf, type BehaviorConfig } from '../../shared/pocBehavior.ts'
+import { normalizeTargets, type AdEventTargets, type SdkEvent } from '../../shared/pocConversions.ts'
 import type { PocApiIntegration, PocCrm } from './types'
 
-type POCConfigLike = {
-  agentBehavior: string
+type POCConfigLike = BehaviorConfig & {
   welcomeMessage: string
   welcomeImage?: string | null
   agentTransferConditions: string
   stopAiAfterHandoff: boolean
   silentAgentHandoff: boolean
-  labels: ReadonlyArray<{ readonly name: string; readonly condition: string }>
+  labels: ReadonlyArray<{ readonly name: string; readonly condition: string; readonly conversion?: AdEventTargets }>
+  sdkEvents?: ReadonlyArray<SdkEvent>
   pipeline: ReadonlyArray<{ readonly order: number; readonly status: string; readonly condition: string }>
   knowledgeBase: {
     readonly textSections: ReadonlyArray<{ readonly title: string; readonly content: string }>
@@ -35,9 +37,15 @@ export function sanitizePocExport(name: string, config: POCConfigLike) {
   const apiIntegrations = config.apiIntegrations.map(({ apiKey: _apiKey, ...integration }) => integration)
   return {
     name,
-    agentBehavior: config.agentBehavior,
+    // The full prompt to paste into Cekat, plus the segments it is composed from.
+    agentBehavior: composeAgentBehavior(config),
+    communicationStyle: config.communicationStyle ?? '',
+    conversationFlow: config.conversationFlow ?? '',
+    rulesRestrictions: config.rulesRestrictions ?? '',
+    customInstructions: customInstructionsOf(config),
     welcomeMessage: config.welcomeMessage,
-    labels: config.labels,
+    labels: config.labels.map((l) => ({ name: l.name, condition: l.condition, conversion: normalizeTargets(l.conversion) })),
+    sdkEvents: config.sdkEvents ?? [],
     pipeline: config.pipeline,
     knowledgeBase: config.knowledgeBase,
     apiIntegrations,

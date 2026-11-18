@@ -203,11 +203,23 @@ describe('poc schemas', () => {
     const atLimit = 'a'.repeat(POC_LABEL_MAX_CHARS)
     const tooLong = `${atLimit}a`
     expect(POC_LABEL_MAX_CHARS).toBe(3000)
-    expect(pocConfig.parse({ labels: [{ name: atLimit, condition: atLimit }] }).labels[0]).toEqual({ name: atLimit, condition: atLimit })
+    expect(pocConfig.parse({ labels: [{ name: atLimit, condition: atLimit }] }).labels[0]).toEqual({ name: atLimit, condition: atLimit, conversion: { meta: '', tiktok: '', google: '' } })
     expect(() => pocConfig.parse({ labels: [{ name: tooLong, condition: '' }] })).toThrow()
     expect(() => pocConfig.parse({ labels: [{ name: 'Urgent', condition: tooLong }] })).toThrow()
     expect(() => pocPatch.parse({ config: { labels: [{ name: tooLong }] } })).toThrow()
     expect(() => pocPatch.parse({ config: { labels: [{ condition: tooLong }] } })).toThrow()
+  })
+
+  test('label conversions and SDK events accept valid ad event names and keys only', () => {
+    const cfg = pocConfig.parse({
+      labels: [{ name: 'Qualified', condition: 'x', conversion: { meta: 'QualifiedLead', google: 'Qualified lead' } }],
+      sdkEvents: [{ name: 'Order paid', key: 'order_paid', properties: [{ key: 'value', type: 'number' }], targets: { tiktok: 'CompletePayment' } }],
+    })
+    expect(cfg.labels[0].conversion).toEqual({ meta: 'QualifiedLead', tiktok: '', google: 'Qualified lead' })
+    expect(cfg.sdkEvents[0]).toEqual({ name: 'Order paid', key: 'order_paid', description: '', properties: [{ key: 'value', type: 'number' }], targets: { meta: '', tiktok: 'CompletePayment', google: '' } })
+    expect(() => pocConfig.parse({ labels: [{ name: 'x', conversion: { meta: 'Lead<script>' } }] })).toThrow()
+    expect(() => pocConfig.parse({ sdkEvents: [{ name: 'x', key: 'Order Paid' }] })).toThrow()
+    expect(() => pocConfig.parse({ sdkEvents: [{ name: 'x', key: 'x', properties: [{ key: 'v', type: 'money' }] }] })).toThrow()
   })
 
   test('patch ignores undefined values and rejects invalid names', () => {

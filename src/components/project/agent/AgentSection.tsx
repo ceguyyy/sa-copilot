@@ -10,6 +10,7 @@ import { BehaviorCard } from './BehaviorCard'
 import { KnowledgeBaseCard } from './KnowledgeBaseCard'
 import { LabelsCard } from './LabelsCard'
 import { PipelineCard } from './PipelineCard'
+import { SdkEventsCard } from './SdkEventsCard'
 
 type Props = {
   draft: PocConfig
@@ -26,6 +27,7 @@ export function AgentSection({ draft, setDraft, revise, clientName, pocName, onJ
     <>
       <BehaviorCard draft={draft} setDraft={setDraft} revise={revise} pocName={pocName} />
       <LabelsCard labels={draft.labels} setDraft={setDraft} revise={revise} />
+      <SdkEventsCard events={draft.sdkEvents} setDraft={setDraft} />
       <PipelineCard pipeline={draft.pipeline} setDraft={setDraft} revise={revise} />
       <KnowledgeBaseCard knowledgeBase={draft.knowledgeBase} setDraft={setDraft} revise={revise} />
       <ApiIntegrationsCard integrations={draft.apiIntegrations} setDraft={setDraft} revise={revise} clientName={clientName} onJsonError={onJsonError} />

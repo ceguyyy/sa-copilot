@@ -1,5 +1,7 @@
 // Compares two POC configs section by section (for the POC version history). Each section is rendered to
 // stable text so a line diff shows what changed; API keys and embedded image data are never shown.
+import { composeAgentBehavior } from './pocBehavior.ts'
+import { normalizeSdkEvents, normalizeTargets, sdkEventText, targetsText } from './pocConversions.ts'
 import { flowOutline, normalizeChatFlows } from './pocChatFlow.ts'
 import { happyCaseScript, type HappyCase } from './pocFlow.ts'
 import { type LegacyWorkflow, type PocN8nCase, workflowCases } from './pocN8n.ts'
@@ -9,6 +11,7 @@ export const POC_SECTIONS = [
   { key: 'welcome', label: 'Welcome message & image' },
   { key: 'handoff', label: 'Agent handoff' },
   { key: 'labels', label: 'Labels' },
+  { key: 'sdkEvents', label: 'SDK events' },
   { key: 'pipeline', label: 'Pipeline' },
   { key: 'knowledge', label: 'Knowledge base' },
   { key: 'api', label: 'API integrations' },
@@ -76,14 +79,20 @@ function n8nText(v: unknown): string {
 /** Every section of a POC config as comparable text. */
 export function pocSectionTexts(config: LooseConfig): Record<PocSectionKey, string> {
   return {
-    behavior: str(config.agentBehavior),
+    behavior: composeAgentBehavior(config),
     welcome: [str(config.welcomeMessage), imageText(config.welcomeImage)].join('\n\n'),
     handoff: [
       str(config.agentTransferConditions),
       `Stop AI after handoff: ${config.stopAiAfterHandoff ? 'yes' : 'no'}`,
       `Silent agent handoff: ${config.silentAgentHandoff ? 'yes' : 'no'}`,
     ].join('\n'),
-    labels: list(config.labels).map((l) => `${str(l.name)} -> ${str(l.condition)}`).join('\n'),
+    labels: list(config.labels)
+      .map((l) => {
+        const ads = targetsText(normalizeTargets(l.conversion))
+        return `${str(l.name)} -> ${str(l.condition)}${ads ? `\n  ads: ${ads}` : ''}`
+      })
+      .join('\n'),
+    sdkEvents: normalizeSdkEvents(config.sdkEvents).map(sdkEventText).join('\n\n'),
     pipeline: list(config.pipeline).map((p) => `${String(p.order ?? '')}. ${str(p.status)} -> ${str(p.condition)}`).join('\n'),
     knowledge: pretty(config.knowledgeBase ?? {}),
     api: apiText(config.apiIntegrations),

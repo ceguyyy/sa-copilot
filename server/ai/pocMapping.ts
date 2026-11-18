@@ -1,6 +1,8 @@
 // Maps the model's POC draft onto a valid POC config (pure, no DB) — used by pocDraft.ts.
 import type { z } from 'zod'
 import { boardFromAi, type PocCrm } from '../../shared/pocCrm.ts'
+import { behaviorFromAi } from '../../shared/pocBehavior.ts'
+import { sdkEventsFromAi, targetsFromAi } from '../../shared/pocConversions.ts'
 import { flowFromAi } from '../../shared/pocFlow.ts'
 import { POC_LABEL_MAX_CHARS } from '../../shared/pocLimits.ts'
 import { cekatWebhookUrl } from '../../shared/pocWebhook.ts'
@@ -39,7 +41,11 @@ export function crmFromAi(raw: unknown): PocCrm {
 }
 
 export const labelsFromAi = (raw: unknown) =>
-  list(raw).map((l) => ({ name: String(l.name ?? '').slice(0, POC_LABEL_MAX_CHARS), condition: String(l.condition ?? '').slice(0, POC_LABEL_MAX_CHARS) }))
+  list(raw).map((l) => ({
+    name: String(l.name ?? '').slice(0, POC_LABEL_MAX_CHARS),
+    condition: String(l.condition ?? '').slice(0, POC_LABEL_MAX_CHARS),
+    conversion: targetsFromAi(l.conversion),
+  }))
 
 /** Orders come from the list position; the first status has no entry condition. */
 export const pipelineFromAi = (raw: unknown) =>
@@ -102,12 +108,14 @@ export function toPocConfig(raw: Record<string, unknown>, current: PocConfig, cl
   const settings = (raw.additionalSettings ?? {}) as Record<string, unknown>
   return pocConfig.parse({
     ...current,
-    agentBehavior: raw.agentBehavior,
+    ...behaviorFromAi(raw),
+    agentBehavior: '',
     welcomeMessage: raw.welcomeMessage,
     agentTransferConditions: raw.agentTransferConditions,
     stopAiAfterHandoff: raw.stopAiAfterHandoff,
     silentAgentHandoff: raw.silentAgentHandoff,
     labels: labelsFromAi(raw.labels),
+    sdkEvents: sdkEventsFromAi(raw.sdkEvents),
     pipeline: pipelineFromAi(raw.pipeline),
     knowledgeBase: knowledgeBaseFromAi(raw.knowledgeBase, current.knowledgeBase.files),
     apiIntegrations: apiIntegrationsFromAi(raw.apiIntegrations, current.apiIntegrations, clientName),

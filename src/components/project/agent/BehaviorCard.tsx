@@ -1,13 +1,14 @@
 import { Textarea } from '../../ui'
 import { ReviseField, ReviseHeading } from '../PocReviseParts'
 import { WelcomeImagePicker } from '../WelcomeImagePicker'
+import { BehaviorSegments } from './BehaviorSegments'
 import type { SetPocDraft } from '../pocConfig'
 import type { PocRevise } from '../usePocRevise'
 import type { PocConfig } from '../../../lib/types'
 
 type Props = { draft: PocConfig; setDraft: SetPocDraft; revise: PocRevise; pocName: string }
 
-/** Agent behavior, welcome message and image, and the handoff settings. */
+/** Agent behavior segments, welcome message and image, and the handoff settings. */
 export function BehaviorCard({ draft, setDraft, revise, pocName }: Props) {
   const set = (patch: Partial<PocConfig>) => setDraft((prev) => ({ ...prev, ...patch }))
 
@@ -15,9 +16,7 @@ export function BehaviorCard({ draft, setDraft, revise, pocName }: Props) {
     <div className="space-y-4 rounded-lg border border-line bg-paper p-4">
       <ReviseHeading title="AI Agent Behavior" action={revise.button({ kind: 'section', section: 'agent' })} />
       {revise.preview({ kind: 'section', section: 'agent' })}
-      <ReviseField label="AI Agent Behavior" action={revise.button({ kind: 'field', field: 'agentBehavior' }, { iconOnly: true })} preview={revise.preview({ kind: 'field', field: 'agentBehavior' })}>
-        <Textarea aria-label="AI Agent Behavior" rows={6} value={draft.agentBehavior} onChange={(e) => set({ agentBehavior: e.target.value })} />
-      </ReviseField>
+      <BehaviorSegments draft={draft} setDraft={setDraft} revise={revise} />
       <ReviseField label="Welcome Message" action={revise.button({ kind: 'field', field: 'welcomeMessage' }, { iconOnly: true })} preview={revise.preview({ kind: 'field', field: 'welcomeMessage' })}>
         <Textarea aria-label="Welcome Message" rows={4} value={draft.welcomeMessage} onChange={(e) => set({ welcomeMessage: e.target.value })} />
       </ReviseField>

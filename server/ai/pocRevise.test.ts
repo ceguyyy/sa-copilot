@@ -52,14 +52,45 @@ describe('revisePlan — sections', () => {
 
   it('patches only the agent fields for the agent section', () => {
     const plan = revisePlan({ kind: 'section', section: 'agent' }, current(), 'POC 01', 'Xhealth')
-    const result = plan.apply({ agentBehavior: 'B', welcomeMessage: 'W', agentTransferConditions: 'T', stopAiAfterHandoff: true, silentAgentHandoff: false })
-    expect(result).toEqual({ kind: 'section', patch: { agentBehavior: 'B', welcomeMessage: 'W', agentTransferConditions: 'T', stopAiAfterHandoff: true, silentAgentHandoff: false } })
+    const result = plan.apply({
+      communicationStyle: 'S',
+      conversationFlow: 'F',
+      rulesRestrictions: 'R',
+      customInstructions: [{ title: 'Promo', content: 'C' }],
+      welcomeMessage: 'W',
+      agentTransferConditions: 'T',
+      stopAiAfterHandoff: true,
+      silentAgentHandoff: false,
+    })
+    expect(result).toEqual({
+      kind: 'section',
+      patch: {
+        communicationStyle: 'S',
+        conversationFlow: 'F',
+        rulesRestrictions: 'R',
+        customInstructions: [{ title: 'Promo', content: 'C' }],
+        agentBehavior: '',
+        welcomeMessage: 'W',
+        agentTransferConditions: 'T',
+        stopAiAfterHandoff: true,
+        silentAgentHandoff: false,
+      },
+    })
+  })
+
+  it('cuts a revised behavior segment to its character limit', () => {
+    const plan = revisePlan({ kind: 'field', field: 'rulesRestrictions' }, current(), 'POC 01', 'Xhealth')
+    expect(plan.apply({ text: 'x'.repeat(3500) })).toEqual({ kind: 'field', text: 'x'.repeat(3000) })
   })
 })
 
 describe('validateRevision', () => {
   it('accepts a revision that keeps the POC valid', () => {
     expect(() => validateRevision(current(), { kind: 'field', field: 'welcomeMessage' }, { kind: 'field', text: 'Halo' })).not.toThrow()
+  })
+
+  it('rejects a behavior segment over its limit', () => {
+    expect(() => validateRevision(current(), { kind: 'field', field: 'communicationStyle' }, { kind: 'field', text: 'x'.repeat(5001) })).toThrow(HttpError)
   })
 
   it('rejects a revision that breaks the POC limits', () => {

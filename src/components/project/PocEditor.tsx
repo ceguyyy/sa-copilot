@@ -20,6 +20,7 @@ import { AgentSection } from './agent/AgentSection'
 import { usePocRevise } from './usePocRevise'
 import { emptyConfig, normalizeConfig, POC_SECTIONS, type PocSection } from './pocConfig'
 import type { PocRow } from '../../lib/types'
+import { hasBehaviorSegments } from '../../../shared/pocBehavior.ts'
 
 type Props = {
   poc: PocRow
@@ -90,7 +91,7 @@ export function PocEditor({ poc, projectId, clientName, section, onSectionChange
   }
 
   const confirmDraftAi = (instruction: string, options: AiRunOptions) => {
-    const hasContent = draft.agentBehavior.trim() || draft.welcomeMessage.trim() || draft.apiIntegrations.length || draft.labels.length
+    const hasContent = hasBehaviorSegments(draft) || draft.welcomeMessage.trim() || draft.apiIntegrations.length || draft.labels.length
     runDraftAi('all', hasContent ? 'Draft with AI replaces every section of this POC (the current one stays in version history). Continue?' : null)(instruction, options)
   }
   const confirmGenerateCrm = (instruction: string, options: AiRunOptions) =>

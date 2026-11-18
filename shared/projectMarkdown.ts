@@ -1,6 +1,8 @@
 // The whole project as one Markdown file: project facts, every deliverable (latest version), diagrams,
 // client questions and POCs — for "Download MD" and for pasting into Notion or other tools.
 import { mdTable, toMarkdown } from './docMarkdown.ts'
+import { composeAgentBehavior } from './pocBehavior.ts'
+import { normalizeSdkEvents, normalizeTargets, targetsText } from './pocConversions.ts'
 import { normalizeCrm } from './pocCrm.ts'
 import { DOC_LABELS, PIPELINE, type AnyDocContent, type DocType } from './schemas.ts'
 
@@ -69,11 +71,17 @@ function pocMarkdown(poc: ProjectPoc): string {
   const list = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : [])
   const out = [`### ${poc.name}`]
   // Free-form markdown written by the SA/AI: its own headings must sit below "#### AI Agent Behavior".
-  if (text(c.agentBehavior)) out.push(`#### AI Agent Behavior\n\n${demoteHeadings(text(c.agentBehavior), 4)}`)
+  const behavior = composeAgentBehavior(c)
+  if (behavior) out.push(`#### AI Agent Behavior\n\n${demoteHeadings(behavior, 4)}`)
   if (text(c.welcomeMessage)) out.push(`#### Welcome Message\n\n${text(c.welcomeMessage)}`)
   if (text(c.agentTransferConditions)) out.push(`#### Agent Transfer Conditions\n\n${text(c.agentTransferConditions)}`)
   const labels = list(c.labels)
-  if (labels.length) out.push(`#### Labels\n\n${mdTable(['Label', 'Condition'], labels.map((l) => [l.name, l.condition]))}`)
+  if (labels.length) out.push(`#### Labels\n\n${mdTable(['Label', 'Condition', 'Ads conversion'], labels.map((l) => [l.name, l.condition, targetsText(normalizeTargets(l.conversion))]))}`)
+  const sdkEvents = normalizeSdkEvents(c.sdkEvents)
+  if (sdkEvents.length) {
+    const rows = sdkEvents.map((e) => [e.name, e.key, e.description, e.properties.map((p) => `${p.key} (${p.type})`).join(', '), targetsText(e.targets)])
+    out.push(`#### SDK Events\n\n${mdTable(['Event', 'Key', 'When it is sent', 'Properties', 'Ads conversion'], rows)}`)
+  }
   const apis = list(c.apiIntegrations)
   if (apis.length) {
     out.push(

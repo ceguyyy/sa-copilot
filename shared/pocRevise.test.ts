@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { fieldText, isSameTarget, reviseTargetLabel, withFieldText, type PocReviseTarget } from './pocRevise.ts'
 
 const config = () => ({
-  agentBehavior: '# Agata',
+  communicationStyle: 'Ramah',
+  conversationFlow: '1. Sapa',
+  rulesRestrictions: 'Jangan diagnosa',
+  customInstructions: [{ title: 'Promo', content: 'Diskon 10%' }],
   welcomeMessage: 'Halo!',
   agentTransferConditions: 'Darurat',
   knowledgeBase: {
@@ -14,7 +17,8 @@ const config = () => ({
 
 describe('fieldText', () => {
   it('reads top-level and per-item fields', () => {
-    expect(fieldText(config(), { kind: 'field', field: 'agentBehavior' })).toBe('# Agata')
+    expect(fieldText(config(), { kind: 'field', field: 'communicationStyle' })).toBe('Ramah')
+    expect(fieldText(config(), { kind: 'field', field: 'customInstruction', index: 0 })).toBe('Diskon 10%')
     expect(fieldText(config(), { kind: 'field', field: 'kbTextContent', index: 0 })).toBe('09-17')
     expect(fieldText(config(), { kind: 'field', field: 'qnaAnswer', index: 0 })).toBe('Ada')
     expect(fieldText(config(), { kind: 'field', field: 'apiDescription', index: 0 })).toBe('Cek slot')
@@ -36,6 +40,8 @@ describe('withFieldText', () => {
 
   it('sets top-level text fields and API descriptions', () => {
     expect(withFieldText(config(), { kind: 'field', field: 'welcomeMessage' }, 'Hai').welcomeMessage).toBe('Hai')
+    expect(withFieldText(config(), { kind: 'field', field: 'rulesRestrictions' }, 'Baru').rulesRestrictions).toBe('Baru')
+    expect(withFieldText(config(), { kind: 'field', field: 'customInstruction', index: 0 }, 'Diskon 20%').customInstructions[0]).toEqual({ title: 'Promo', content: 'Diskon 20%' })
     expect(withFieldText(config(), { kind: 'field', field: 'apiDescription', index: 0 }, 'Baru').apiIntegrations[0]).toEqual({ name: 'cek_jadwal', description: 'Baru' })
   })
 
@@ -48,7 +54,8 @@ describe('withFieldText', () => {
 describe('reviseTargetLabel', () => {
   it('names sections and fields, with the item they belong to', () => {
     expect(reviseTargetLabel(config(), { kind: 'section', section: 'labels' })).toBe('AI Action — Labels')
-    expect(reviseTargetLabel(config(), { kind: 'field', field: 'agentBehavior' })).toBe('AI Agent Behavior')
+    expect(reviseTargetLabel(config(), { kind: 'field', field: 'conversationFlow' })).toBe('Conversation Flow')
+    expect(reviseTargetLabel(config(), { kind: 'field', field: 'customInstruction', index: 0 })).toBe('Custom Instruction — "Promo"')
     expect(reviseTargetLabel(config(), { kind: 'field', field: 'qnaAnswer', index: 0 })).toBe('Q&A answer — "Parkir?"')
     expect(reviseTargetLabel(config(), { kind: 'field', field: 'apiDescription', index: 0 })).toBe('API description — cek_jadwal')
   })
