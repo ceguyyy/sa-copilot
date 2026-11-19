@@ -7,6 +7,7 @@ import type { PocConfig } from '../../../lib/types'
 import { AdditionalSettingsCard } from './AdditionalSettingsCard'
 import { ApiIntegrationsCard } from './ApiIntegrationsCard'
 import { BehaviorCard } from './BehaviorCard'
+import { ConversionSetupCard } from './ConversionSetupCard'
 import { KnowledgeBaseCard } from './KnowledgeBaseCard'
 import { LabelsCard } from './LabelsCard'
 import { PipelineCard } from './PipelineCard'
@@ -28,6 +29,7 @@ export function AgentSection({ draft, setDraft, revise, clientName, pocName, onJ
       <BehaviorCard draft={draft} setDraft={setDraft} revise={revise} pocName={pocName} />
       <LabelsCard labels={draft.labels} setDraft={setDraft} revise={revise} />
       <SdkEventsCard events={draft.sdkEvents} setDraft={setDraft} />
+      <ConversionSetupCard draft={draft} pocName={pocName} />
       <PipelineCard pipeline={draft.pipeline} setDraft={setDraft} revise={revise} />
       <KnowledgeBaseCard knowledgeBase={draft.knowledgeBase} setDraft={setDraft} revise={revise} />
       <ApiIntegrationsCard integrations={draft.apiIntegrations} setDraft={setDraft} revise={revise} clientName={clientName} onJsonError={onJsonError} />
