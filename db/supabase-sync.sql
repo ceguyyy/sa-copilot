@@ -28,4 +28,15 @@ create table if not exists sa_copilot_sync.snapshots (
   data bytea not null,
   primary key (workspace_id, revision)
 );
+-- v2.1 snapshots list their upload files by SHA-256; each file is stored once per workspace in blobs.
+-- The app creates both on the first upload when they are missing; older full snapshots keep blob_hashes null.
+alter table sa_copilot_sync.snapshots add column if not exists blob_hashes text[];
+create table if not exists sa_copilot_sync.blobs (
+  workspace_id text not null references sa_copilot_sync.workspaces(id),
+  hash text not null,
+  size integer not null,
+  data bytea not null,
+  created_at timestamptz not null default now(),
+  primary key (workspace_id, hash)
+);
 revoke all on all tables in schema sa_copilot_sync from public, anon, authenticated;

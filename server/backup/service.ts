@@ -26,6 +26,11 @@ async function isFile(file: string): Promise<boolean> {
 }
 
 export async function createBackup(): Promise<{ data: Uint8Array; manifest: BackupManifest }> {
+  return packBackup(await collectBackup(), config.appVersion)
+}
+
+/** Every table and the upload files the database references, read in one consistent snapshot. */
+export async function collectBackup(): Promise<{ tables: Record<string, Record<string, unknown>[]>; files: Record<string, Uint8Array> }> {
   const tables: Record<string, Record<string, unknown>[]> = {}
   await withTransaction(async (tx) => {
     await tx.query('set transaction isolation level repeatable read read only')
@@ -38,7 +43,7 @@ export async function createBackup(): Promise<{ data: Uint8Array; manifest: Back
     const file = path.join(config.uploadDir, key)
     if (await isFile(file)) files[key] = await readFile(file)
   }
-  return packBackup({ tables, files }, config.appVersion)
+  return { tables, files }
 }
 
 export function summarize(manifest: BackupManifest): { projects: number; documents: number; files: number } {
