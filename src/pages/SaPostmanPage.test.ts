@@ -9,7 +9,7 @@ import { OpenSaPostman } from '../components/OpenSaPostman'
 import {endpointFromRequest} from '../../shared/saPostman'
 import { saPostmanApi } from '../lib/api'
 
-vi.mock('../lib/api', () => ({ saPostmanApi: { environments:vi.fn().mockResolvedValue([]), execute: vi.fn(), assist:vi.fn(), collections:vi.fn().mockResolvedValue([]), versions:vi.fn().mockResolvedValue([]), list:vi.fn().mockResolvedValue([]), history:vi.fn().mockResolvedValue([]) } }))
+vi.mock('../lib/api', () => ({ saPostmanApi: { vault:vi.fn().mockResolvedValue({configured:false,unlocked:false,entries:[]}), environments:vi.fn().mockResolvedValue([]), execute: vi.fn(), assist:vi.fn(), collections:vi.fn().mockResolvedValue([]), versions:vi.fn().mockResolvedValue([]), list:vi.fn().mockResolvedValue([]), history:vi.fn().mockResolvedValue([]) } }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 it('opens a POC request with its payload, waits for Send, and displays the response', async () => {
   const host = document.createElement('div'), root = createRoot(host)
@@ -24,7 +24,8 @@ it('opens a POC request with its payload, waits for Send, and displays the respo
     expect((host.querySelector('[aria-label="Request body"]') as HTMLTextAreaElement).value).toBe('{"action":"create_ticket"}')
     expect(saPostmanApi.execute).not.toHaveBeenCalled()
     await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === 'Hit / Send')!.click())
-    expect(saPostmanApi.execute).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: '{"action":"create_ticket"}' }))
+    // The second argument is the execution id that Cancel uses to abort the running request.
+    expect(saPostmanApi.execute).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: '{"action":"create_ticket"}' }), expect.any(String))
     expect(host.textContent).toContain('201 Created')
     expect(host.textContent).toContain('ok: true')
     await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Collapse all')!.click())
