@@ -90,6 +90,23 @@ New Dropdown columns start with Label 1, Label 2, Label 3.
   "[SA Copilot test] sa_copilot_test_cek_jadwal" (`tAbALwZDB1NId9DyDredc`, draft, tool for "Agent build 3", not published),
   "[SA Copilot test] http_via_gdrive_auth" (`mjuH1It9XlupwolR0Ir8E`, draft, tool `sa_copilot_test_http` for "Agent build 3").
 
+## API Tools (Devtools › API Tools) and the agent's Integrations
+
+- This is how an AI agent calls a webhook: create the tool in `/developers/api-tools`, then activate it on the agent in
+  Integrations › AI Tools (`?tab=integrations`). Tools from Automation flows (AI Tool (Invoke)) are not listed there.
+- Create form: Name, HTTP Method (GET/POST), Description, Webhook Address, Max Tool Calls, API Key (Bearer), AI Inputs
+  (Simple / Custom = JSON Schema in a Monaco editor). "Create Tool" sends `POST /ai_tools`.
+- **Creating ignores the method and Max Tool Calls** (saved as POST / null). "Edit Tool" › Save (`PUT /ai_tools/:id`)
+  saves them. The builder leaves Max Tool Calls alone: re-filling it once saved 0.
+- Monaco auto-closes brackets while text is inserted, leaving `"}` after the cursor; invalid JSON is saved as
+  `schema: null`. The builder inserts one-line JSON, deletes everything after the cursor and checks the editor text,
+  then checks the PUT reply (method and schema).
+- Activate is one click (`PUT /ai_agents/ai_tools/assign`); an active card shows one button "Active"/"Deactivate"
+  (hover). The page renders the list twice, one copy hidden, and a new tool may need a reload to appear.
+- `GET /ai_tools` (the list) returns `schema: null` for some tools; the edit form shows what is saved.
+- Test leftovers (all active on "Agent build 3"): `sa_copilot_test_cek_jadwal`, `sa_copilot_test_cek_slot`,
+  `…_slot2` … `…_slot7` (slot2/slot3 have no AI inputs, slot7 has Max Tool Calls 0).
+
 ## The builder (server/cekat)
 
 `selectors.ts` holds every selector, `browser.ts` the Edge/Chrome window with SA Copilot's own profile

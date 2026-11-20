@@ -70,7 +70,7 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
             {plan.data.routing.transfer && <li>Agent transfer condition</li>}
             {plan.data.routing.labels.length > 0 && <li>{plan.data.routing.labels.length} label condition(s): {plan.data.routing.labels.map((l) => l.title).join(', ')} — missing labels are created in Settings › Labels</li>}
             {plan.data.routing.moves.length > 0 && <li>{plan.data.routing.moves.length} pipeline condition(s): {plan.data.routing.moves.map((m) => m.title).join(', ')} — missing statuses are created in Settings › Pipeline Statuses</li>}
-            {plan.data.tools.names.length > 0 && <li>{plan.data.tools.names.length} API tool flow(s) in Cekat Automation: {plan.data.tools.names.join(', ')} — needs Cekat MCP and an active Automation connection; built as drafts to review and publish</li>}
+            {plan.data.tools.names.length > 0 && <li>{plan.data.tools.names.length} API tool(s) in Devtools › API Tools, activated on the agent: {plan.data.tools.names.join(', ')}</li>}
             <li>AI configuration: history {String(plan.data.settings.historyLimit)}, context {String(plan.data.settings.contextLimit)}, creativity {String(plan.data.settings.creativity)}, message await {String(plan.data.settings.messageAwait)}s</li>
           </ul>
           {plan.data.notes.map((n) => (
@@ -118,20 +118,7 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
               Open in Cekat <ExternalLink className="size-3" />
             </a>
           </p>
-          {result.toolFlows.length > 0 && (
-            <ul className="ml-5 list-disc">
-              {result.toolFlows.map((f) => (
-                <li key={f.name}>
-                  API tool flow "{f.name}"{' '}
-                  {f.url && (
-                    <a className="inline-flex items-center gap-1 underline" href={f.url} target="_blank" rel="noopener noreferrer">
-                      Open draft <ExternalLink className="size-3" />
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          {result.apiTools.length > 0 && <p className="text-forest">API tools active on the agent: {result.apiTools.join(', ')}.</p>}
           {result.problems.length > 0 && (
             <ul className="ml-5 list-disc text-muted">
               {result.problems.map((p) => (

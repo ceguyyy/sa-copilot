@@ -23,7 +23,7 @@ export type AgentBuildResult = {
   createdLabels: string[]
   createdStatuses: string[]
   conditions: number
-  toolFlows: { name: string; url: string }[]
+  apiTools: string[]
   problems: string[]
 }
 

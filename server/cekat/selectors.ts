@@ -71,6 +71,44 @@ export const ROUTING = {
   statusAdd: { role: 'button' as const, name: 'Add', exact: true },
 }
 
+/**
+ * Devtools › API Tools (the business's webhook tools) and the agent's Integrations › AI Tools, where each tool is
+ * activated per agent. Creating ignores the HTTP method and Max Tool Calls (saved as POST / null), so both are set
+ * again through "Edit Tool" › Save, which sends the whole tool (PUT /ai_tools/:id).
+ */
+export const API_TOOLS = {
+  page: `${CEKAT_URL}/developers/api-tools`,
+  tool: (id: string) => `${CEKAT_URL}/developers/api-tools?tool_id=${id}`,
+  create: { role: 'button' as const, name: 'Create New Tool' },
+  name: { role: 'textbox' as const, name: 'Name' },
+  method: { role: 'combobox' as const, name: 'HTTP Method' },
+  description: { role: 'textbox' as const, name: 'Description ?' },
+  webhook: { role: 'textbox' as const, name: 'Webhook Address' },
+  apiKey: { role: 'textbox' as const, name: 'API Key (Bearer)' },
+  custom: { role: 'radio' as const, name: 'Custom' },
+  /** The AI Inputs JSON Schema (Custom) is a Monaco editor; insertText keeps the JSON as typed. */
+  schemaEditor: '.monaco-editor',
+  schemaLines: '.monaco-editor .view-lines',
+  createTool: { role: 'button' as const, name: 'Create Tool' },
+  edit: { role: 'button' as const, name: /Edit\s*Tool/ },
+  save: { role: 'button' as const, name: 'Save', exact: true },
+  /** POST (create) and PUT (update) of a tool. */
+  apiPath: '/ai_tools',
+  /** Activating a tool on an agent. */
+  assignPath: '/ai_agents/ai_tools/assign',
+  /** Tool names on the list page. */
+  names: 'h2',
+  integrations: (agentId: string) => `${CEKAT_URL}/ai-agents-v2/${agentId}?tab=integrations`,
+  /**
+   * A tool's card in Integrations › AI Tools: the closest ancestor of its name with a button. The page renders the
+   * list twice, one copy hidden, so callers keep the visible one.
+   */
+  card: (name: string) => `xpath=//h2[normalize-space()=${JSON.stringify(name)}]/ancestor::*[.//button][1]`,
+  activate: { role: 'button' as const, name: 'Activate', exact: true },
+  /** An active tool shows one button reading "Active" (and "Deactivate" on hover). */
+  active: { role: 'button' as const, name: /^Active(\s|$)/ },
+}
+
 /** Labels of the behavior fields, in page order. */
 export const AGENT_FIELDS = {
   welcome: 'Welcome Message',
