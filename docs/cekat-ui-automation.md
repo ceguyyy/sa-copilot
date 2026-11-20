@@ -62,6 +62,34 @@ by filling an option input; add by typing in "Create or find options" and clicki
 (saved at once); there is no way to delete an option; an empty option makes Apply fail with HTTP 400.
 New Dropdown columns start with Label 1, Label 2, Label 3.
 
+## Automation (Cekat MCP `automation_ckt_*`)
+
+- Cekat Automation is Activepieces. The Cekat piece has trigger **AI Tool (Invoke)** (`ai_tool_invoked`: `agentIds`,
+  `toolName`, `toolDescription`, `aiInputs[{name, description, type string|number|boolean, required, enum[{value}]}]`,
+  `responseCode`) and action **AI Tool (Response)** (`ai_tool_response`: `responseType`, `fields {status, headers, body}`,
+  `respond`). An AI agent's API tool can therefore live in Cekat as one flow per tool — the same shape as a POC API
+  integration — instead of the n8n gateway.
+- `agentIds` options resolve only with a `flowId` (`resolve_property_options`); the values are AI agent ids.
+- `build_flow` works (trigger + CODE/PIECE steps; all validated). References: `{{trigger['output'].body.inputs}}`,
+  `{{step_1['output'].body}}`. `test_flow` + `list_runs`/`get_run` (environment TESTING) show step outputs and errors.
+- **Calling the client API is the blocker**: the HTTP piece (`send_request`) needs a connection, and this project has
+  none (`list_connections pieceName=http` is empty; setup guide: Automations › Connections › HTTP). CODE steps run in
+  isolated-vm without `fetch`, `URL` or npm packages (axios cannot be resolved), so they cannot call out.
+  `/automations/connections` loads `automation.cekat.ai` in an iframe; as a Member its project-members API returns 404.
+- The builder (`toolsBuild.ts`) runs after the agent build: one flow per POC API integration with a target URL,
+  named after the tool. The steps are AI Tool (Invoke) → optional login `send_request` to `authUrl` (body to fill in;
+  the token is assumed at `body.token`) → `send_request` (GET inputs go in the query, other methods send a JSON body
+  `{data: …}`, failureMode `continue_all`) → AI Tool (Response) with the API body. Existing flow names are skipped.
+  The flows stay drafts (not published) until the SA has checked them.
+- **The HTTP step does not need an HTTP connection**: `send_request` only checks that `auth` is some active connection
+  of the project. With `authType: NONE` it sends none of that connection's credentials. Verified with the Google Drive
+  connection `yx1cagoXjFhAakLpPRRdQ`: the test run (`PAoD5BDyWBPO35H5x1KCA`) reached httpbin.org with the query
+  input and no `Authorization` header, and AI Tool (Response) returned the API body. The builder takes an HTTP
+  connection if there is one, otherwise the first active connection.
+- Test leftovers: flows "[SA Copilot test] cek_jadwal" (`ChnnJxVob0rOY5ouL85TJ`, empty) and
+  "[SA Copilot test] sa_copilot_test_cek_jadwal" (`tAbALwZDB1NId9DyDredc`, draft, tool for "Agent build 3", not published),
+  "[SA Copilot test] http_via_gdrive_auth" (`mjuH1It9XlupwolR0Ir8E`, draft, tool `sa_copilot_test_http` for "Agent build 3").
+
 ## The builder (server/cekat)
 
 `selectors.ts` holds every selector, `browser.ts` the Edge/Chrome window with SA Copilot's own profile

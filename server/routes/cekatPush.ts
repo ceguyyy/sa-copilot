@@ -13,6 +13,7 @@ import { planRouting, runRoutingBuild } from '../cekat/routingBuild.ts'
 import { CekatRoutingUi } from '../cekat/routingUi.ts'
 import { planKb, runKbBuild } from '../cekat/kbBuild.ts'
 import { CekatKbUi } from '../cekat/kbUi.ts'
+import { planTools, runToolsBuild, type ToolsResult } from '../cekat/toolsBuild.ts'
 import { streamResponse } from '../ai/stream.ts'
 import { boardFromAi, boardToAi, normalizeCrm, type CrmBoard } from '../../shared/pocCrm.ts'
 import { queryOne } from '../db.ts'
@@ -48,6 +49,23 @@ async function cekat<T>(run: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof McpToolError) throw new HttpError(502, `Cekat: ${e.message}`)
     throw e
+  }
+}
+
+/** The API tools as Cekat Automation flows, after the agent exists. They need Cekat MCP; the agent build does not. */
+async function buildTools(agentId: string, config: z.infer<typeof pocConfig>, log: (text: string) => void): Promise<ToolsResult> {
+  const plan = planTools(config)
+  if (!plan.tools.length) return { flows: [], problems: plan.problems }
+  let call: CekatCall
+  try {
+    call = await cekatCall()
+  } catch (e) {
+    return { flows: [], problems: [`API tools were not built. ${e instanceof Error ? e.message : String(e)}`] }
+  }
+  try {
+    return await runToolsBuild(call, agentId, config, log)
+  } catch (e) {
+    return { flows: [], problems: [`API tools stopped: ${e instanceof Error ? e.message : String(e)}`] }
   }
 }
 
@@ -102,10 +120,16 @@ cekatPush.post('/pocs/:id/cekat/agent/preview', async (c) => {
   notFound(await queryOne('select id from pocs where id = $1', [idParam(c)]), 'POC')
   const { config, name } = await parseJson(c, agentBuildInput)
   const kb = planKb(config)
-  return c.json({ ...planAgentBuild(name, config, false), routing: planRouting(config), kb: { textChars: kb.text.length, qna: kb.qna.length, manual: kb.manual } })
+  const tools = planTools(config)
+  return c.json({
+    ...planAgentBuild(name, config, false),
+    routing: planRouting(config),
+    kb: { textChars: kb.text.length, qna: kb.qna.length, manual: kb.manual },
+    tools: { names: tools.tools.map((t) => t.name), problems: tools.problems },
+  })
 })
 
-/** Creates the POC's AI agent in a visible browser window, streaming each step. Needs no Cekat MCP. */
+/** Creates the POC's AI agent in a visible browser window, streaming each step. Only the API tools need Cekat MCP. */
 cekatPush.post('/pocs/:id/cekat/agent/build', async (c) => {
   notFound(await queryOne('select id from pocs where id = $1', [idParam(c)]), 'POC')
   const { config, name } = await parseJson(c, agentBuildInput)
@@ -124,7 +148,8 @@ cekatPush.post('/pocs/:id/cekat/agent/build', async (c) => {
         problems: [...kb.problems, ...routing.problems, ...agent.problems],
       }
     })
-    out.send({ type: 'result', data: result })
+    const tools = await buildTools(result.agentId, config, log)
+    out.send({ type: 'result', data: { ...result, toolFlows: tools.flows, problems: [...result.problems, ...tools.problems] } })
     out.send({ type: 'done' })
   })
 })

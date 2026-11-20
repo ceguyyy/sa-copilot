@@ -14,8 +14,18 @@ export type AgentBuildPlan = {
   problems: string[]
   routing: { transfer: string | null; labels: { title: string }[]; moves: { title: string }[]; problems: string[] }
   kb: { textChars: number; qna: number; manual: string[] }
+  tools: { names: string[]; problems: string[] }
 }
-export type AgentBuildResult = { agentId: string; url: string; kbQna: number; createdLabels: string[]; createdStatuses: string[]; conditions: number; problems: string[] }
+export type AgentBuildResult = {
+  agentId: string
+  url: string
+  kbQna: number
+  createdLabels: string[]
+  createdStatuses: string[]
+  conditions: number
+  toolFlows: { name: string; url: string }[]
+  problems: string[]
+}
 
 type BuildEvent<T> = { type: 'status'; text: string } | { type: 'result'; data: T } | { type: 'done' } | { type: 'error'; error: string }
 
