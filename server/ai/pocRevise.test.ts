@@ -47,7 +47,7 @@ describe('revisePlan — sections', () => {
     const plan = revisePlan({ kind: 'section', section: 'crm' }, current(), 'POC 01', 'Xhealth')
     expect(plan.task.join('\n')).toContain('"values"')
     const result = plan.apply({ crm: { boards: [{ name: 'Leads', description: 'x', columns: [{ name: 'Lead', type: 'text', options: [] }], kanbanColumn: '', rows: [] }] } })
-    expect(result).toMatchObject({ kind: 'section', patch: { crm: { boards: [{ name: 'Leads', columns: [{ key: 'c1', name: 'Lead' }] }] } } })
+    expect(result).toMatchObject({ kind: 'section', patch: { crm: { boards: [{ name: 'Leads', columns: [{ key: 'c1', name: 'Lead' }, { key: 'c2', name: 'Lead(2)' }] }] } } })
   })
 
   it('patches only the agent fields for the agent section', () => {

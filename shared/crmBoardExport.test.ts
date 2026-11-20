@@ -8,18 +8,19 @@ const board = boardFromAi({
   description: '',
   columns: [
     { name: 'Lead', type: 'text', options: [] },
+    { name: 'Lead(2)', type: 'text', options: [] },
     { name: 'Status', type: 'select', options: [{ label: 'New Lead', condition: '' }, { label: 'Qualified', condition: 'Sudah isi data' }] },
     { name: 'Nomor Telepon', type: 'phone', options: [] },
   ],
   kanbanColumn: 'Status',
-  rows: [{ values: ['Budi Santoso', 'New Lead', '6281234567890'] }, { values: ['Maju & Co', 'Qualified', ''] }],
+  rows: [{ values: ['Budi Santoso', 'Budi Santoso', 'New Lead', '6281234567890'] }, { values: ['Maju & Co', 'Maju & Co', 'Qualified', ''] }],
 })
 
 describe('layoutBoard', () => {
   it('lays the table out as title + header row + one row per item', () => {
     const { shapes } = layoutBoard(board, 'table')
-    // title, index header, 3 column headers, 2 rows × (index + 3 cells)
-    expect(shapes).toHaveLength(1 + 1 + 3 + 2 * 4)
+    // title, index header, 4 column headers, 2 rows × (index + 4 cells)
+    expect(shapes).toHaveLength(1 + 1 + 4 + 2 * 5)
     expect(shapes.some((s) => s.text === 'Status · Select')).toBe(true)
   })
 

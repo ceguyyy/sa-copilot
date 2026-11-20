@@ -49,14 +49,43 @@ describe('boardFromAi', () => {
       description: 'Prospek KPR',
       columns: [
         { name: 'Lead', type: 'text', options: [] },
+        { name: 'Lead(2)', type: 'text', options: [] },
         { name: 'Status', type: 'select', options: [{ label: 'New Lead', condition: '' }, { label: 'Qualified', condition: 'Sudah isi data' }] },
         { name: 'Nomor Telepon', type: 'phone', options: [] },
       ],
       kanbanColumn: 'status',
-      rows: [{ values: ['Budi Santoso', 'New Lead', '6281234567890'] }],
+      rows: [{ values: ['Budi Santoso', 'Budi Santoso', 'New Lead', '6281234567890'] }],
     })
-    expect(board.kanbanColumn).toBe('c2')
-    expect(board.rows).toEqual([{ c1: 'Budi Santoso', c2: 'New Lead', c3: '6281234567890' }])
+    expect(board.kanbanColumn).toBe('c3')
+    expect(board.rows).toEqual([{ c1: 'Budi Santoso', c2: 'Budi Santoso', c3: 'New Lead', c4: '6281234567890' }])
+  })
+
+  it('adds the Cekat key duplicate "<column 1>(2)" when the model leaves it out, copying each value', () => {
+    const board = boardFromAi({
+      name: 'Leads',
+      columns: [
+        { name: 'Phone_number', type: 'text', options: [] },
+        { name: 'Status', type: 'select', options: [{ label: 'Baru', condition: '' }] },
+      ],
+      kanbanColumn: 'Status',
+      rows: [{ values: ['6281234567890', 'Baru'] }],
+    })
+    expect(board.columns.map((c) => [c.name, c.type])).toEqual([
+      ['Phone_number', 'text'],
+      ['Phone_number(2)', 'phone'],
+      ['Status', 'select'],
+    ])
+    expect(board.rows).toEqual([{ c1: '6281234567890', c2: '6281234567890', c3: 'Baru' }])
+    expect(board.kanbanColumn).toBe('c3')
+  })
+
+  it('keeps a duplicate the model already wrote, normalising its name', () => {
+    const board = boardFromAi({ name: 'B', columns: [{ name: 'Email', type: 'text' }, { name: 'Email (2)', type: 'email' }], rows: [] })
+    expect(board.columns.map((c) => [c.name, c.type])).toEqual([['Email', 'text'], ['Email(2)', 'email']])
+  })
+
+  it('leaves a board without columns alone', () => {
+    expect(boardFromAi({ name: 'Empty', columns: [], rows: [] }).columns).toEqual([])
   })
 })
 
@@ -147,15 +176,16 @@ describe('boardToAi', () => {
           description: 'Semua lead',
           columns: [
             { key: 'c1', name: 'Lead', type: 'text', options: [] },
-            { key: 'c2', name: 'Status', type: 'select', options: [{ label: 'Baru', condition: '' }, { label: 'Deal', condition: 'Bayar' }] },
+            { key: 'c2', name: 'Lead(2)', type: 'text', options: [] },
+            { key: 'c3', name: 'Status', type: 'select', options: [{ label: 'Baru', condition: '' }, { label: 'Deal', condition: 'Bayar' }] },
           ],
-          rows: [{ c1: 'Budi', c2: 'Deal' }, { c1: 'Sari', c2: '' }],
-          kanbanColumn: 'c2',
+          rows: [{ c1: 'Budi', c2: 'Budi', c3: 'Deal' }, { c1: 'Sari', c2: 'Sari', c3: '' }],
+          kanbanColumn: 'c3',
         },
       ],
     }).boards[0]
     const ai = boardToAi(board)
-    expect(ai).toMatchObject({ kanbanColumn: 'Status', rows: [{ values: ['Budi', 'Deal'] }, { values: ['Sari', ''] }] })
+    expect(ai).toMatchObject({ kanbanColumn: 'Status', rows: [{ values: ['Budi', 'Budi', 'Deal'] }, { values: ['Sari', 'Sari', ''] }] })
     expect(boardFromAi(ai)).toEqual(board)
   })
 })

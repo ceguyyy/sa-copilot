@@ -1,6 +1,6 @@
 // Renders a POC CRM board (table or kanban view) as a standalone SVG or as draw.io XML. Both come from one layout,
 // so the SVG download and the editable draw.io diagram always look the same.
-import { CRM_COLUMN_LABELS, hasOptions, kanbanLanes, type CrmBoard } from './pocCrm.ts'
+import { CRM_COLUMN_LABELS, hasOptions, kanbanLanes, keyDuplicateName, type CrmBoard } from './pocCrm.ts'
 
 export type BoardView = 'table' | 'kanban'
 
@@ -99,7 +99,9 @@ function kanbanLayout(board: CrmBoard): BoardLayout {
   const top = PAD + TITLE_H
   const lanes = kanbanLanes(board)
   const options = board.columns.find((c) => c.key === board.kanbanColumn)?.options ?? []
-  const [titleColumn, ...rest] = board.columns.filter((c) => c.key !== board.kanbanColumn)
+  const [titleColumn, ...others] = board.columns.filter((c) => c.key !== board.kanbanColumn)
+  // The "<key>(2)" duplicate repeats the card title, so the card leaves it out.
+  const rest = titleColumn ? others.filter((c) => c.name !== keyDuplicateName(titleColumn.name)) : others
   const width = PAD * 2 + Math.max(1, lanes.length) * laneW + Math.max(0, lanes.length - 1) * gap
   const shapes: Shape[] = [title(board, width)]
   const laneShapes: Shape[] = []

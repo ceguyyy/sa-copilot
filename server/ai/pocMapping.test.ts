@@ -31,10 +31,11 @@ describe('toPocConfig', () => {
               description: 'Janji temu',
               columns: [
                 { name: 'Pasien', type: 'text', options: [] },
+                { name: 'Pasien(2)', type: 'text', options: [] },
                 { name: 'Status', type: 'select', options: [{ label: 'Baru', condition: 'x' }, { label: 'Terkonfirmasi', condition: 'Slot dipilih' }] },
               ],
               kanbanColumn: 'Status',
-              rows: [{ values: ['Aisyah', 'Baru'] }],
+              rows: [{ values: ['Aisyah', 'Aisyah', 'Baru'] }],
             },
           ],
         },
@@ -54,8 +55,8 @@ describe('toPocConfig', () => {
       targetUrl: 'https://da.example.com/appointments/v2',
       authUrl: 'https://da.example.com/login',
     })
-    expect(cfg.crm.boards[0]).toMatchObject({ name: 'Booking', kanbanColumn: 'c2', rows: [{ c1: 'Aisyah', c2: 'Baru' }] })
-    expect(cfg.crm.boards[0].columns[1].options).toEqual([
+    expect(cfg.crm.boards[0]).toMatchObject({ name: 'Booking', kanbanColumn: 'c3', rows: [{ c1: 'Aisyah', c2: 'Aisyah', c3: 'Baru' }] })
+    expect(cfg.crm.boards[0].columns[2].options).toEqual([
       { label: 'Baru', condition: '' },
       { label: 'Terkonfirmasi', condition: 'Slot dipilih' },
     ])

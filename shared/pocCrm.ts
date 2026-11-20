@@ -159,7 +159,40 @@ export function normalizeCrm(raw: unknown): PocCrm {
 }
 
 /** Maps the AI's board (columns by name, rows as values in column order) onto the stored shape. */
-export function boardFromAi(raw: Record<string, unknown>): CrmBoard {
+/** Name of the column that must follow the first (key) column: Cekat's convention "<first>(2)". */
+export const keyDuplicateName = (first: string) => `${first.trim()}(2)`
+
+/** The duplicate keeps the key's value in a typed column, e.g. a Phone column next to a "Phone_number" key. */
+function keyDuplicateType(first: string): CrmColumnType {
+  if (/phone|telepon|whats ?app|\bwa\b|\bhp\b|handphone|nomor|no\.? ?(hp|wa|telp)/i.test(first)) return 'phone'
+  if (/e-?mail/i.test(first)) return 'email'
+  return 'text'
+}
+
+const normName = (s: string) => s.toLowerCase().replace(/\s+/g, '')
+
+/**
+ * Cekat CRM rule: column 1 is the board's key (the item title) and column 2 duplicates it as "<name>(2)".
+ * Inserts the duplicate when the model left it out, copying each row's key value into it.
+ */
+function withKeyDuplicate(columns: Record<string, unknown>[], rows: unknown[][]): { columns: Record<string, unknown>[]; rows: unknown[][] } {
+  const first = typeof columns[0]?.name === 'string' ? (columns[0].name as string).trim() : ''
+  if (!first) return { columns, rows }
+  const dup = keyDuplicateName(first)
+  const second = typeof columns[1]?.name === 'string' ? (columns[1].name as string) : ''
+  if (normName(second) === normName(dup)) return { columns: columns.map((c, i) => (i === 1 ? { ...c, name: dup } : c)), rows }
+  return {
+    columns: [columns[0], { name: dup, type: keyDuplicateType(first), options: [] }, ...columns.slice(1)],
+    rows: rows.map((values) => [values[0] ?? '', values[0] ?? '', ...values.slice(1)]),
+  }
+}
+
+export function boardFromAi(input: Record<string, unknown>): CrmBoard {
+  const fixed = withKeyDuplicate(
+    records(input.columns),
+    records(input.rows).map((r) => (Array.isArray(r.values) ? r.values : [])),
+  )
+  const raw: Record<string, unknown> = { ...input, columns: fixed.columns, rows: fixed.rows.map((values) => ({ values })) }
   const columns: CrmColumn[] = records(raw.columns).map((c, i) => ({
     key: `c${i + 1}`,
     name: text(c.name, 120),

@@ -51,7 +51,7 @@ export const crmSchema = obj({
           type: oneOf([...CRM_COLUMN_TYPES]),
           options: arr(obj({ label: str('Option, e.g. "New Lead"'), condition: str('When an item moves into this option; empty for the first option') }), 'Only for select/dropdown columns, in pipeline order; empty otherwise'),
         }),
-        'Columns in display order; the first one is the item title (usually "Lead" or the customer name, type text)',
+        'Columns in display order. Column 1 is the board key (the item title, type text, e.g. "Phone_number" or "Lead"); column 2 duplicates it with the same name plus "(2)" (e.g. "Phone_number(2)", type phone for a phone number) and holds the same value in every row',
       ),
       kanbanColumn: str('Name of the select column the kanban view is grouped by (usually "Status")'),
       rows: arr(obj({ values: arr(str(), 'One value per column, in column order; select values must be one of its options; checkbox "true"/"false"') }), '3–5 realistic sample items with fake data'),
@@ -63,6 +63,7 @@ export const crmSchema = obj({
 export const CRM_TASK = [
   'CRM structure: design the Cekat CRM boards. A board is a table: typed columns (Text, Number, Date, Timeline, Email, Phone, Long Text, Checkbox, Select, Dropdown, References, Agents, Contacts, Companies, Conversation, Orders, Subscriptions, Files) and items (rows). The kanban view is the same board grouped by one Select column (its options are the pipeline stages, in order, each with the condition to move into it).',
   'Take the columns from the data the client must capture (e.g. name, phone, domicile, preferences, AI summary) and add 3–5 realistic sample items with fake data. When the CEKAT N8N NODES catalog lists CRM nodes, keep names usable by those nodes.',
+  'Cekat CRM rule: column 1 is the key and cannot be deleted; column 2 must be its duplicate named "<column 1>(2)", e.g. "Phone_number" then "Phone_number(2)", with the same value in each sample item.',
 ].join('\n')
 
 export const flowFields = {
