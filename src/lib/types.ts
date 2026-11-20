@@ -209,6 +209,8 @@ export interface McpServer {
   tools: string[]
   /** Configured in .env (e.g. the Outline wiki): shown, but not editable here. */
   builtin?: boolean
+  /** none: no login used; connected: logged in (OAuth); required: the server asks to log in first. */
+  auth: 'none' | 'connected' | 'required'
 }
 
 export interface ProjectFile {

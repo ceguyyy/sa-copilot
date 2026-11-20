@@ -5,8 +5,10 @@ import type { CrmBoard, PocCrm } from '../../../lib/types'
 import { AiDraftButton } from '../../AiDraftButton'
 import { Button } from '../../ui'
 import { CrmBoardCard } from './CrmBoardCard'
+import { CekatCrmBuildPanel } from './CekatCrmBuildPanel'
 
 type Props = {
+  pocId: string
   crm: PocCrm
   onChange: (crm: PocCrm) => void
   onGenerate: (instruction: string, options: AiRunOptions) => void
@@ -20,15 +22,17 @@ const newBoard = (): CrmBoard => ({
   name: '',
   description: '',
   columns: [
+    // Cekat rule: column 1 is the key, column 2 its "(2)" duplicate.
     { key: 'c1', name: 'Lead', type: 'text', options: [] },
-    { key: 'c2', name: 'Status', type: 'select', options: [{ label: 'New Lead', condition: '' }] },
+    { key: 'c2', name: 'Lead(2)', type: 'text', options: [] },
+    { key: 'c3', name: 'Status', type: 'select', options: [{ label: 'New Lead', condition: '' }] },
   ],
   rows: [],
-  kanbanColumn: 'c2',
+  kanbanColumn: 'c3',
 })
 
 /** POC CRM tab: the Cekat CRM boards, each editable as a table and previewed as a kanban. */
-export function CrmSection({ crm, onChange, onGenerate, isGenerating, reviseAction, revisePreview }: Props) {
+export function CrmSection({ pocId, crm, onChange, onGenerate, isGenerating, reviseAction, revisePreview }: Props) {
   const setBoard = (index: number, board: CrmBoard) => onChange({ boards: crm.boards.map((b, i) => (i === index ? board : b)) })
 
   return (
@@ -48,7 +52,10 @@ export function CrmSection({ crm, onChange, onGenerate, isGenerating, reviseActi
       {revisePreview}
       {crm.boards.length === 0 && <p className="rounded-lg border border-dashed border-line p-4 text-sm text-muted">No CRM board yet — add one or generate them with AI.</p>}
       {crm.boards.map((board, i) => (
-        <CrmBoardCard key={`board-${i}`} board={board} onChange={(b) => setBoard(i, b)} onRemove={() => onChange({ boards: crm.boards.filter((_, x) => x !== i) })} />
+        <div key={`board-${i}`} className="space-y-2">
+          <CrmBoardCard board={board} onChange={(b) => setBoard(i, b)} onRemove={() => onChange({ boards: crm.boards.filter((_, x) => x !== i) })} />
+          <CekatCrmBuildPanel pocId={pocId} board={board} />
+        </div>
       ))}
       <Button variant="outline" icon={<Plus className="size-4" />} onClick={() => onChange({ boards: [...crm.boards, newBoard()] })}>
         Add CRM board

@@ -134,7 +134,7 @@ async function request<T>(what: string, path: string, init: RequestInit = {}): P
   return (res.status === 204 ? undefined : await res.json()) as T
 }
 
-const send = <T>(what: string, method: string, path: string, body?: unknown) =>
+export const send = <T>(what: string, method: string, path: string, body?: unknown) =>
   request<T>(what, path, {
     method,
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
@@ -247,6 +247,18 @@ export const pocsApi = {
   remove: (id: string) => send<void>('Delete POC', 'DELETE', `/pocs/${id}`),
 }
 
+/** "Create in Cekat" through the logged-in Cekat MCP: preview first, apply after the SA confirms. */
+export type CekatPushPlan = { createEvents: { key: string; label: string }[]; existingEvents: string[]; ruleText: string[]; problems: string[] }
+export type CekatPushPreview =
+  | { kind: 'plan'; plan: CekatPushPlan; cekatCheck: string }
+  | { kind: 'choose-business'; businesses: { id: string; name: string; status: string }[] }
+export type CekatPushResult = { createdEvents: string[]; failedEvents: { key: string; error: string }[]; rulesSaved: number; rulesError: string | null; problems: string[] }
+export const cekatPushApi = {
+  preview: (pocId: string, config: PocConfig) => send<CekatPushPreview>('Preview in Cekat', 'POST', `/pocs/${pocId}/cekat/preview`, { config }),
+  apply: (pocId: string, config: PocConfig) => send<CekatPushResult>('Create in Cekat', 'POST', `/pocs/${pocId}/cekat/apply`, { config }),
+  selectBusiness: (businessId: string) => send<void>('Choose Cekat business', 'POST', '/cekat/business', { businessId }),
+}
+
 export const pocVersionsApi = {
   list: (pocId: string) => request<PocVersion[]>('Load POC versions', `/pocs/${pocId}/versions`),
   create(pocId: string, config: PocConfig, origin: 'manual' | 'ai' | 'restore', note: string): Promise<PocVersion> {
@@ -327,6 +339,9 @@ export const mcpApi = {
   update: (id: string, input: Partial<Pick<McpServer, 'name' | 'url' | 'enabled'>>) =>
     send<McpServer>('Update tool server', 'PATCH', `/mcp-servers/${id}`, input),
   remove: (id: string) => send<void>('Delete tool server', 'DELETE', `/mcp-servers/${id}`),
+  login: (id: string) =>
+    send<{ status: 'connected' } | { status: 'redirect'; authorizationUrl: string }>('Log in to tool server', 'POST', `/mcp-servers/${id}/login`),
+  logout: (id: string) => send<void>('Log out of tool server', 'POST', `/mcp-servers/${id}/logout`),
 }
 
 // ---------- theme ----------

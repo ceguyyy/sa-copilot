@@ -1,12 +1,13 @@
 import { CopyButton } from '../../CopyButton'
+import { CekatPushPanel } from './CekatPushPanel'
 import { Textarea } from '../../ui'
 import { conversionSetupGuide, sdkDeveloperBrief } from '../../../../shared/pocConversionGuide.ts'
 import type { PocConfig } from '../../../lib/types'
 
-type Props = { draft: PocConfig; pocName: string }
+type Props = { pocId: string; draft: PocConfig; pocName: string }
 
 /** Copy-ready setup checklist for Cekat and the brief for the client's developers, built from the POC's conversions. */
-export function ConversionSetupCard({ draft, pocName }: Props) {
+export function ConversionSetupCard({ pocId, draft, pocName }: Props) {
   const guide = conversionSetupGuide(pocName, draft)
   const brief = sdkDeveloperBrief(pocName, draft)
 
@@ -16,6 +17,7 @@ export function ConversionSetupCard({ draft, pocName }: Props) {
         <h4 className="font-display text-base font-semibold">Ads Conversion Setup</h4>
         <p className="text-xs text-muted">Updates as you edit labels and SDK events above.</p>
       </div>
+      {guide && <CekatPushPanel pocId={pocId} draft={draft} />}
       <GuideBlock
         title="Setup checklist (Cekat dashboard)"
         hint="Step by step for Marketing › Paid Ads and Marketing › Events."

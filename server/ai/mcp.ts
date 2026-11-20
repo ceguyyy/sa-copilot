@@ -7,6 +7,8 @@ import { config } from '../config.ts'
 import { outlineStdio } from './outlineCommand.ts'
 import { query, queryOne } from '../db.ts'
 import type { ToolDef } from './llm/types.ts'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
+import { StoredOAuthProvider, hasLogin, isReadOnlyAccountTool } from './mcpOAuth.ts'
 
 export interface McpServer {
   id: string
@@ -30,6 +32,10 @@ interface McpTool extends ToolDef {
 
 export const DEFAULT_SERVERS = [{ name: 'Cekat Docs', url: 'https://docs.cekat.ai/~gitbook/mcp' }]
 
+/** Servers that answered "log in first" on the last attempt; Settings shows them as Login required. */
+const loginRequired = new Set<string>()
+export const needsLogin = (serverId: string) => loginRequired.has(serverId)
+
 const TOOLS_TTL_MS = 5 * 60_000
 const MAX_RESULT_CHARS = 30_000
 const clients = new Map<string, Promise<Client>>()
@@ -37,6 +43,13 @@ let toolCache: { at: number; tools: McpTool[] } | null = null
 
 export function invalidateMcpCache(): void {
   toolCache = null
+}
+
+/** Drops the open connection of a server, e.g. after logging in or out, so the next call reconnects. */
+export function resetMcpServer(serverId: string): void {
+  clients.delete(serverId)
+  loginRequired.delete(serverId)
+  invalidateMcpCache()
 }
 
 /** Tool names must match ^[a-zA-Z0-9_-]{1,64}$ for both wire formats; prefix with the server so names never collide. */
@@ -87,7 +100,11 @@ function connect(server: ServerEntry): Promise<Client> {
   if (!pending) {
     pending = (async () => {
       const client = new Client({ name: 'sa-copilot', version: '1.0.0' })
-      await client.connect(server.stdio ? new StdioClientTransport(server.stdio) : new StreamableHTTPClientTransport(new URL(server.url)))
+      // The provider only adds a login when the server asks for one (servers without OAuth never see it).
+      const transport = server.stdio
+        ? new StdioClientTransport(server.stdio)
+        : new StreamableHTTPClientTransport(new URL(server.url), { authProvider: new StoredOAuthProvider(server.id, server.url) })
+      await client.connect(transport)
       return client
     })()
     pending.catch(() => clients.delete(server.id)) // retry on the next request instead of caching the failure
@@ -101,8 +118,10 @@ async function loadServerTools(server: ServerEntry): Promise<McpTool[]> {
   const { tools } = await client.listTools()
   // The AI acts on its own, so it only gets tools that don't declare side effects
   // (e.g. Cekat docs' `sendFeedback` posts to GitBook and is left out), or the allowlist when a server has one.
+  // A logged-in server acts on a real account, so only tools that clearly just read are given to the AI.
+  const account = !server.stdio && (await hasLogin(server.id))
   const allowed = (t: { name: string; annotations?: { readOnlyHint?: boolean } }) =>
-    server.allowTools ? server.allowTools.has(t.name) : t.annotations?.readOnlyHint !== false
+    server.allowTools ? server.allowTools.has(t.name) : account ? isReadOnlyAccountTool(t) : t.annotations?.readOnlyHint !== false
   return tools.filter(allowed).map((t) => ({
     name: toolName(server.name, t.name),
     description: `[${server.name}] ${t.description ?? t.name}`.slice(0, 1000),
@@ -118,13 +137,53 @@ export async function mcpTools(): Promise<McpTool[]> {
   const servers: ServerEntry[] = [...(await query<McpServer>('select * from mcp_servers where enabled order by created_at')), ...builtinServers()]
   const results = await Promise.allSettled(servers.map(loadServerTools))
   const tools = results.flatMap((r, i) => {
-    if (r.status === 'fulfilled') return r.value
+    if (r.status === 'fulfilled') {
+      loginRequired.delete(servers[i].id)
+      return r.value
+    }
+    if (r.reason instanceof UnauthorizedError) {
+      loginRequired.add(servers[i].id)
+      clients.delete(servers[i].id)
+      return []
+    }
     console.error(`MCP server "${servers[i].name}" unavailable:`, r.reason instanceof Error ? r.reason.message : r.reason)
     clients.delete(servers[i].id)
     return []
   })
   toolCache = { at: Date.now(), tools }
   return tools
+}
+
+export class McpToolError extends Error {}
+
+/**
+ * Calls a tool on one server for an action the SA started and confirmed (e.g. creating events in Cekat), so it
+ * bypasses the read-only list the AI gets. Never hand this to the model. Returns the text result.
+ */
+export async function callServerTool(serverId: string, toolName: string, args: Record<string, unknown>): Promise<string> {
+  const server = await findServer(serverId)
+  if (!server) throw new McpToolError('That tool server was removed')
+  try {
+    const client = await connect(server)
+    // Servers may name tools with dots (central.get_business); callers use the underscore form.
+    const flat = (n: string) => n.replace(/[^A-Za-z0-9_]/g, '_')
+    const { tools } = await client.listTools()
+    const remote = tools.find((t) => t.name === toolName) ?? tools.find((t) => flat(t.name) === flat(toolName))
+    if (!remote) throw new McpToolError(`${server.name} has no tool "${toolName}". It may have been renamed; check Settings › AI tools.`)
+    const result = await client.callTool({ name: remote.name, arguments: args })
+    const text = (Array.isArray(result.content) ? result.content : [])
+      .map((c: { type: string; text?: string }) => (c.type === 'text' ? (c.text ?? '') : ''))
+      .join('\n')
+    if (result.isError) throw new McpToolError(text || `${toolName} failed`)
+    return text
+  } catch (e) {
+    if (e instanceof UnauthorizedError) {
+      loginRequired.add(server.id)
+      throw new McpToolError(`Log in to ${server.name} again in Settings › AI tools.`)
+    }
+    if (!(e instanceof McpToolError)) clients.delete(server.id)
+    throw e instanceof McpToolError ? e : new McpToolError(e instanceof Error ? e.message : String(e))
+  }
 }
 
 export async function callMcpTool(name: string, input: unknown): Promise<string> {

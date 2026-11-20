@@ -14,6 +14,7 @@ import { PipelineCard } from './PipelineCard'
 import { SdkEventsCard } from './SdkEventsCard'
 
 type Props = {
+  pocId: string
   draft: PocConfig
   setDraft: SetPocDraft
   revise: PocRevise
@@ -23,13 +24,13 @@ type Props = {
 }
 
 /** The "POC Agent" tab: everything that is set up on the Cekat AI agent itself. */
-export function AgentSection({ draft, setDraft, revise, clientName, pocName, onJsonError }: Props) {
+export function AgentSection({ pocId, draft, setDraft, revise, clientName, pocName, onJsonError }: Props) {
   return (
     <>
       <BehaviorCard draft={draft} setDraft={setDraft} revise={revise} pocName={pocName} />
       <LabelsCard labels={draft.labels} setDraft={setDraft} revise={revise} />
       <SdkEventsCard events={draft.sdkEvents} setDraft={setDraft} />
-      <ConversionSetupCard draft={draft} pocName={pocName} />
+      <ConversionSetupCard pocId={pocId} draft={draft} pocName={pocName} />
       <PipelineCard pipeline={draft.pipeline} setDraft={setDraft} revise={revise} />
       <KnowledgeBaseCard knowledgeBase={draft.knowledgeBase} setDraft={setDraft} revise={revise} />
       <ApiIntegrationsCard integrations={draft.apiIntegrations} setDraft={setDraft} revise={revise} clientName={clientName} onJsonError={onJsonError} />

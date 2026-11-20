@@ -15,6 +15,7 @@ import { setupDatabase } from './db.ts'
 import { HttpError, toHttpError } from './http.ts'
 import { api } from './routes.ts'
 import { extras } from './routes/extras.ts'
+import { cekatPush } from './routes/cekatPush.ts'
 import { n8nNodes } from './routes/n8nNodes.ts'
 import { themes } from './themes.ts'
 import { languages } from './languages.ts'
@@ -30,6 +31,7 @@ import { beginWrite } from './maintenance/lock.ts'
 import { office } from './routes/office.ts'
 
 import { auth, validateAccount } from './auth.ts'
+import { mcpOAuthCallback } from './routes/mcpOAuthCallback.ts'
 import { desktopUpdate } from './maintenance/desktopUpdate.ts'
 import { saPostman } from './routes/saPostman.ts'
 import { saPostmanWorkspace } from './routes/saPostmanWorkspace.ts'
@@ -37,6 +39,8 @@ import { saPostmanWorkspace } from './routes/saPostmanWorkspace.ts'
 const app = new Hono()
 app.route('/api/desktop-update', desktopUpdate)
 app.get('/api/health', (c) => c.json({ ready: true }))
+// The browser returning from an MCP server login has no app session; the route checks its own single-use state.
+app.route('/api', mcpOAuthCallback)
 app.route('/api', auth)
 app.use('/api/*', async (c, next) => {
   if (!await validateAccount(c)) throw new HttpError(401, 'Login required')
@@ -63,6 +67,7 @@ app.route('/api', connections)
 app.route('/api', inbox)
 app.route('/api', api)
 app.route('/api', extras)
+app.route('/api', cekatPush)
 app.route('/api', n8nNodes)
 app.route('/api', backup)
 app.route('/api', maintenance)

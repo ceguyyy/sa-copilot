@@ -2,7 +2,8 @@
 import { Hono } from 'hono'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { builtinServers, invalidateMcpCache, mcpTools } from '../ai/mcp.ts'
+import { builtinServers, invalidateMcpCache, mcpTools, needsLogin, resetMcpServer } from '../ai/mcp.ts'
+import { forgetLogin, hasLogin, startLogin } from '../ai/mcpOAuth.ts'
 import { removeOwnerFiles } from '../attachments.ts'
 import { query, queryOne } from '../db.ts'
 import { deleteProjectFile, exportProjectFiles, listProjectFiles, projectFilePath, revealInExplorer, safeSegment } from '../exports.ts'
@@ -96,7 +97,15 @@ extras.get('/mcp-servers', async (c) => {
   ])
   // `tools` is empty for a disabled or unreachable server — the UI shows that as "no tools".
   const builtin = builtinServers().map(({ id, name, url, enabled, created_at }) => ({ id, name, url, enabled, created_at, builtin: true }))
-  return c.json([...servers, ...builtin].map((s) => ({ ...s, tools: tools.filter((t) => t.serverId === s.id).map((t) => t.name) })))
+  const rows = await Promise.all(
+    [...servers, ...builtin].map(async (s) => ({
+      ...s,
+      tools: tools.filter((t) => t.serverId === s.id).map((t) => t.name),
+      // 'none': no login used; 'connected': logged in; 'required': the server asked to log in.
+      auth: needsLogin(s.id) ? 'required' : (await hasLogin(s.id)) ? 'connected' : 'none',
+    })),
+  )
+  return c.json(rows)
 })
 
 extras.post('/mcp-servers', async (c) => {
@@ -108,14 +117,43 @@ extras.post('/mcp-servers', async (c) => {
 
 extras.patch('/mcp-servers/:id', async (c) => {
   const id = idParam(c)
-  const set = toSetClause(await parseJson(c, mcpServerPatch), 2)
+  const patch = await parseJson(c, mcpServerPatch)
+  const set = toSetClause(patch, 2)
   const row = await queryOne(`update mcp_servers set ${set.sql} where id = $1 returning *`, [id, ...set.values])
-  invalidateMcpCache()
+  // A login belongs to one server address; never send it to a new URL.
+  if (patch.url !== undefined) await forgetLogin(id)
+  resetMcpServer(id)
   return c.json(notFound(row, 'MCP server'))
 })
 
 extras.delete('/mcp-servers/:id', async (c) => {
-  await query('delete from mcp_servers where id = $1', [idParam(c)])
-  invalidateMcpCache()
+  const id = idParam(c)
+  await query('delete from mcp_servers where id = $1', [id])
+  await forgetLogin(id)
+  resetMcpServer(id)
+  return c.body(null, 204)
+})
+
+/** Starts the OAuth login of a server: returns the page to open in the browser, or connected when still valid. */
+extras.post('/mcp-servers/:id/login', async (c) => {
+  const id = idParam(c)
+  const server = notFound(await queryOne<{ id: string; url: string }>('select id, url from mcp_servers where id = $1', [id]), 'MCP server')
+  try {
+    const url = await startLogin(server.id, server.url)
+    if (!url) {
+      resetMcpServer(id)
+      return c.json({ status: 'connected' as const })
+    }
+    return c.json({ status: 'redirect' as const, authorizationUrl: url.toString() })
+  } catch (e) {
+    console.error('MCP login failed:', e)
+    throw new HttpError(502, `This server's login could not be started: ${e instanceof Error ? e.message : String(e)}`)
+  }
+})
+
+extras.post('/mcp-servers/:id/logout', async (c) => {
+  const id = idParam(c)
+  await forgetLogin(id)
+  resetMcpServer(id)
   return c.body(null, 204)
 })

@@ -222,6 +222,7 @@ export function PocEditor({ poc, projectId, clientName, section, onSectionChange
         )}
         {section === 'crm' && (
           <CrmSection
+            pocId={poc.id}
             crm={draft.crm}
             onChange={(crm) => setDraft((prev) => ({ ...prev, crm }))}
             onGenerate={confirmGenerateCrm}
@@ -231,7 +232,7 @@ export function PocEditor({ poc, projectId, clientName, section, onSectionChange
           />
         )}
         {section === 'agent' && (
-          <AgentSection draft={draft} setDraft={setDraft} revise={revise} clientName={clientName} pocName={pocName} onJsonError={setJsonError} />
+          <AgentSection pocId={poc.id} draft={draft} setDraft={setDraft} revise={revise} clientName={clientName} pocName={pocName} onJsonError={setJsonError} />
         )}
 
         <Field label="Version note">

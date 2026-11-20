@@ -76,7 +76,7 @@ Installed macOS apps and Windows copies predating the updater use the GitHub Rel
 
 ### Supabase cloud backup and sync between computers
 
-Use your **existing Supabase project**, with a dedicated private `sa_copilot_sync` schema. This feature does not alter the healthcare demo tables. It stores complete `.sacopilot` snapshots, including referenced upload files, and retains the latest ten revisions. Each compressed snapshot is limited to 100 MB.
+Use your **existing Supabase project**, with a dedicated private `sa_copilot_sync` schema. This feature does not alter the healthcare demo tables. It retains the latest ten revisions. Each revision stores the database tables plus a SHA-256 list of the referenced upload files; the files themselves are stored once in `sa_copilot_sync.blobs`, so an upload only sends new or changed files and a download reuses matching local files. Every file is verified before a restore, older full snapshots still restore, and a compressed snapshot is limited to 100 MB. The app creates the blob table on the first upload when it is missing.
 
 1. Run [db/supabase-sync.sql](db/supabase-sync.sql) in the Supabase SQL editor as the database owner.
 2. In Supabase **Connect**, copy the **Session pooler** PostgreSQL URL, with the database password. This is separate from `DEMO_SUPABASE_URL` and its REST key. The connection uses TLS with certificate verification and the official Supabase root CA bundled with the app.
@@ -95,6 +95,7 @@ Sync is **manual snapshot transfer**, not live collaboration or automatic mergin
 - **Sources:** PDF, DOCX, PPTX, XLSX, CSV/TXT/MD, images, or pasted notes. markitdown converts files to compact Markdown, which saves AI tokens.
 - **Knowledge:** project-level, plus a global knowledge base shared by every project. It includes the **Cekat n8n nodes** catalog (Cekat, Cekat Trigger, Cekat CRM), used when designing integrations.
 - **Chat:** "Ask your SA" streams from Claude, grounded in the project's sources and documents. It can also consult Cekat Docs and the Outline wiki.
+- **Cekat MCP:** Settings → AI tools (MCP) → **Add Cekat MCP** (`https://mcp.cekat.ai/mcp`) and log in with a Cekat account in the browser. The AI can then read that account's CRM, marketing, broadcast and automation data. Only read-only tools are used; tools that create, change or delete anything are left out. The login is stored in a private file on this computer (`data/mcp-oauth`), never in a backup or the cloud sync.
 - **Deliverables:** structured documents with dedicated editors (tables, sections, Gantt, User Journey). **Draft with AI** accepts an additional prompt every time. Built-in and custom formats can be edited in Settings, with AI help.
 - **POC:**
   - **POC Agent:** the AI agent setup and tools. API integrations go through Cekat n8n webhooks (`https://workflows.cekat.ai/webhook/…`); n8n then authenticates and calls the client's system. Each tool has an AI Input Schema.

@@ -127,7 +127,7 @@ const pocCrmColumn = z.object({
   type: z.enum(CRM_COLUMN_TYPES),
   options: z.array(z.object({ label: z.string().trim().max(80), condition: z.string().max(2_000) })).max(50),
 })
-const pocCrm = z.preprocess(
+export const pocCrm = z.preprocess(
   normalizeCrm,
   z.object({
     boards: z
