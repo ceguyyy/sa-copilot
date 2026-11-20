@@ -104,8 +104,19 @@ New Dropdown columns start with Label 1, Label 2, Label 3.
 - Activate is one click (`PUT /ai_agents/ai_tools/assign`); an active card shows one button "Active"/"Deactivate"
   (hover). The page renders the list twice, one copy hidden, and a new tool may need a reload to appear.
 - `GET /ai_tools` (the list) returns `schema: null` for some tools; the edit form shows what is saved.
+- **The tool's webhook is an Automation flow** when the POC integration has a client endpoint (target URL):
+  Catch Webhook (`webhook/catch_webhook`, authType none) → HTTP `send_request` to the client → Return Response
+  (`webhook/return_response`). Published, its URL is `https://automation.cekat.ai/api/v1/webhooks/<flowId>/sync`
+  (`/sync` waits for Return Response). The tool is created as POST; it posts the AI inputs at the top level of the
+  body plus `conversation {id, lastSessionId, assignedAiAgent, pluginData, businessId}`, so the flow reads
+  `{{trigger['output'].body.<input>}}`. Verified end to end: agent Preview → tool → flow → httpbin → agent reply
+  (run `bMEE9n676xfBJDnjOg974`). Flows with a login step stay drafts until the SA fills in the login body.
+- Without a target URL the POC's own webhook address (e.g. n8n) is used as it is.
 - Test leftovers (all active on "Agent build 3"): `sa_copilot_test_cek_jadwal`, `sa_copilot_test_cek_slot`,
-  `…_slot2` … `…_slot7` (slot2/slot3 have no AI inputs, slot7 has Max Tool Calls 0).
+  `…_slot2` … `…_slot7` (slot2/slot3 have no AI inputs, slot7 has Max Tool Calls 0), `sa_copilot_test_webhook_jadwal`
+  (webhook = flow `0w8LakYEWzlW73zMOtmkR`). Published flows "[SA Copilot test] webhook_cek_jadwal"
+  (`0w8LakYEWzlW73zMOtmkR`) and "[SA Copilot test] flow_jadwal_generated" (`pg2E4XBddZwg6nPRAXo7r`, built from
+  `webhookFlowArgs`).
 
 ## The builder (server/cekat)
 

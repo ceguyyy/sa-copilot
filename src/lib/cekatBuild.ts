@@ -14,7 +14,7 @@ export type AgentBuildPlan = {
   problems: string[]
   routing: { transfer: string | null; labels: { title: string }[]; moves: { title: string }[]; problems: string[] }
   kb: { textChars: number; qna: number; manual: string[] }
-  tools: { names: string[]; problems: string[] }
+  tools: { names: string[]; viaFlow: string[]; problems: string[] }
 }
 export type AgentBuildResult = {
   agentId: string
@@ -24,6 +24,7 @@ export type AgentBuildResult = {
   createdStatuses: string[]
   conditions: number
   apiTools: string[]
+  apiToolFlows: string[]
   problems: string[]
 }
 

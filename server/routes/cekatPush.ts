@@ -15,6 +15,7 @@ import { planKb, runKbBuild } from '../cekat/kbBuild.ts'
 import { CekatKbUi } from '../cekat/kbUi.ts'
 import { planApiTools, runApiToolsBuild } from '../cekat/apiToolsBuild.ts'
 import { CekatApiToolsUi } from '../cekat/apiToolsUi.ts'
+import { webhookFlowMaker, type FlowMaker } from '../cekat/webhookFlow.ts'
 import { streamResponse } from '../ai/stream.ts'
 import { boardFromAi, boardToAi, normalizeCrm, type CrmBoard } from '../../shared/pocCrm.ts'
 import { queryOne } from '../db.ts'
@@ -50,6 +51,19 @@ async function cekat<T>(run: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof McpToolError) throw new HttpError(502, `Cekat: ${e.message}`)
     throw e
+  }
+}
+
+/**
+ * Builds the Automation flows behind API tools that call a client endpoint. Only those need Cekat MCP; without it
+ * (null) such tools are skipped and the rest of the agent is still built.
+ */
+async function flowMaker(config: z.infer<typeof pocConfig>): Promise<FlowMaker | null> {
+  if (!planApiTools(config).tools.some((t) => t.flow)) return null
+  try {
+    return await webhookFlowMaker(await cekatCall())
+  } catch {
+    return null
   }
 }
 
@@ -109,21 +123,25 @@ cekatPush.post('/pocs/:id/cekat/agent/preview', async (c) => {
     ...planAgentBuild(name, config, false),
     routing: planRouting(config),
     kb: { textChars: kb.text.length, qna: kb.qna.length, manual: kb.manual },
-    tools: { names: tools.tools.map((t) => t.name), problems: tools.problems },
+    tools: { names: tools.tools.map((t) => t.spec.name), viaFlow: tools.tools.filter((t) => t.flow).map((t) => t.spec.name), problems: tools.problems },
   })
 })
 
-/** Creates the POC's AI agent and its API tools in a visible browser window, streaming each step. Needs no Cekat MCP. */
+/**
+ * Creates the POC's AI agent and its API tools in a visible browser window, streaming each step. Only the Automation
+ * flows behind tools that call a client endpoint need Cekat MCP.
+ */
 cekatPush.post('/pocs/:id/cekat/agent/build', async (c) => {
   notFound(await queryOne('select id from pocs where id = $1', [idParam(c)]), 'POC')
   const { config, name } = await parseJson(c, agentBuildInput)
   return streamResponse(async (out) => {
     const log = (text: string) => out.send({ type: 'status', text })
+    const flows = await flowMaker(config)
     const result = await withCekatBrowser(log, async (page) => {
       const agent = await runAgentBuild(new CekatAgentUi(page), name, config, log)
       const kb = await runKbBuild(new CekatKbUi(page), agent.agentId, config, log)
       const routing = await runRoutingBuild(new CekatRoutingUi(page), agent.agentId, config, log)
-      const tools = await runApiToolsBuild(new CekatApiToolsUi(page), agent.agentId, config, log)
+      const tools = await runApiToolsBuild(new CekatApiToolsUi(page), agent.agentId, config, log, flows)
       return {
         ...agent,
         kbQna: kb.qna,
@@ -131,6 +149,7 @@ cekatPush.post('/pocs/:id/cekat/agent/build', async (c) => {
         createdStatuses: routing.createdStatuses,
         conditions: routing.conditions,
         apiTools: tools.activated,
+        apiToolFlows: tools.flows,
         problems: [...kb.problems, ...routing.problems, ...tools.problems, ...agent.problems],
       }
     })

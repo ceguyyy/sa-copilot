@@ -71,6 +71,7 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
             {plan.data.routing.labels.length > 0 && <li>{plan.data.routing.labels.length} label condition(s): {plan.data.routing.labels.map((l) => l.title).join(', ')} — missing labels are created in Settings › Labels</li>}
             {plan.data.routing.moves.length > 0 && <li>{plan.data.routing.moves.length} pipeline condition(s): {plan.data.routing.moves.map((m) => m.title).join(', ')} — missing statuses are created in Settings › Pipeline Statuses</li>}
             {plan.data.tools.names.length > 0 && <li>{plan.data.tools.names.length} API tool(s) in Devtools › API Tools, activated on the agent: {plan.data.tools.names.join(', ')}</li>}
+            {plan.data.tools.viaFlow.length > 0 && <li>Cekat Automation webhook flow(s) to the client API for: {plan.data.tools.viaFlow.join(', ')} — needs Cekat MCP</li>}
             <li>AI configuration: history {String(plan.data.settings.historyLimit)}, context {String(plan.data.settings.contextLimit)}, creativity {String(plan.data.settings.creativity)}, message await {String(plan.data.settings.messageAwait)}s</li>
           </ul>
           {plan.data.notes.map((n) => (
@@ -119,6 +120,7 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
             </a>
           </p>
           {result.apiTools.length > 0 && <p className="text-forest">API tools active on the agent: {result.apiTools.join(', ')}.</p>}
+          {result.apiToolFlows.length > 0 && <p className="text-forest">Webhook flows built in Cekat Automation: {result.apiToolFlows.join(', ')}.</p>}
           {result.problems.length > 0 && (
             <ul className="ml-5 list-disc text-muted">
               {result.problems.map((p) => (
