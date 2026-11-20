@@ -1,6 +1,6 @@
 // The POC's routing on a Cekat AI agent: missing labels are created in Settings › Labels, then one condition per
-// label, one agent transfer condition, and a pipeline condition per status move. Pipeline statuses cannot be
-// created from here, so moves to a status Cekat does not have yet are skipped and reported.
+// label, one agent transfer condition, and a pipeline condition per status move. Missing pipeline statuses are
+// created in Settings › Pipeline Statuses first, in the POC's order.
 import type { RoutingUi } from './routingUi.ts'
 
 type Log = (text: string) => void
@@ -62,12 +62,13 @@ export function planRouting(config: RoutingConfigLike): RoutingPlan {
 
 const norm = (s: string) => s.trim().toLowerCase()
 
-export interface RoutingResult { createdLabels: string[]; conditions: number; problems: string[] }
+export interface RoutingResult { createdLabels: string[]; createdStatuses: string[]; conditions: number; problems: string[] }
 
 export async function runRoutingBuild(ui: RoutingUi, agentId: string, config: RoutingConfigLike, log: Log): Promise<RoutingResult> {
   const plan = planRouting(config)
   const problems = [...plan.problems]
   const createdLabels: string[] = []
+  const createdStatuses: string[] = []
   const titles: string[] = []
 
   if (plan.labels.length) {
@@ -92,12 +93,14 @@ export async function runRoutingBuild(ui: RoutingUi, agentId: string, config: Ro
   }
   if (plan.moves.length) {
     const statuses = new Set((await ui.pipelineNames(agentId)).map(norm))
+    for (const name of plan.moves.flatMap((m) => [m.current, m.target])) {
+      if (!name || statuses.has(norm(name))) continue
+      log(`Creating pipeline status "${name}"…`)
+      await ui.createPipelineStatus(name)
+      statuses.add(norm(name))
+      createdStatuses.push(name)
+    }
     for (const m of plan.moves) {
-      const missing = [m.current, m.target].filter((s): s is string => !!s && !statuses.has(norm(s)))
-      if (missing.length) {
-        problems.push(`Pipeline condition "${m.title}" skipped: create the status ${missing.map((s) => `"${s}"`).join(' and ')} in Cekat (Settings › Pipeline Management) first.`)
-        continue
-      }
       log(`Adding pipeline condition "${m.title}"…`)
       await ui.addPipelineCondition(agentId, m.title, m.current, m.target, m.description)
       titles.push(m.title)
@@ -109,5 +112,5 @@ export async function runRoutingBuild(ui: RoutingUi, agentId: string, config: Ro
     const page = (await ui.routingText(agentId)).toLowerCase()
     for (const t of titles) if (!page.includes(t.toLowerCase())) problems.push(`Condition "${t}" was not found on the agent's AI Actions & Routing page after saving; check it in Cekat.`)
   }
-  return { createdLabels, conditions: titles.length, problems }
+  return { createdLabels, createdStatuses, conditions: titles.length, problems }
 }

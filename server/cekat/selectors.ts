@@ -29,6 +29,18 @@ export const AGENT = {
   dropdownAfter: (label: string) => `xpath=(//*[normalize-space()='${label}'])[last()]/following::button[1]`,
 }
 
+/** Knowledge Base (?tab=knowledge-base). "Q&A" also names a global shortcut to Settings › Quick Reply, so the
+ * sub-tabs are found next to their siblings. */
+export const KB = {
+  page: (id: string) => `${CEKAT_URL}/ai-agents-v2/${id}?tab=knowledge-base`,
+  ready: 'Characters',
+  textEditor: '.tiptap.ProseMirror',
+  qnaTab: `xpath=//button[normalize-space()='Website']/following-sibling::button[normalize-space()='Q&A'][1]`,
+  addQna: 'button:text-is("Add New Q&A")',
+  question: 'textarea[placeholder="What is the package price?"]',
+  answer: 'textarea[placeholder="Harga paketnya 100rb..."]',
+}
+
 /** AI Actions & Routing (?tab=actions-routing) and Settings › Labels. */
 export const ROUTING = {
   page: (id: string) => `${CEKAT_URL}/ai-agents-v2/${id}?tab=actions-routing`,
@@ -52,6 +64,11 @@ export const ROUTING = {
   addLabel: { role: 'button' as const, name: 'Add Label' },
   labelName: '[role="dialog"] #name',
   labelCreate: '[role="dialog"] button:has-text("Create")',
+  /** Settings › Pipeline Statuses: "Add Status" opens an inline form (name, colour) with Cancel / Add. */
+  pipelinePage: `${CEKAT_URL}/settings/pipeline-settings`,
+  addStatus: { role: 'button' as const, name: 'Add Status' },
+  statusName: 'input[type="text"] >> nth=0',
+  statusAdd: { role: 'button' as const, name: 'Add', exact: true },
 }
 
 /** Labels of the behavior fields, in page order. */

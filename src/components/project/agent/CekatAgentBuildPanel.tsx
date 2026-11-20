@@ -40,7 +40,7 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
       <div>
         <h4 className="font-display text-base font-semibold">Build AI Agent in Cekat</h4>
         <p className="text-xs text-muted">
-          Creates a new AI agent in Cekat with this POC's behavior, custom instructions, AI configuration, labels, agent transfer and pipeline conditions. A browser window opens; log in there the first time.
+          Creates a new AI agent in Cekat with this POC's behavior, custom instructions, AI configuration, knowledge base (text and Q&A), labels, agent transfer and pipeline conditions. A browser window opens; log in there the first time.
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-2">
@@ -65,14 +65,21 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
             {plan.data.instructions.map((title) => (
               <li key={title}>Additional instruction "{title}"</li>
             ))}
+            {plan.data.kb.textChars > 0 && <li>Knowledge base text — {plan.data.kb.textChars.toLocaleString()} characters</li>}
+            {plan.data.kb.qna > 0 && <li>{plan.data.kb.qna} knowledge base Q&A pair(s)</li>}
             {plan.data.routing.transfer && <li>Agent transfer condition</li>}
             {plan.data.routing.labels.length > 0 && <li>{plan.data.routing.labels.length} label condition(s): {plan.data.routing.labels.map((l) => l.title).join(', ')} — missing labels are created in Settings › Labels</li>}
-            {plan.data.routing.moves.length > 0 && <li>{plan.data.routing.moves.length} pipeline condition(s): {plan.data.routing.moves.map((m) => m.title).join(', ')} — only between statuses that exist in Cekat</li>}
+            {plan.data.routing.moves.length > 0 && <li>{plan.data.routing.moves.length} pipeline condition(s): {plan.data.routing.moves.map((m) => m.title).join(', ')} — missing statuses are created in Settings › Pipeline Statuses</li>}
             <li>AI configuration: history {String(plan.data.settings.historyLimit)}, context {String(plan.data.settings.contextLimit)}, creativity {String(plan.data.settings.creativity)}, message await {String(plan.data.settings.messageAwait)}s</li>
           </ul>
           {plan.data.notes.map((n) => (
             <p key={n} className="text-xs text-muted">
               {n}
+            </p>
+          ))}
+          {plan.data.kb.manual.map((m) => (
+            <p key={m} className="text-xs text-muted">
+              {m}
             </p>
           ))}
           {plan.data.routing.problems.map((p) => (
@@ -105,7 +112,7 @@ export function CekatAgentBuildPanel({ pocId, pocName, draft }: Props) {
       {result && (
         <div className="space-y-1">
           <p className="text-forest">
-            AI agent created in Cekat with {result.conditions} routing condition(s){result.createdLabels.length > 0 && `, ${result.createdLabels.length} new label(s)`}.{' '}
+            AI agent created in Cekat with {result.conditions} routing condition(s){result.createdLabels.length > 0 && `, ${result.createdLabels.length} new label(s)`}{result.createdStatuses.length > 0 && `, ${result.createdStatuses.length} new pipeline status(es)`}.{' '}
             <a className="inline-flex items-center gap-1 underline" href={result.url} target="_blank" rel="noopener noreferrer">
               Open in Cekat <ExternalLink className="size-3" />
             </a>

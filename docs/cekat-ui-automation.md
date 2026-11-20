@@ -122,11 +122,19 @@ No `data-testid` on these pages: use ids, roles and visible text.
    - Pipeline: Current (optional; empty = from any status) and Target (required) pickers with
      `input[placeholder="Search pipelines"]`, same option buttons. Statuses must already exist.
    Settings › Labels (`/settings/labels`, works as Member): "Add Label" › dialog `#name` (max 100), a colour
-   with a default, "Create". Pipeline statuses: docs say Settings › Pipeline Management › Add Status, but
-   `/settings/pipeline` and `/settings/pipeline-management` are 404 and no menu link was found.
+   with a default, "Create". Pipeline statuses: `/settings/pipeline-settings` ("Pipeline Statuses") › "Add Status"
+   opens an inline form: the first text input is the name, a colour (default #000000), "Add". Verified live.
    Builder: `routingUi.ts` + `routingBuild.ts`; verified live on "Agent build 3": a transfer condition, two label
-   conditions (one label created) and New Leads → Qualified, a move to a missing status skipped and reported.
-5. **Knowledge Base**: sub-tabs Text, Website, File, Q&A, Product; a "Default" text section and a character count.
+   conditions (one label created) and New Leads → Qualified. Missing statuses are now created first.
+5. **Knowledge Base**: sub-tabs Text, Website, File, Q&A, Product. "Q&A" also names a global shortcut to
+   Settings › Quick Reply: click the sub-tab as `//button[normalize-space()='Website']/following-sibling::button[normalize-space()='Q&A'][1]`.
+   - Text: one "Default" text, a Tiptap editor `.tiptap.ProseMirror`; `fill()` makes each line a paragraph; Save.
+   - Q&A: "Add New Q&A" adds a row with textareas (placeholders "What is the package price?" / "Harga paketnya 100rb...");
+     one Save posts each pair as a document (`type: "qna"`). The dashboard renders the Q&A list and its count
+     twice; the documents behind it (`GET server.cekat.ai/documents?ai_agent_id=…`) are not duplicated.
+   - Website: Batch / Single link and a "Web Link Collector" that crawls up to 300 links and trains on them —
+     not automated; the builder lists the POC's websites and files for the SA.
+   Builder: `kbUi.ts` + `kbBuild.ts`; verified live on "Agent build 3" (two text sections, two Q&A pairs).
 6. **AI Configuration**: AI Model (Auto), Stop AI after transfer, Silent transfer, Ignore Team Handoff,
    Timezone, AI History Limit, AI Read File Limit, AI Context Limit, AI Creativity Level, Message Await,
    AI Message Limit, Session Only Memory — the same fields as the POC Additional Settings.
@@ -154,6 +162,7 @@ No `data-testid` on these pages: use ids, roles and visible text.
   "[SA Copilot test] Build uji 3" (`75dae2dc-391c-4749-8cb9-ee055240b1fd`, the full verified run).
 - AI agents "[SA Copilot test] Agent build" (stopped after creating), "… Agent build 2" (stopped at the
   settings) and "… Agent build 3" (`33c950e9-2ca5-40cb-bbdb-a0ee2c1181d6`, the full verified run).
+- Pipeline statuses "[SA Copilot test] Belum ada" and "[SA Copilot test] Status baru" (Settings › Pipeline Statuses).
 - Labels "[SA Copilot test] Booking" and "[SA Copilot test] Komplain" (Settings › Labels); routing conditions on
   "Agent build 3" and a label condition on "Agent uji".
 - AI agent "[SA Copilot test] Agent uji" (`26d741de-8ee7-4e06-b5dd-54ef40786b55`) in Cekat AI Demo, with a

@@ -22,6 +22,7 @@ function fakeUi(labels: string[], statuses: string[], shown?: string) {
   const ui: RoutingUi = {
     labelNames: async () => labels,
     createLabel: async (name) => void calls.push(`label ${name}`),
+    createPipelineStatus: async (name) => void calls.push(`status ${name}`),
     pipelineNames: async () => statuses,
     addTransferCondition: async (_id, title) => void calls.push(`transfer ${title}`),
     addLabelCondition: async (_id, title, label) => void calls.push(`label-condition ${title}=${label}`),
@@ -70,11 +71,11 @@ describe('runRoutingBuild', () => {
     expect(result.problems.filter((p) => !p.includes('longer than'))).toEqual([])
   })
 
-  it('skips pipeline moves to statuses Cekat does not have and says which to create', async () => {
-    const { ui, calls } = fakeUi(['Booking', 'Komplain'], ['New Lead', 'Qualified'])
+  it('creates the pipeline statuses Cekat does not have before adding the moves', async () => {
+    const { ui, calls } = fakeUi(['Booking', 'Komplain'], ['new lead'])
     const result = await runRoutingBuild(ui, 'agent-1', config, () => {})
-    expect(calls.filter((c) => c.startsWith('pipeline'))).toEqual(['pipeline New Lead>Qualified'])
-    expect(result.problems).toContain('Pipeline condition "Qualified → Booked" skipped: create the status "Booked" in Cekat (Settings › Pipeline Management) first.')
+    expect(calls.filter((c) => /^(status|pipeline)/.test(c))).toEqual(['status Qualified', 'status Booked', 'pipeline New Lead>Qualified', 'pipeline Qualified>Booked'])
+    expect(result.createdStatuses).toEqual(['Qualified', 'Booked'])
   })
 
   it('reports conditions the page does not show after saving', async () => {
@@ -85,7 +86,7 @@ describe('runRoutingBuild', () => {
 
   it('does nothing when the POC has no routing', async () => {
     const { ui, calls } = fakeUi([], [])
-    expect(await runRoutingBuild(ui, 'agent-1', {}, () => {})).toEqual({ createdLabels: [], conditions: 0, problems: [] })
+    expect(await runRoutingBuild(ui, 'agent-1', {}, () => {})).toEqual({ createdLabels: [], createdStatuses: [], conditions: 0, problems: [] })
     expect(calls).toEqual([])
   })
 })

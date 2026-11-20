@@ -11,6 +11,8 @@ import { planAgentBuild, runAgentBuild } from '../cekat/agentBuild.ts'
 import { CekatAgentUi } from '../cekat/agentUi.ts'
 import { planRouting, runRoutingBuild } from '../cekat/routingBuild.ts'
 import { CekatRoutingUi } from '../cekat/routingUi.ts'
+import { planKb, runKbBuild } from '../cekat/kbBuild.ts'
+import { CekatKbUi } from '../cekat/kbUi.ts'
 import { streamResponse } from '../ai/stream.ts'
 import { boardFromAi, boardToAi, normalizeCrm, type CrmBoard } from '../../shared/pocCrm.ts'
 import { queryOne } from '../db.ts'
@@ -99,7 +101,8 @@ cekatPush.post('/pocs/:id/cekat/crm/build', async (c) => {
 cekatPush.post('/pocs/:id/cekat/agent/preview', async (c) => {
   notFound(await queryOne('select id from pocs where id = $1', [idParam(c)]), 'POC')
   const { config, name } = await parseJson(c, agentBuildInput)
-  return c.json({ ...planAgentBuild(name, config, false), routing: planRouting(config) })
+  const kb = planKb(config)
+  return c.json({ ...planAgentBuild(name, config, false), routing: planRouting(config), kb: { textChars: kb.text.length, qna: kb.qna.length, manual: kb.manual } })
 })
 
 /** Creates the POC's AI agent in a visible browser window, streaming each step. Needs no Cekat MCP. */
@@ -110,8 +113,16 @@ cekatPush.post('/pocs/:id/cekat/agent/build', async (c) => {
     const log = (text: string) => out.send({ type: 'status', text })
     const result = await withCekatBrowser(log, async (page) => {
       const agent = await runAgentBuild(new CekatAgentUi(page), name, config, log)
+      const kb = await runKbBuild(new CekatKbUi(page), agent.agentId, config, log)
       const routing = await runRoutingBuild(new CekatRoutingUi(page), agent.agentId, config, log)
-      return { ...agent, createdLabels: routing.createdLabels, conditions: routing.conditions, problems: [...routing.problems, ...agent.problems] }
+      return {
+        ...agent,
+        kbQna: kb.qna,
+        createdLabels: routing.createdLabels,
+        createdStatuses: routing.createdStatuses,
+        conditions: routing.conditions,
+        problems: [...kb.problems, ...routing.problems, ...agent.problems],
+      }
     })
     out.send({ type: 'result', data: result })
     out.send({ type: 'done' })

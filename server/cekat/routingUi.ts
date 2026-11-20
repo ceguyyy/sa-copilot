@@ -8,6 +8,7 @@ export interface RoutingUi {
   labelNames(): Promise<string[]>
   createLabel(name: string): Promise<void>
   pipelineNames(agentId: string): Promise<string[]>
+  createPipelineStatus(name: string): Promise<void>
   addTransferCondition(agentId: string, title: string, description: string): Promise<void>
   addLabelCondition(agentId: string, title: string, label: string, description: string): Promise<void>
   addPipelineCondition(agentId: string, title: string, current: string | null, target: string, description: string): Promise<void>
@@ -90,6 +91,15 @@ export class CekatRoutingUi implements RoutingUi {
     await page.keyboard.press('Escape')
     await page.getByRole(ROUTING.cancel.role, { name: ROUTING.cancel.name }).click()
     return names
+  }
+
+  async createPipelineStatus(name: string): Promise<void> {
+    const { page } = this
+    await page.goto(ROUTING.pipelinePage, { waitUntil: 'domcontentloaded' })
+    await page.getByRole(ROUTING.addStatus.role, { name: ROUTING.addStatus.name }).click()
+    await page.locator(ROUTING.statusName).fill(name)
+    await page.getByRole(ROUTING.statusAdd.role, { name: ROUTING.statusAdd.name, exact: ROUTING.statusAdd.exact }).click()
+    await page.getByText(name, { exact: true }).first().waitFor()
   }
 
   async addTransferCondition(agentId: string, title: string, description: string): Promise<void> {

@@ -96,7 +96,7 @@ export function planAgentBuild(name: string, config: AgentConfigLike, exists: bo
   if (!name.trim()) problems.push('The AI agent needs a name.')
   else if (exists) problems.push(`An AI agent named "${name.trim()}" already exists in this Cekat business. Use another name or remove the old one first.`)
   if (!fields.some((f) => f.title !== AGENT_FIELDS.welcome)) problems.push('The AI Agent Behavior is empty: fill Communication Style, Conversation Flow or Rules & Restrictions first.')
-  notes.push('Knowledge base and API integrations are not created yet; set them up in Cekat.')
+  notes.push('API integrations are not created yet; set them up in Cekat.')
   return { agentName: name.trim(), fields: fields.map((f) => ({ title: f.title, chars: f.text.length })), instructions: instructions.map((i) => i.title), settings, notes, problems }
 }
 
