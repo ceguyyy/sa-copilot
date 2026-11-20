@@ -1,6 +1,6 @@
 import { ReviewAlerts } from '../components/ReviewAlerts'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronsDownUp, ChevronsUpDown, ExternalLink, FileClock, FileDown, FolderOpen, GitBranch, HelpCircle, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
+import { Archive, ChevronsDownUp, ChevronsUpDown, ExternalLink, Loader2, FileClock, FileDown, FolderOpen, GitBranch, HelpCircle, LayoutTemplate, ListChecks, MonitorPlay, NotebookText, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../shared/schemas.ts'
@@ -22,7 +22,10 @@ import { DiagramsPanel } from '../components/project/DiagramsPanel'
 import { PocPanel } from '../components/project/PocPanel'
 import { ProjectFilesPanel } from '../components/ProjectFilesPanel'
 import { SourcesPanel } from '../components/SourcesPanel'
-import { Button, ErrorNote, PageHeader, Select, Spinner } from '../components/ui'
+import { ErrorNote, PageHeader, Spinner } from '../components/ui'
+import { Button } from '@/components/shadcn/button'
+import { Card } from '@/components/shadcn/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/shadcn/select'
 import { auditApi, demoApi, documentsApi, filesApi, pocsApi, projectsApi, questionsApi, sourcesApi } from '../lib/api'
 import { PROJECT_STATUSES, type DocumentRow, type ProjectStatus } from '../lib/types'
 import { useGenerate } from '../lib/useGenerate'
@@ -181,33 +184,44 @@ export function ProjectPage() {
           title={p.name}
           actions={
             <>
-              <LanguageSelect className="w-44" value={p.language} onChange={(language) => update.mutate({ language })} />
-              <Select aria-label="Project status" value={p.status} onChange={(e) => update.mutate({ status: e.target.value as ProjectStatus })} className="w-36">
-                {PROJECT_STATUSES.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
+              {/* The app's Select is w-full (clsx, no merge), so the width comes from this wrapper. */}
+              <div className="w-48">
+                <LanguageSelect className="h-8 py-1" value={p.language} onChange={(language) => update.mutate({ language })} />
+              </div>
+              <Select value={p.status} onValueChange={(status) => update.mutate({ status: status as ProjectStatus })}>
+                <SelectTrigger aria-label="Project status" size="sm" className="w-36 capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROJECT_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s} className="capitalize">
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-              <a
-                href={projectsApi.markdownUrl(projectId)}
-                download
-                title="Every deliverable, diagram, client question and POC of this project in one Markdown file"
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-paper"
-              >
-                <FileDown className="size-4" /> Download MD
-              </a>
+              <Button asChild variant="outline" size="sm">
+                <a href={projectsApi.markdownUrl(projectId)} download title="Every deliverable, diagram, client question and POC of this project in one Markdown file">
+                  <FileDown /> Download MD
+                </a>
+              </Button>
               <Button
                 variant="outline"
-                icon={<NotebookText className="size-4" />}
-                loading={sendToNotion.isPending}
+                size="sm"
+                disabled={sendToNotion.isPending}
                 title={p.notion_page_id ? 'Replace the Notion page with the latest version of this project' : 'Create a Notion page with every deliverable, diagram, question and POC'}
                 onClick={() => sendToNotion.mutate()}
               >
+                {sendToNotion.isPending ? <Loader2 className="animate-spin" /> : <NotebookText />}
                 {p.notion_page_id ? 'Update Notion' : 'Send to Notion'}
               </Button>
-              <Button variant="outline" loading={archiveProject.isPending} onClick={() => archiveProject.mutate()}>{p.archived_at ? 'Unarchive' : 'Archive'}</Button>
+              <Button variant="outline" size="sm" disabled={archiveProject.isPending} onClick={() => archiveProject.mutate()}>
+                {archiveProject.isPending ? <Loader2 className="animate-spin" /> : <Archive />}
+                {p.archived_at ? 'Unarchive' : 'Archive'}
+              </Button>
               <ErrorNote error={archiveProject.error} />
-              <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => confirm(`Move project "${p.name}" and all its contents to Trash? You can restore it within 30 days.`) && removeProject.mutate()}>
-                Move to Trash
+              <Button variant="destructive" size="sm" onClick={() => confirm(`Move project "${p.name}" and all its contents to Trash? You can restore it within 30 days.`) && removeProject.mutate()}>
+                <Trash2 /> Move to Trash
               </Button>
             </>
           }
@@ -232,13 +246,17 @@ export function ProjectPage() {
           onSelect={selectTab}
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-panel px-4 py-3">
+        <Card className="flex-row flex-wrap items-center justify-between gap-3 px-4 py-3">
           <EnhancementPanel key={projectId} projectId={projectId} initialOpen={['enhance', 'review-revisions'].includes(params.get('action') ?? '')} initialHistory={params.get('action') === 'review-revisions'} />
           <div className="flex flex-wrap gap-1">
-            <Button variant="ghost" icon={<ChevronsDownUp className="size-4" />} onClick={() => expandAll(false)}>Collapse all</Button>
-            <Button variant="ghost" icon={<ChevronsUpDown className="size-4" />} onClick={() => expandAll(true)}>Expand all</Button>
+            <Button variant="ghost" size="sm" onClick={() => expandAll(false)}>
+              <ChevronsDownUp /> Collapse all
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => expandAll(true)}>
+              <ChevronsUpDown /> Expand all
+            </Button>
           </div>
-        </div>
+        </Card>
 
         {gen.running && (
           <p className="truncate font-mono text-xs text-ember" aria-live="polite">

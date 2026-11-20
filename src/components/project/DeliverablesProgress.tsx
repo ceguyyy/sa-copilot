@@ -2,6 +2,8 @@ import { Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { DOC_LABELS, PIPELINE, type DocType } from '../../../shared/schemas.ts'
 import type { DocumentRow } from '../../lib/types'
+import { Badge } from '@/components/shadcn/badge'
+import { Progress } from '@/components/shadcn/progress'
 
 type Props = {
   projectId: string
@@ -17,16 +19,16 @@ export function DeliverablesProgress({ projectId, docs }: Props) {
   const next = PIPELINE.find((t) => !byType.has(t))
 
   return (
-    <section aria-label="Deliverables progress" className="space-y-4 rounded-xl border border-line bg-panel p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold">Deliverables progress</h3>
-        <p className="text-sm text-muted">
-          <span className="font-semibold text-ink">{done}</span> of {PIPELINE.length} drafted{next ? <> · next: <span className="font-medium text-ink">{DOC_LABELS[next]}</span></> : ' · all done'}
+    <section aria-label="Deliverables progress" className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-display text-2xl font-semibold text-foreground">{done}</span> of {PIPELINE.length} drafted
         </p>
+        <Badge variant="outline" className={next ? 'border-transparent bg-ember-soft text-ember' : 'border-transparent bg-accent text-ok'}>
+          {next ? `Next: ${DOC_LABELS[next]}` : 'All done'}
+        </Badge>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-paper" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={`${percent}% of deliverables drafted`}>
-        <div className="h-full w-full origin-left rounded-full bg-forest transition-transform duration-500 motion-reduce:transition-none" style={{ transform: `scaleX(${percent / 100})` }} />
-      </div>
+      <Progress value={percent} aria-label={`${percent}% of deliverables drafted`} className="h-2 bg-secondary" />
       <ol className="flex gap-0 overflow-x-auto pb-1">
         {PIPELINE.map((type, i) => {
           const doc = byType.get(type)

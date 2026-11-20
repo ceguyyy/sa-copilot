@@ -1,5 +1,9 @@
 {
   "files": [],
+  "compilerOptions": {
+    // Read by the shadcn CLI (components.json "@/..." aliases); tsconfig.app.json has the same path for the app.
+    "paths": { "@/*": ["./src/*"] }
+  },
   "references": [
     {
       "path": "./tsconfig.app.json"

@@ -1,6 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 @import 'tailwindcss';
+@import 'tw-animate-css';
 @plugin '@tailwindcss/typography';
+
+/* shadcn/ui's dark: variants follow the theme src/lib/theme.ts applies (data-theme on <html>). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @theme {
   --font-display: 'Fraunces', Georgia, serif;
@@ -19,6 +23,74 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
+}
+
+/*
+ * shadcn/ui theme (src/components/shadcn). Every shadcn variable is derived from the 12 app tokens, so whatever the
+ * theme generator applies (presets or AI themes, light or dark) also restyles the shadcn components. "muted" stays
+ * the app's secondary text token; shadcn's text-muted-foreground maps onto it.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  /* With --radius 0.5rem these equal Tailwind's defaults, so rounded-* elsewhere in the app is unchanged. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --primary: var(--forest);
+  --primary-foreground: var(--paper);
+  --secondary: color-mix(in oklab, var(--line) 45%, var(--panel));
+  --secondary-foreground: var(--ink);
+  --muted-foreground: var(--muted);
+  --accent: var(--forest-soft);
+  --accent-foreground: var(--ink);
+  --destructive: var(--bad);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--forest);
+  --chart-1: var(--forest);
+  --chart-2: var(--ember);
+  --chart-3: var(--ok);
+  --chart-4: var(--warn);
+  --chart-5: var(--muted);
+}
+
+/* shadcn's base layer colors every border; only its components (they carry data-slot) get it here. */
+@layer base {
+  [data-slot] {
+    border-color: var(--border);
+  }
 }
 
 :root {
