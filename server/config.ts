@@ -25,6 +25,9 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   // Loopback only: desktop credentials and integrations stay on this device.
   host: '127.0.0.1',
+  // An https page that sends an MCP OAuth login back to this machine (Cekat's consent page refuses http://localhost
+  // redirects). Empty means the browser returns straight to /api/mcp-oauth/callback.
+  mcpOAuthRelayUrl: process.env.MCP_OAUTH_RELAY_URL?.trim() ?? 'https://ceguyyy.github.io/sa-copilot/oauth-callback.html',
   databaseUrl: required('DATABASE_URL'),
   uploadDir: fromEnv('UPLOAD_DIR', 'data/uploads'),
   // Where Backup & Restore writes the automatic backup taken before a restore.

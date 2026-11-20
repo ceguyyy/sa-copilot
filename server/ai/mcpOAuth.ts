@@ -1,7 +1,8 @@
 // OAuth login for remote MCP servers that need an account (e.g. Cekat MCP, https://mcp.cekat.ai/mcp).
 // The SDK does discovery, dynamic client registration, PKCE and token refresh; this file stores what it needs.
 // Credentials live in a 0600 file per server outside the database, so they are never part of a backup or the
-// cloud sync. The browser comes back to /api/mcp-oauth/callback on this machine with a single-use state.
+// cloud sync. The browser comes back to /api/mcp-oauth/callback on this machine with a single-use state, through
+// the https relay page (oauth-relay/oauth-callback.html) when config.mcpOAuthRelayUrl is set.
 import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -21,7 +22,13 @@ const pending = new Map<string, { serverId: string; serverUrl: string; expires: 
 
 const authDir = () => path.join(path.dirname(config.uploadDir), 'mcp-oauth')
 const authFile = (serverId: string) => path.join(authDir(), `${serverId.replace(/[^A-Za-z0-9_-]/g, '_')}.json`)
-export const redirectUrl = () => `http://${config.host}:${config.port}/api/mcp-oauth/callback`
+/** Where the browser lands on this machine. */
+export const localCallbackUrl = () => `http://${config.host}:${config.port}/api/mcp-oauth/callback`
+/**
+ * The redirect the OAuth server sees: the https relay page when one is set (it forwards to localCallbackUrl on the
+ * port at the start of the state), otherwise the local callback itself.
+ */
+export const redirectUrl = () => config.mcpOAuthRelayUrl || localCallbackUrl()
 
 async function load(serverId: string): Promise<StoredAuth> {
   try {
@@ -82,13 +89,17 @@ export class StoredOAuthProvider implements OAuthClientProvider {
     }
   }
 
+  /** "<port>.<random>": the relay page reads the port to send the browser back to this server. */
   state(): string {
-    this.loginState ??= randomBytes(24).toString('base64url')
+    this.loginState ??= `${config.port}.${randomBytes(24).toString('base64url')}`
     return this.loginState
   }
 
+  /** A registration made for another redirect (e.g. before the relay page) is ignored, so the SDK registers again. */
   async clientInformation() {
-    return (await load(this.serverId)).clientInformation
+    const info = (await load(this.serverId)).clientInformation
+    const uris = info && 'redirect_uris' in info ? info.redirect_uris : undefined
+    return uris && !uris.includes(redirectUrl()) ? undefined : info
   }
 
   async saveClientInformation(clientInformation: OAuthClientInformationMixed) {

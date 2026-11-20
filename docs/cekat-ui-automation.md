@@ -3,6 +3,23 @@
 Findings from exploring chat.cekat.ai (business "Cekat AI Demo", role Member) on 2026-11-20, for the
 "Build in Cekat" feature. The dashboard has stable `data-testid` attributes; prefer them over text.
 
+## Logging in to Cekat MCP from SA Copilot
+
+- The OAuth server is Supabase Auth (`udqxuclnwliseiyquarc.supabase.co/auth/v1`, project "Cekat Analytics") with open
+  dynamic client registration. Authorizing goes to Cekat's consent page `chat.cekat.ai/oauth/consent`.
+- The consent page refuses ("This OAuth app is not supported") any `http://localhost` / `127.0.0.1` redirect except
+  the MCP Inspector (port 6274, `/oauth/callback`, behind a flag). `https://` redirects on the default port are
+  accepted unless a "strict provider" mode is on (then only claude.ai, claude.com, chatgpt.com, chat.openai.com).
+  Strict mode was off on 2026-11-20. The Cekat docs list Claude Code and Codex, which use localhost redirects.
+- So SA Copilot registers the https relay page `https://ceguyyy.github.io/sa-copilot/oauth-callback.html`
+  (`oauth-relay/oauth-callback.html`, published on the `gh-pages` branch). The state starts with the app's port
+  (`3000.<random>`); the page forwards only `code`, `state`, `error`, `error_description` and `iss` to
+  `http://127.0.0.1:<port>/api/mcp-oauth/callback` and stores nothing. The code is useless without the PKCE verifier
+  on this machine, and the state is single-use. A saved registration for another redirect is ignored, so the app
+  registers again. `MCP_OAUTH_RELAY_URL=` (empty) goes back to the local redirect.
+- The consent text describes read access to aggregated analytics; whether write tools (CRM, Automation) work with
+  this login is still to be checked.
+
 ## What goes through Cekat MCP vs the browser
 
 | Part of the POC | How | Notes |

@@ -123,3 +123,30 @@ describe('stored credentials', () => {
     expect(new StoredOAuthProvider('s', URL_).clientMetadata).toMatchObject({ redirect_uris: ['http://127.0.0.1:3000/api/mcp-oauth/callback'], token_endpoint_auth_method: 'none' })
   })
 })
+
+describe('https relay page', () => {
+  const RELAY = 'https://relay.example/oauth-callback.html'
+  const settings = config as { mcpOAuthRelayUrl?: string }
+  beforeEach(() => {
+    settings.mcpOAuthRelayUrl = RELAY
+    return () => {
+      settings.mcpOAuthRelayUrl = undefined
+    }
+  })
+
+  it('registers the relay page as the redirect and puts this port at the start of the state', async () => {
+    const provider = new StoredOAuthProvider('relay-1', URL_)
+    expect(provider.clientMetadata.redirect_uris).toEqual([RELAY])
+    expect(provider.state()).toMatch(/^3000\.[A-Za-z0-9_-]{32}$/)
+    const state = (await startLogin('relay-1', URL_))!.searchParams.get('state')!
+    await expect(finishLogin(state, 'code')).resolves.toBe('relay-1')
+  })
+
+  it('registers again when the saved client was made for another redirect', async () => {
+    const provider = new StoredOAuthProvider('relay-2', URL_)
+    await provider.saveClientInformation({ client_id: 'old', redirect_uris: ['http://127.0.0.1:3000/api/mcp-oauth/callback'] })
+    expect(await provider.clientInformation()).toBeUndefined()
+    await provider.saveClientInformation({ client_id: 'new', redirect_uris: [RELAY] })
+    expect(await provider.clientInformation()).toMatchObject({ client_id: 'new' })
+  })
+})
