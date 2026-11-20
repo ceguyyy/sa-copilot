@@ -95,6 +95,7 @@ describe('buildServerEnv', () => {
       PORT: '51234',
       ANTHROPIC_BASE_URL: 'http://127.0.0.1:20128',
       '9ROUTER_API_KEY': 'sk-9',
+      DATA_DIR: '/D',
       UPLOAD_DIR: path.join('/D', 'uploads'),
       BACKUP_DIR: path.join('/D', 'backups'),
       DOCS_DIR: path.join('/Docs', 'SA Copilot'),

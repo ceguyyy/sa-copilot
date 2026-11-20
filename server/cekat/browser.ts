@@ -1,8 +1,7 @@
 // A visible Edge/Chrome window with SA Copilot's own Cekat profile: the SA logs in once and the session stays on
 // this computer (never the password; the profile lives next to the uploads and is not part of a backup).
-import path from 'node:path'
 import { type BrowserContext, type Page, chromium } from 'playwright-core'
-import { config } from '../config.ts'
+import { cekatProfileDir } from '../dataDirs.ts'
 import { HttpError } from '../http.ts'
 import { CEKAT_URL } from './selectors.ts'
 
@@ -10,7 +9,7 @@ const CHANNELS = process.platform === 'win32' ? ['msedge', 'chrome'] : ['chrome'
 /** How long the SA has to log in when the saved session has expired. */
 export const LOGIN_WAIT_MS = 5 * 60_000
 
-export const profileDir = () => path.join(path.dirname(config.uploadDir), 'cekat-browser')
+export const profileDir = cekatProfileDir
 
 let running = false
 

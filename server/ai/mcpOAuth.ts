@@ -9,6 +9,7 @@ import path from 'node:path'
 import { auth, type OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js'
 import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
 import { config } from '../config.ts'
+import { mcpAuthDir } from '../dataDirs.ts'
 
 interface StoredAuth {
   clientInformation?: OAuthClientInformationMixed
@@ -20,7 +21,7 @@ interface StoredAuth {
 export const LOGIN_TTL_MS = 10 * 60_000
 const pending = new Map<string, { serverId: string; serverUrl: string; expires: number }>()
 
-const authDir = () => path.join(path.dirname(config.uploadDir), 'mcp-oauth')
+const authDir = mcpAuthDir
 const authFile = (serverId: string) => path.join(authDir(), `${serverId.replace(/[^A-Za-z0-9_-]/g, '_')}.json`)
 /** Where the browser lands on this machine. */
 export const localCallbackUrl = () => `http://${config.host}:${config.port}/api/mcp-oauth/callback`

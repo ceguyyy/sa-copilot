@@ -35,6 +35,7 @@ import { mcpOAuthCallback } from './routes/mcpOAuthCallback.ts'
 import { desktopUpdate } from './maintenance/desktopUpdate.ts'
 import { saPostman } from './routes/saPostman.ts'
 import { saPostmanWorkspace } from './routes/saPostmanWorkspace.ts'
+import { migrateLegacyDataDirs } from './dataDirs.ts'
 
 const app = new Hono()
 app.route('/api/desktop-update', desktopUpdate)
@@ -102,6 +103,11 @@ try {
   console.error('Check DATABASE_URL in .env and that the PostgreSQL service is running (pgAdmin / services.msc).\n')
   process.exit(1)
 }
+
+// MCP logins and the Cekat browser profile used to sit next to the upload folder; move them into DATA_DIR once.
+await migrateLegacyDataDirs()
+  .then((moved) => moved.forEach((m) => console.log(`Moved app data: ${m}`)))
+  .catch((e) => console.error('Could not move app data to DATA_DIR; MCP and Cekat browser logins may have to be done again:', e))
 
 serve({ fetch: app.fetch, port: config.port, hostname: config.host }, ({ port }) => {
   console.log(`SA Copilot running at http://localhost:${port}`)

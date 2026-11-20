@@ -164,6 +164,7 @@ export function buildServerEnv(cfg: DesktopConfig, paths: AppPaths, ports: Ports
     PORT: String(ports.server),
     ANTHROPIC_BASE_URL: v.aiBaseUrl || `http://127.0.0.1:${ports.router}`,
     '9ROUTER_API_KEY': s.routerApiKey,
+    DATA_DIR: paths.dataDir,
     UPLOAD_DIR: paths.uploadDir,
     BACKUP_DIR: paths.backupDir,
     DOCS_DIR: v.docsDir || paths.defaultDocsDir,

@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn() }))
 vi.mock('@modelcontextprotocol/sdk/client/auth.js', () => ({ auth: mocks.auth }))
-vi.mock('../config.ts', () => ({ config: { uploadDir: path.join(mkdtempSync(path.join(tmpdir(), 'sa-mcp-oauth-')), 'uploads'), host: '127.0.0.1', port: 3000 } }))
+vi.mock('../config.ts', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'sa-mcp-oauth-'))
+  return { config: { uploadDir: path.join(dir, 'uploads'), dataDir: path.join(dir, 'data'), host: '127.0.0.1', port: 3000 } }
+})
 import { LOGIN_TTL_MS, LoginCallbackError, StoredOAuthProvider, finishLogin, forgetLogin, hasLogin, isReadOnlyAccountTool, redirectUrl, startLogin } from './mcpOAuth.ts'
 import { config } from '../config.ts'
 
@@ -100,7 +103,7 @@ describe('stored credentials', () => {
   it('keeps them in a private file outside the database and removes them on logout', async () => {
     const state = (await startLogin('server-5', URL_))!.searchParams.get('state')!
     await finishLogin(state, 'code')
-    const dir = path.join(path.dirname(config.uploadDir), 'mcp-oauth')
+    const dir = path.join((config as { dataDir: string }).dataDir, 'mcp-oauth')
     const file = path.join(dir, 'server-5.json')
     expect(readdirSync(dir)).toContain('server-5.json')
     if (process.platform !== 'win32') expect(statSync(file).mode & 0o077).toBe(0)

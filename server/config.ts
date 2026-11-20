@@ -29,6 +29,8 @@ export const config = {
   // redirects). Empty means the browser returns straight to /api/mcp-oauth/callback.
   mcpOAuthRelayUrl: process.env.MCP_OAUTH_RELAY_URL?.trim() ?? 'https://ceguyyy.github.io/sa-copilot/oauth-callback.html',
   databaseUrl: required('DATABASE_URL'),
+  // App data that is not a user file: MCP logins, the Cekat browser profile, the SAPostman vault.
+  dataDir: fromEnv('DATA_DIR', 'data'),
   uploadDir: fromEnv('UPLOAD_DIR', 'data/uploads'),
   // Where Backup & Restore writes the automatic backup taken before a restore.
   backupDir: fromEnv('BACKUP_DIR', 'data/backups'),
