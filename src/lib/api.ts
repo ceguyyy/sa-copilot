@@ -9,7 +9,7 @@ import type { EnhancementBatch, EnhancementItem } from '../../shared/enhancement
 import type { ConfigPatch } from '../../electron/settings.ts'
 import type { DesktopStatus } from '../../electron/bridge.ts'
 import type { InboxItem } from '../../shared/inbox.ts'
-import type { SaRequest, SaResponse, SaEndpoint, SaSaved, SaVersion, SaHistory, SaExecution, SaCollection } from '../../shared/saPostman.ts'
+import type { SaRequest, SaResponse, SaEndpoint, SaSaved, SaVersion, SaHistory, SaExecution, SaCollection, SaAssertionRule } from '../../shared/saPostman.ts'
 
 export interface SaVaultStatus {configured:boolean;unlocked:boolean;entries:{name:string;updatedAt:string}[]}
 export const saPostmanApi = {
@@ -43,6 +43,8 @@ export const saPostmanApi = {
   history: () => request<(Omit<SaHistory,'response'> & {summary:{status?:number;durationMs?:number}})[]>('Load send history','/sapostman/history'),
   historyItem: (id:string) => request<SaHistory>('Load sent request',`/sapostman/history/${id}`),
   removeHistory: (id:string) => send('Delete send history','DELETE',`/sapostman/history/${id}`),
+  assertions: (input:{prompt:string;endpoint:SaEndpoint;response:string}) => send<{rules:SaAssertionRule[];note:string}>('Generate checks','POST','/sapostman/assertions',input),
+  publishMock: (requestId:string) => send<{url:string;flowId:string}>('Publish mock to Cekat','POST',`/sapostman/requests/${requestId}/mock/publish`,{}),
   assist: (input:{mode:'generate'|'trace'|'docs'|'ask';history?:{role:'user'|'assistant';content:string}[];prompt:string;endpoint:SaEndpoint;response:string;error:string}) => send<{explanation:string;curl:string;docs:string}>('Ask SAPostman AI','POST','/sapostman/assist',input),
 }
 

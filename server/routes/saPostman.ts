@@ -9,7 +9,8 @@ export async function executeSaRequest(request: SaRequest, fetcher: typeof fetch
   let url: URL
   try { url = new URL(request.url) } catch { throw new HttpError(400, 'Enter a valid HTTP or HTTPS URL') }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new HttpError(400, 'Use HTTP or HTTPS without credentials in the URL')
-  if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && Number(url.port || (url.protocol === 'https:' ? 443 : 80)) === config.port) throw new HttpError(400, 'Requests to the SA Copilot server are not allowed')
+  // The SA Copilot server itself is off limits, except its public mock responses.
+  if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && Number(url.port || (url.protocol === 'https:' ? 443 : 80)) === config.port && !url.pathname.startsWith('/api/sapostman/mock/')) throw new HttpError(400, 'Requests to the SA Copilot server are not allowed')
   const headers = new Headers()
   for (const h of request.headers) {
     if (!h.name.trim()) continue

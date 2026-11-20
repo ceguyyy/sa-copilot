@@ -2,6 +2,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import { Button, Field, Input, Textarea } from '../../ui'
 import { CopyButton } from '../../CopyButton'
 import { OpenSaPostman } from '../../OpenSaPostman'
+import { PocToolsToSaPostman } from './PocToolsToSaPostman'
 import { ReviseField, ReviseHeading } from '../PocReviseParts'
 import { defaultApiIntegration, HTTP_METHODS, type SetPocDraft } from '../pocConfig'
 import type { PocRevise } from '../usePocRevise'
@@ -31,6 +32,7 @@ export function ApiIntegrationsCard({ integrations, setDraft, revise, clientName
     <div className="space-y-4 rounded-lg border border-line bg-paper p-4">
       <ReviseHeading title="API Integrations" action={revise.button({ kind: 'section', section: 'apiIntegrations' })} />
       {revise.preview({ kind: 'section', section: 'apiIntegrations' })}
+      {integrations.length > 0 && <PocToolsToSaPostman clientName={clientName} integrations={integrations} />}
       {integrations.length === 0 ? <p className="text-sm text-muted">No API integration configured yet.</p> : integrations.map((integration, index) => (
         <div key={`api-${index}`} className="space-y-3 rounded-lg border border-line bg-panel p-3">
           <div className="grid gap-3 md:grid-cols-2">

@@ -111,6 +111,47 @@ export function curlCommand({ method, url, apiKey, body }: CurlRequest): string 
 }
 
 /**
+ * The conversation object Cekat adds to every API tool call (seen on a real call). Ids are placeholders the SA can
+ * replace with a real conversation to test per-conversation logic.
+ */
+export const CEKAT_CONVERSATION_SAMPLE = {
+  id: '00000000-0000-4000-8000-000000000001',
+  lastSessionId: '00000000-0000-4000-8000-000000000001',
+  assignedAiAgent: '00000000-0000-4000-8000-000000000002',
+  pluginData: {},
+  businessId: '00000000-0000-4000-8000-000000000003',
+}
+
+export interface CekatToolCall {
+  method: 'GET' | 'POST'
+  url: string
+  headers: { name: string; value: string }[]
+  body: string
+}
+
+/**
+ * The request Cekat sends when the agent calls this API tool: the AI inputs at the top level of a JSON body plus the
+ * `conversation` object, to the webhook address, with the tool's API key as a Bearer token. Cekat tools only use
+ * GET or POST; a GET sends the inputs as query parameters.
+ */
+export function cekatToolCall(integration: CurlIntegration): CekatToolCall {
+  const sample = sampleFromSchema(integration.aiInput)
+  const inputs = sample && typeof sample === 'object' && !Array.isArray(sample) ? (sample as Record<string, unknown>) : {}
+  const url = integration.webhookAddress.trim() || WEBHOOK_URL_PLACEHOLDER
+  const headers = integration.apiKey?.trim() ? [{ name: 'Authorization', value: `Bearer ${integration.apiKey.trim()}` }] : []
+  if (integration.httpMethod === 'GET') {
+    const query = new URLSearchParams(Object.entries(inputs).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)])).toString()
+    return { method: 'GET', url: query ? `${url}?${query}` : url, headers, body: '' }
+  }
+  return {
+    method: 'POST',
+    url,
+    headers: [{ name: 'Content-Type', value: 'application/json' }, ...headers],
+    body: JSON.stringify({ ...inputs, conversation: CEKAT_CONVERSATION_SAMPLE }, null, 2),
+  }
+}
+
+/**
  * The integration's use case on the POC's one n8n gateway workflow: the body carries "action" = the integration
  * name (unless the AI Input already has an action field), so Switch Action routes it to its branch.
  */

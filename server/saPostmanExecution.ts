@@ -6,7 +6,9 @@ import type { SaEndpoint, SaResponse, SaCheck } from '../shared/saPostman.ts'
 import { resolveSaVariables } from '../shared/saPostman.ts'
 
 export const field = z.object({ name: z.string().max(256), value: z.string().max(500000), enabled: z.boolean().optional(), description: z.string().max(2000).optional() })
+export const mockSchema = z.object({ status: z.number().int().min(100).max(599), contentType: z.string().max(200), body: z.string().max(2_000_000) })
 export const endpointSchema = z.object({
+  mock: mockSchema.optional(),
   extracts:z.array(z.object({name:z.string().regex(/^[\w.-]+$/),path:z.string().min(1).max(1000),secret:z.boolean().optional()})).max(50).optional(),
   collectionId:z.string().uuid().nullable().optional(),docsHtml:z.string().max(200000).optional(),
   variables: z.array(field.extend({secret:z.boolean().optional()})).max(100).optional().default([]),
@@ -16,7 +18,23 @@ export const endpointSchema = z.object({
   scripts: z.object({ pre: z.string().max(20000), post: z.string().max(20000) }), settings: z.object({ timeoutMs: z.number().int().min(1000).max(120000) }),
 })
 const preSchema = z.object({ headers: z.record(z.string(), z.string()).optional(), params: z.record(z.string(), z.string()).optional() }).strict()
-const assertionSchema = z.array(z.object({ name: z.string().max(300), target: z.enum(['status','header','json']), path: z.string().optional(), operator:z.enum(['equals','exists']).optional(), equals: z.unknown().optional() }).strict().refine(rule=>rule.operator==='exists'||Object.hasOwn(rule,'equals'),'Equals assertions need an expected value')).max(100)
+/** equals and contains compare with `equals`; exists and notEmpty need no expected value. */
+export const ASSERTION_OPERATORS = ['equals', 'exists', 'notEmpty', 'contains'] as const
+const needsExpected = (operator?: string) => !operator || operator === 'equals' || operator === 'contains'
+export const assertionSchema = z.array(z.object({ name: z.string().max(300), target: z.enum(['status','header','json']), path: z.string().optional(), operator:z.enum(ASSERTION_OPERATORS).optional(), equals: z.unknown().optional() }).strict().refine(rule=>!needsExpected(rule.operator)||Object.hasOwn(rule,'equals'),'Equals and contains assertions need an expected value')).max(100)
+type Assertion = z.infer<typeof assertionSchema>[number]
+/** Not undefined, null, '', [] or {}. */
+const notEmpty = (v: unknown) => v !== undefined && v !== null && (typeof v === 'string' ? v.trim() !== '' : Array.isArray(v) ? v.length > 0 : typeof v === 'object' ? Object.keys(v as object).length > 0 : true)
+/** A string containing the text, or an array containing an equal item. */
+const contains = (v: unknown, expected: unknown) => typeof v === 'string' ? v.includes(String(expected)) : Array.isArray(v) && v.some(item => JSON.stringify(item) === JSON.stringify(expected))
+function judge(test: Assertion, actual: unknown): { expected: unknown; passed: boolean } {
+  switch (test.operator) {
+    case 'exists': return { expected: 'field exists', passed: actual !== undefined }
+    case 'notEmpty': return { expected: 'not empty', passed: notEmpty(actual) }
+    case 'contains': return { expected: `contains ${JSON.stringify(test.equals)}`, passed: contains(actual, test.equals) }
+    default: return { expected: test.equals, passed: JSON.stringify(actual) === JSON.stringify(test.equals) }
+  }
+}
 export function evaluateChecks(script: string, response: SaResponse): SaCheck[] {
   if (!script.trim()) return []
   const tests = assertionSchema.parse(JSON.parse(script))
@@ -28,7 +46,7 @@ export function evaluateChecks(script: string, response: SaResponse): SaCheck[] 
     if (test.target === 'json') {
       try { actual = jsonPath(parsedBody,test.path??'') } catch { actual = undefined }
     }
-    return { name: test.name, actual: actual ?? null, expected: test.operator==='exists'?'field exists':test.equals, passed: test.operator==='exists'?actual!==undefined:JSON.stringify(actual) === JSON.stringify(test.equals) }
+    return { name: test.name, actual: actual ?? null, ...judge(test, actual) }
   })
 }
 export function prepareEndpoint(e: SaEndpoint) {

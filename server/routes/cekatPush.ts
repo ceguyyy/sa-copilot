@@ -38,7 +38,7 @@ function boardFrom(raw: unknown): CrmBoard {
   return boardFromAi(boardToAi(board))
 }
 
-async function cekatCall(): Promise<CekatCall> {
+export async function cekatCall(): Promise<CekatCall> {
   const server = await queryOne<{ id: string }>(`select id from mcp_servers where enabled and rtrim(url, '/') = $1 order by created_at limit 1`, [CEKAT_MCP_URL])
   if (!server || !(await hasLogin(server.id))) throw new HttpError(400, 'Connect Cekat first: Settings › AI tools (MCP) › Add Cekat MCP, then log in.')
   return (tool, args) => callServerTool(server.id, tool, args)

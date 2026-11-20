@@ -36,12 +36,16 @@ import { desktopUpdate } from './maintenance/desktopUpdate.ts'
 import { saPostman } from './routes/saPostman.ts'
 import { saPostmanWorkspace } from './routes/saPostmanWorkspace.ts'
 import { migrateLegacyDataDirs } from './dataDirs.ts'
+import { saMock, saMockPublic } from './routes/saMock.ts'
+import { saPostmanAssertions } from './routes/saPostmanAssertions.ts'
 
 const app = new Hono()
 app.route('/api/desktop-update', desktopUpdate)
 app.get('/api/health', (c) => c.json({ ready: true }))
 // The browser returning from an MCP server login has no app session; the route checks its own single-use state.
 app.route('/api', mcpOAuthCallback)
+// Mock responses are served without a session so local tools (n8n, a demo app) can call them.
+app.route('/api', saMockPublic)
 app.route('/api', auth)
 app.use('/api/*', async (c, next) => {
   if (!await validateAccount(c)) throw new HttpError(401, 'Login required')
@@ -64,6 +68,8 @@ app.use('/api/*', guardTrash)
 app.route('/api', office)
 app.route('/api', saPostman)
 app.route('/api', saPostmanWorkspace)
+app.route('/api', saPostmanAssertions)
+app.route('/api', saMock)
 app.route('/api', connections)
 app.route('/api', inbox)
 app.route('/api', api)

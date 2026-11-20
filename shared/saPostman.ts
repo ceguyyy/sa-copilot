@@ -1,7 +1,10 @@
 export interface SaField { name: string; value: string; enabled?: boolean; description?: string }
 export interface SaRequest { method: string; url: string; headers: SaField[]; body: string }
 export interface SaResponse { status: number; statusText: string; headers: Record<string, string>; body: string; durationMs: number; bytes: number; truncated: boolean }
+/** A saved example response the request can be mocked with (SA Copilot's local mock URL, or a Cekat flow). */
+export interface SaMock { status: number; contentType: string; body: string }
 export interface SaEndpoint extends SaRequest {
+  mock?: SaMock
   extracts?: {name:string;path:string;secret?:boolean}[]
   collectionId?: string | null
   docsHtml?: string
@@ -18,6 +21,20 @@ export interface SaSaved { id: string; name: string; version: number; config: Sa
 export interface SaCollection {id:string;name:string;created_at:string;version?:number;variables?: (SaField & {secret?:boolean})[];updated_at?:string}
 export interface SaVersion { id: string; request_id: string; version: number; config: SaEndpoint; created_at: string }
 export interface SaHistory { id: string; name: string; request: SaEndpoint; response: SaResponse | null; error: string | null; checks: SaCheck[]; created_at: string }
+/** A post-response check (scripts.post holds a JSON array of these). */
+export type SaAssertionOperator = 'equals' | 'exists' | 'notEmpty' | 'contains'
+export interface SaAssertionRule { name: string; target: 'status' | 'header' | 'json'; path?: string; operator?: SaAssertionOperator; equals?: unknown }
+/**
+ * Adds rules to a scripts.post JSON array, skipping ones it already has (same target, path, operator and value).
+ * Throws when the existing script is not a JSON array, so hand-written content is never overwritten.
+ */
+export function mergeAssertions(script: string, rules: SaAssertionRule[]): string {
+  const existing: unknown = script.trim() ? JSON.parse(script) : []
+  if (!Array.isArray(existing)) throw new Error('Fix the post-response JSON (Scripts tab) before adding checks')
+  const key = (r: SaAssertionRule) => JSON.stringify([r.target, r.path ?? '', r.operator ?? 'equals', r.equals])
+  const seen = new Set((existing as SaAssertionRule[]).map(key))
+  return JSON.stringify([...existing, ...rules.filter((r) => !seen.has(key(r)))], null, 2)
+}
 export interface SaCheck { name: string; passed: boolean; actual: unknown; expected: unknown }
 export interface SaExecution { response: SaResponse | null; error: string | null; checks: SaCheck[]; historyId: string; historyError?: string }
 export function endpointFromRequest(request?: Partial<SaRequest>): SaEndpoint {

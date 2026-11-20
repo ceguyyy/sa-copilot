@@ -133,7 +133,8 @@ New Dropdown columns start with Label 1, Label 2, Label 3.
   `…_slot2` … `…_slot7` (slot2/slot3 have no AI inputs, slot7 has Max Tool Calls 0), `sa_copilot_test_webhook_jadwal`
   (webhook = flow `0w8LakYEWzlW73zMOtmkR`). Published flows "[SA Copilot test] webhook_cek_jadwal"
   (`0w8LakYEWzlW73zMOtmkR`) and "[SA Copilot test] flow_jadwal_generated" (`pg2E4XBddZwg6nPRAXo7r`, built from
-  `webhookFlowArgs`).
+  `webhookFlowArgs`), "[SA Copilot mock] sa_copilot_test_slots" (`GgRwVNAcP3KjVXKRSAjLn`, published; the SAPostman
+  mock flow shape: Catch Webhook → Return Response with a JSON body and status 201, verified by calling /sync).
 
 ## The builder (server/cekat)
 
