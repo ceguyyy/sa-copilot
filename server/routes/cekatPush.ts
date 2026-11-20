@@ -7,6 +7,10 @@ import { applyPush, previewPush, type CekatCall } from '../cekat/pocPush.ts'
 import { withCekatBrowser } from '../cekat/browser.ts'
 import { boardNames, planCrmBuild, runCrmBuild } from '../cekat/crmBuild.ts'
 import { CekatCrmUi } from '../cekat/crmUi.ts'
+import { planAgentBuild, runAgentBuild } from '../cekat/agentBuild.ts'
+import { CekatAgentUi } from '../cekat/agentUi.ts'
+import { planRouting, runRoutingBuild } from '../cekat/routingBuild.ts'
+import { CekatRoutingUi } from '../cekat/routingUi.ts'
 import { streamResponse } from '../ai/stream.ts'
 import { boardFromAi, boardToAi, normalizeCrm, type CrmBoard } from '../../shared/pocCrm.ts'
 import { queryOne } from '../db.ts'
@@ -20,6 +24,7 @@ const pushInput = z.object({ config: pocConfig })
 const businessInput = z.object({ businessId: z.string().uuid() })
 /** One board as it is on screen (unsaved edits included), validated like a saved POC board. */
 const crmBuildInput = z.object({ board: z.unknown() })
+const agentBuildInput = z.object({ config: pocConfig, name: z.string().trim().min(1).max(100) })
 
 /** The board, with the key-duplicate rule applied the same way the AI output gets it. */
 function boardFrom(raw: unknown): CrmBoard {
@@ -85,6 +90,29 @@ cekatPush.post('/pocs/:id/cekat/crm/build', async (c) => {
   return streamResponse(async (out) => {
     const log = (text: string) => out.send({ type: 'status', text })
     const result = await withCekatBrowser(log, (page) => runCrmBuild(new CekatCrmUi(page), call, board, log))
+    out.send({ type: 'result', data: result })
+    out.send({ type: 'done' })
+  })
+})
+
+/** What "Build AI agent in Cekat" would do. Agent names are checked on the dashboard when the build starts. */
+cekatPush.post('/pocs/:id/cekat/agent/preview', async (c) => {
+  notFound(await queryOne('select id from pocs where id = $1', [idParam(c)]), 'POC')
+  const { config, name } = await parseJson(c, agentBuildInput)
+  return c.json({ ...planAgentBuild(name, config, false), routing: planRouting(config) })
+})
+
+/** Creates the POC's AI agent in a visible browser window, streaming each step. Needs no Cekat MCP. */
+cekatPush.post('/pocs/:id/cekat/agent/build', async (c) => {
+  notFound(await queryOne('select id from pocs where id = $1', [idParam(c)]), 'POC')
+  const { config, name } = await parseJson(c, agentBuildInput)
+  return streamResponse(async (out) => {
+    const log = (text: string) => out.send({ type: 'status', text })
+    const result = await withCekatBrowser(log, async (page) => {
+      const agent = await runAgentBuild(new CekatAgentUi(page), name, config, log)
+      const routing = await runRoutingBuild(new CekatRoutingUi(page), agent.agentId, config, log)
+      return { ...agent, createdLabels: routing.createdLabels, conditions: routing.conditions, problems: [...routing.problems, ...agent.problems] }
+    })
     out.send({ type: 'result', data: result })
     out.send({ type: 'done' })
   })

@@ -105,12 +105,36 @@ No `data-testid` on these pages: use ids, roles and visible text.
    Playwright `fill()` works. Style chips (Formal, Friendly, …), Normal Text, Message split, Optimize sit in
    the toolbar. Bottom bar: "Cancel Edit" / "Save" (`getByRole('button', { name: 'Save', exact: true })`).
    Verified: text saved and still there after a reload.
+   Field area to click: `(//p[normalize-space()='<title>'])[last()]/ancestor::*[following-sibling::div][1]/following-sibling::div[1]`
+   (the segments keep their title in a wrapper div, Welcome Message in a header button). `fill()` keeps line
+   breaks; markdown is stored as plain text. Additional Instructions › "Condition" adds an instruction:
+   title `input[maxlength="100"]` (last), a Pipeline picker (empty = all customers) and its own editor.
+   Save each field on its own.
 4. **AI Actions & Routing**: Agent Transfer, Conversation Label, Conversation Pipeline — each a list of
-   Conditions (= POC handoff conditions, labels, pipeline). Not filled in yet.
+   Conditions (= POC handoff conditions, labels, pipeline). Each saved condition adds its own "Condition"
+   button, so find a section's add button through its heading:
+   `((//p[normalize-space()='<heading>'])[last()]/ancestor::*[.//button[normalize-space()='Condition']][1]//button[normalize-space()='Condition'])[last()]`.
+   A new condition has a title `input[maxlength="100"]` (last), a trigger type (Prompt) and a description editor.
+   - Transfer: title + description only.
+   - Label: picker `(//*[normalize-space()='Label'])[last()]` opens `input[placeholder="Search labels"]`;
+     type key by key (`pressSequentially`, `fill` does not filter), click `button:has(> span:text-is("<name>"))`.
+     Labels must already exist: no create option here.
+   - Pipeline: Current (optional; empty = from any status) and Target (required) pickers with
+     `input[placeholder="Search pipelines"]`, same option buttons. Statuses must already exist.
+   Settings › Labels (`/settings/labels`, works as Member): "Add Label" › dialog `#name` (max 100), a colour
+   with a default, "Create". Pipeline statuses: docs say Settings › Pipeline Management › Add Status, but
+   `/settings/pipeline` and `/settings/pipeline-management` are 404 and no menu link was found.
+   Builder: `routingUi.ts` + `routingBuild.ts`; verified live on "Agent build 3": a transfer condition, two label
+   conditions (one label created) and New Leads → Qualified, a move to a missing status skipped and reported.
 5. **Knowledge Base**: sub-tabs Text, Website, File, Q&A, Product; a "Default" text section and a character count.
 6. **AI Configuration**: AI Model (Auto), Stop AI after transfer, Silent transfer, Ignore Team Handoff,
    Timezone, AI History Limit, AI Read File Limit, AI Context Limit, AI Creativity Level, Message Await,
    AI Message Limit, Session Only Memory — the same fields as the POC Additional Settings.
+   Toggles are `input.peer.sr-only` checkboxes: read `isChecked()`, click the parent switch. Numbers are
+   `input[type=number]` after their label (History min 10, Message Await max 1200). AI Creativity Level is a
+   button with Consistent / Balanced / Creative (= POC temperature low / balanced / creative). Save at the bottom.
+7. Builder: `server/cekat/agentUi.ts` + `agentBuild.ts`. Verified live on 2026-11-20 ("[SA Copilot test] Agent
+   build 3", `33c950e9-…`): welcome, the three segments, one instruction and every setting saved as planned.
 
 ## Not found yet / blocked
 
@@ -128,5 +152,9 @@ No `data-testid` on these pages: use ids, roles and visible text.
 - Boards "[SA Copilot test] Build uji" (`fd37c43a-…`, stopped after creating the board),
   "[SA Copilot test] Build uji 2" (`e7e9b056-…`, partial; Dropdown `Prioritas` used for the editor test) and
   "[SA Copilot test] Build uji 3" (`75dae2dc-391c-4749-8cb9-ee055240b1fd`, the full verified run).
+- AI agents "[SA Copilot test] Agent build" (stopped after creating), "… Agent build 2" (stopped at the
+  settings) and "… Agent build 3" (`33c950e9-2ca5-40cb-bbdb-a0ee2c1181d6`, the full verified run).
+- Labels "[SA Copilot test] Booking" and "[SA Copilot test] Komplain" (Settings › Labels); routing conditions on
+  "Agent build 3" and a label condition on "Agent uji".
 - AI agent "[SA Copilot test] Agent uji" (`26d741de-8ee7-4e06-b5dd-54ef40786b55`) in Cekat AI Demo, with a
   test Communication Style. Delete both when the exploration is done.

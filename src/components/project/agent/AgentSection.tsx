@@ -7,6 +7,7 @@ import type { PocConfig } from '../../../lib/types'
 import { AdditionalSettingsCard } from './AdditionalSettingsCard'
 import { ApiIntegrationsCard } from './ApiIntegrationsCard'
 import { BehaviorCard } from './BehaviorCard'
+import { CekatAgentBuildPanel } from './CekatAgentBuildPanel'
 import { ConversionSetupCard } from './ConversionSetupCard'
 import { KnowledgeBaseCard } from './KnowledgeBaseCard'
 import { LabelsCard } from './LabelsCard'
@@ -28,6 +29,7 @@ export function AgentSection({ pocId, draft, setDraft, revise, clientName, pocNa
   return (
     <>
       <BehaviorCard draft={draft} setDraft={setDraft} revise={revise} pocName={pocName} />
+      <CekatAgentBuildPanel pocId={pocId} pocName={pocName} draft={draft} />
       <LabelsCard labels={draft.labels} setDraft={setDraft} revise={revise} />
       <SdkEventsCard events={draft.sdkEvents} setDraft={setDraft} />
       <ConversionSetupCard pocId={pocId} draft={draft} pocName={pocName} />
