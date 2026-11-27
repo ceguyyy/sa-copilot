@@ -7,13 +7,14 @@ import { cn } from '@/lib/utils'
 export function ProjectSection({ title, description, icon: Icon, expanded, onToggle, children, anchor }: { title: string; description?: string; icon: LucideIcon; expanded: boolean; onToggle: () => void; children: ReactNode; anchor?: string }) {
   const id = useId()
   return (
-    <Card id={anchor} className="scroll-mt-6 gap-0 overflow-hidden rounded-2xl py-0">
+    // No overflow-hidden: popovers inside a section (e.g. a draft button's additional prompt) must show in full.
+    <Card id={anchor} className="scroll-mt-6 gap-0 rounded-2xl py-0">
       <button
         type="button"
         aria-expanded={expanded}
         aria-controls={id}
         onClick={onToggle}
-        className="group flex w-full items-center gap-3 p-4 text-left transition hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:p-5"
+        className={cn('group flex w-full items-center gap-3 p-4 text-left transition', expanded ? 'rounded-t-2xl' : 'rounded-2xl', 'hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:p-5')}
       >
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
           <Icon className="size-5" />
